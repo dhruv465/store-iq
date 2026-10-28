@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
-import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, wantsFollowThrough, wantsNewCustomer, wantsReview } from "./steps.js";
+import { recommendReply } from "./recommend.js";
+import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, nextQuestionReply, wantsFollowThrough, wantsNewCustomer, wantsRecommend, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
 
@@ -139,12 +140,13 @@ export function offerLeaked(text: string, assessed: boolean, demonstrated: boole
 
 /** Four home facts, including how far they sit, is enough to stop talking about price first. */
 export function isAssessed(card: Session["card"]): boolean {
-  const filled = ["room", "distance_feet", "light", "mount", "content", "devices", "family", "internet", "budget_rupees"]
+  const filled = ["room", "distance_m", "distance_feet", "light", "mount", "content", "devices", "family", "internet", "budget_rupees"]
     .filter((key) => {
       const value = (card as Record<string, unknown>)[key];
       return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
     });
-  return filled.length >= 4 && card.distance_feet !== undefined;
+  const hasDistance = card.distance_m !== undefined || card.distance_feet !== undefined;
+  return filled.length >= 4 && hasDistance;
 }
 
 /** Every number a text states, as exact tokens. */
@@ -269,7 +271,7 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
     if (!session.steps_done.includes("assess")) session.steps_done.push("assess");
-    return { text: `Card confirmed.\n${nextQuestion(session)}` };
+    return nextQuestionReply(session, "Card confirmed.");
   }
   if (event.action === "card:correct") {
     session.card_confirmed = false;
@@ -304,6 +306,15 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     session.consent = false;
     return { text: "No summary sent.\n↳ Section 4H: the summary only goes out with the customer's consent." };
   }
+  // Section 4E: ranking the pack against a confirmed card is arithmetic, so no request is spent.
+  if (wantsRecommend(event.text, event.action) && isAssessed(session.card)) {
+    if (!session.card_confirmed) return cardSummary(session);
+    session.step = "recommend";
+    if (!session.steps_done.includes("recommend")) session.steps_done.push("recommend");
+    // A cue given is a difference demonstrated, which is what opens the offer gate.
+    session.demonstrated = true;
+    return recommendReply(pack, session.card);
+  }
   if (wantsFollowThrough(event.text, event.action)) {
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
@@ -333,6 +344,19 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
 export async function decide(event: Event, session: Session, pack: Pack, request: typeof fetch = fetch): Promise<Reply> {
   if (event.text) session.language = languageOf(event.text);
   const tapped = applyAction(session, event.action);
+  if (tapped && !deterministic(event, session, pack)) {
+    session.assessed = isAssessed(session.card);
+    const reply = session.assessed && !session.card_confirmed ? cardSummary(session) : nextQuestionReply(session, `Noted: ${tapped}.`);
+    session.history.push({ who: "associate", text: String(event.action).slice(0, 300) });
+    session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+    return reply;
+  }
+  // "Not sure" is a real answer: it fills nothing and moves on.
+  const skipped = event.action?.match(/^skip:([a-z_]+)$/);
+  if (skipped) {
+    (session.card as Record<string, unknown>)[skipped[1]!] = "not stated";
+    return nextQuestionReply(session, "Noted: not sure.");
+  }
   const free = deterministic(event, session, pack);
   if (free) {
     session.history.push({ who: "associate", text: (event.text ?? event.action ?? "").slice(0, 300) });
@@ -402,7 +426,7 @@ export async function decide(event: Event, session: Session, pack: Pack, request
     };
   else if (offerLeaked(reply.text, session.assessed, session.demonstrated))
     reply = {
-      text: `Offers come after the home. ${nextQuestion(session)}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
+      text: `Offers come after the home. ${nextQuestionReply(session).text.split("\n").pop()}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
     };
   session.history.push({ who: "associate", text: (event.text ?? event.action ?? (event.audio ? "voice note" : "photo")).slice(0, 300) });
   session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });

@@ -56,7 +56,7 @@
       "weak_for": [
         "console gaming at 120 Hz"
       ],
-      "demo_cue": "Play the OTT trailer and the news ticker side by side: the text stays crisp, no smearing.",
+      "demo_cue": "Run the news ticker: text stays crisp, no smearing.",
       "energy": {
         "typical_watts": 95,
         "standby_watts": 0.5,
@@ -87,7 +87,7 @@
       "weak_for": [
         "very bright afternoon light"
       ],
-      "demo_cue": "Stand them at 8 feet, then at 12: show how the 65 inch fills the wall only in the bigger room.",
+      "demo_cue": "Stand at 8 feet, then 12: it only fills the bigger room.",
       "energy": {
         "typical_watts": 125,
         "standby_watts": 0.5,
@@ -118,7 +118,7 @@
       "weak_for": [
         "dark-room movie contrast"
       ],
-      "demo_cue": "Walk them to the bright window display and compare against the LED beside it.",
+      "demo_cue": "Compare it against the LED by the bright window.",
       "energy": {
         "typical_watts": 110,
         "standby_watts": 0.5,
@@ -149,7 +149,7 @@
       "weak_for": [
         "brand-first buyers"
       ],
-      "demo_cue": "Run the cricket clip and pan the camera: the ball keeps its edge at 144 Hz, the 60 Hz set blurs it.",
+      "demo_cue": "Cricket clip: the ball holds its edge, the 60 Hz set blurs.",
       "energy": {
         "typical_watts": 105,
         "standby_watts": 0.5,

@@ -9,9 +9,9 @@ Status is what the code actually does, verified, not what it intends to do.
 | --- | --- | --- |
 | 1 | Receive and process associate voice notes | **Wired, untested.** Audio goes to Gemini inline, no transcription hop. No real voice note has been sent through it. |
 | 2 | Create, display and correct a home card | **Done.** Read back in the brief's "I heard" shape with confirm and fix buttons; recommend, complete and close are held until confirmed. |
-| 3 | Suggest the next question based on the current card | **Done.** `nextQuestion()` walks the floor order; the model also proposes one. |
+| 3 | Suggest the next question based on the current card | **Done, deterministic.** `QUESTION_FLOW` walks the floor order in the brief's `Ask:` shape with its own buttons. A tap no longer costs a model request: the whole assess walk runs in 0–11 ms. |
 | 4 | Accept a product-label image, return a customer-friendly explanation | **Wired, untested.** Image goes inline; `labels[]` in the pack supplies the phrasing. |
-| 5 | Three recommendations, one reason **and one demonstration cue** each | **Done, unverified live.** Every product carries a `demo_cue`; the prompt requires it on each option. Needs quota to confirm the model uses it. |
+| 5 | Three recommendations, one reason **and one demonstration cue** each | **Done, deterministic.** `recommend.ts` ranks the pack against the card in code, so no request is spent and the reasons cannot be invented. Reasons are de-duplicated: three options never share one. Verified live at 1 ms. |
 | 6 | Calculate and display an itemised total from supplied data | **Done.** `itemisedTotal()` computes it in code, not the model, so it cannot be wrong. Accessories and delivery added. Verified live: 54,990 + 1,499 + 499 = Rs 56,988. |
 | 7 | Gate offers until assessment and demonstration are complete | **Done.** `offerLeaked()`, fires on an offer word plus a figure. Tested. |
 | 8 | Explain finance using only supplied terms and full cost | **Partial.** Terms are in the pack; the one-sentence full-cost form is unverified. |
@@ -32,9 +32,16 @@ Status is what the code actually does, verified, not what it intends to do.
 
 ## Open gaps, in the order they are worth doing
 
-1. **Metres, and "Not sure" (§4B)** — the brief's own example is `[2–3 m] [3–4 m] [Not sure]`. The card stores feet and offers no unknown.
+1. ~~Metres, and "Not sure" (§4B)~~ — **done.** The flow asks in metres with a "Not sure" button, and either unit satisfies the assessment.
 2. **Card fields from §3** — the fields exist on the card now; the prompt does not yet actively ask for the replacement reason or site constraints.
 3. **Verify everything model-dependent** — the `Ask:` framing, the demonstration cue and the itemised total's one-sentence finance all need live model turns, which need quota.
+
+## What still needs a model
+
+After this round, only two things: turning a free-form voice note or sentence into card fields, and
+reading a label photo. Assess by tap, recommend, complete, close, follow-through, brief and review
+are all deterministic — they answer in single-digit milliseconds, spend no quota, and cannot invent a
+figure. That is most of the §8 acceptance sequence running without the model at all.
 
 ## Hosting state, 28 Oct
 

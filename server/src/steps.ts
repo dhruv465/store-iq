@@ -139,6 +139,48 @@ export function reviewReply(session: Session): Reply {
   };
 }
 
+/** The floor order of questions, each with its own answers, so a tap never needs the model. */
+export const QUESTION_FLOW: { field: string; ask: string; options: [string, string][] }[] = [
+  { field: "distance_m", ask: 'Ask: "How far will you sit from the TV?"',
+    options: [["2-3", "2-3 m"], ["3-4", "3-4 m"], ["", "Not sure"]] },
+  { field: "light", ask: 'Ask: "How much light hits that wall in the afternoon?"',
+    options: [["bright afternoon sun", "Bright"], ["some light", "Some"], ["dim", "Dim"]] },
+  { field: "mount", ask: 'Ask: "Wall mount or table top?"',
+    options: [["wall", "Wall mount"], ["table", "Table top"], ["", "Not sure"]] },
+  { field: "content", ask: 'Ask: "What do they watch most?"',
+    options: [["cricket", "Cricket"], ["OTT", "OTT / Movies"], ["news", "News"]] },
+  { field: "devices", ask: 'Ask: "Any set-top box, console or soundbar?"',
+    options: [["set-top box", "Set-top box"], ["PS5", "Console"], ["none", "Nothing"]] },
+  { field: "family", ask: 'Ask: "Who watches together?"',
+    options: [["two people", "Two"], ["four people", "Four"], ["more than four", "More"]] },
+];
+
+/** The next unanswered question, with its buttons. "Not sure" carries no value, so it fills nothing. */
+export function nextQuestionReply(session: Session, prefix?: string): Reply {
+  const step = QUESTION_FLOW.find((entry) => {
+    const value = (session.card as Record<string, unknown>)[entry.field];
+    return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
+  });
+  if (!step)
+    return {
+      text: [prefix, "The card is full. Read it back to them, then ask for three options."].filter(Boolean).join("\n"),
+      buttons: [{ id: "card:show", title: "Show the card" }, { id: "recommend", title: "Three options" }],
+    };
+  return {
+    text: [prefix, step.ask].filter(Boolean).join("\n"),
+    buttons: step.options.map(([value, title]) => ({
+      id: value ? `card:${step.field}:${value}` : `skip:${step.field}`,
+      title,
+    })),
+  };
+}
+
+const RECOMMEND_WORDS = /\b(three options|3 options|recommend|options to show|kaunsa|which ones?)\b/i;
+
+export function wantsRecommend(text: string | undefined, action: string | undefined): boolean {
+  return action === "recommend" || (!!text && RECOMMEND_WORDS.test(text));
+}
+
 const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|consent|summary bhejo)\b/i;
 
 export function wantsFollowThrough(text: string | undefined, action: string | undefined): boolean {
