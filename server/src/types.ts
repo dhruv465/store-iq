@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Lang } from "./i18n.js";
 /** Section 4 of the developer brief, A to I, in order. "demonstrate" lives inside recommend, which is
  *  how the brief names that stage, and shows up as the demonstration cue on each option. */
 export const STEPS = [
@@ -51,7 +52,7 @@ export type Session = {
   interaction_started: string;
   /** Set once the associate has confirmed the card back; recommendations wait for it. */
   card_confirmed: boolean;
-  language: "en" | "hi";
+  language: Lang;
   step: Step;
   card: HomeCard;
   /** The offer opens only after both are true. */

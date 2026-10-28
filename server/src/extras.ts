@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { isAssessed } from "./brain.js";
 import type { Pack } from "./pack.js";
 import { score } from "./steps.js";
+import { t, type Lang } from "./i18n.js";
 import type { Reply, Session } from "./types.js";
 
 /** The contest's extra points: "ask an expert" and the department manager view.
@@ -35,7 +36,7 @@ export function newReference(): string {
 }
 
 /** Logs the question against a named owner and gives the associate a line to hold the customer with. */
-export function expertReply(pack: Pack, question: string, reference: string): { reply: Reply; area: string; owner: string } {
+export function expertReply(pack: Pack, question: string, reference: string, lang: Lang = "en"): { reply: Reply; area: string; owner: string } {
   const { area, name } = routeTo(pack, question);
   return {
     area,
@@ -43,7 +44,7 @@ export function expertReply(pack: Pack, question: string, reference: string): { 
     reply: {
       text: [
         `Sent to ${name} · ${reference}`,
-        `Say: "Let me confirm that with our ${area} desk and come straight back to you."`,
+        t(lang, "exp.say", { area }),
         "↳ Logged against an owner, so it does not get lost when you move to the next customer.",
       ].join("\n"),
     },

@@ -29,8 +29,11 @@ export type Product = {
   specs: Record<string, number | string>;
   good_for: string[];
   weak_for: string[];
-  /** Section 6.5: the difference to show the customer, not just the reason to say. */
+  /** Section 6.5: the difference to show the customer, not just the reason to say.
+   *  A pack may carry the cue per language; English is the fallback. */
   demo_cue: string;
+  demo_cue_hi?: string;
+  demo_cue_mr?: string;
   energy: { typical_watts: number; standby_watts: number; units_per_year_4h_day: number };
 };
 

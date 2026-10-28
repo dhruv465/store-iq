@@ -4,6 +4,7 @@ import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.j
 import { recommendReply } from "./recommend.js";
 import { looksLikeAClaim, validateReply } from "./validate.js";
 import { describe, extractCard } from "./extract.js";
+import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, nextQuestionReply, wantsFollowThrough, wantsNewCustomer, wantsRecommend, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
@@ -269,16 +270,16 @@ export function startInteraction(session: Session): void {
 export function deterministic(event: Event, session: Session, pack: Pack): Reply | null {
   if (wantsNewCustomer(event.text, event.action)) {
     startInteraction(session);
-    return { text: "New customer, clean card.\nTell me what they said and I will give you the first question." };
+    return { text: t(session.language, "newcustomer") };
   }
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
     if (!session.steps_done.includes("assess")) session.steps_done.push("assess");
-    return nextQuestionReply(session, "Card confirmed.");
+    return nextQuestionReply(session, t(session.language, "card.confirmed"));
   }
   if (event.action === "card:correct") {
     session.card_confirmed = false;
-    return { text: "Tell me what to change and I will update the card." };
+    return { text: t(session.language, "card.fixwhat") };
   }
   const picked = event.action?.match(/^select:([A-Za-z0-9_-]+)$/);
   if (picked) {
@@ -307,11 +308,11 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   }
   if (event.action === "consent:no") {
     session.consent = false;
-    return { text: "No summary sent.\n↳ Section 4H: the summary only goes out with the customer's consent." };
+    return { text: t(session.language, "ft.noconsent") };
   }
   // Section 4C: the pack carries the confirm/correct pair, so a known claim needs no request.
   if (looksLikeAClaim(event.text, event.action) && event.text) {
-    const corrected = validateReply(pack, event.text);
+    const corrected = validateReply(pack, event.text, session.language);
     if (corrected) {
       session.step = "validate";
       if (!session.steps_done.includes("validate")) session.steps_done.push("validate");
@@ -325,7 +326,7 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     if (!session.steps_done.includes("recommend")) session.steps_done.push("recommend");
     // A cue given is a difference demonstrated, which is what opens the offer gate.
     session.demonstrated = true;
-    return recommendReply(pack, session.card);
+    return recommendReply(pack, session.card, session.language);
   }
   if (wantsFollowThrough(event.text, event.action)) {
     session.step = "follow_through";
@@ -366,11 +367,15 @@ export async function decide(
   request: typeof fetch = fetch,
   store?: Store,
 ): Promise<Reply> {
-  if (event.text) session.language = languageOf(event.text);
+  const switched = askedToSwitchLanguage(event.text);
+  if (switched) session.language = switched;
+  else if (event.text) session.language = languageFrom(event.text, session.language);
   const tapped = applyAction(session, event.action);
   if (tapped && !deterministic(event, session, pack)) {
     session.assessed = isAssessed(session.card);
-    const reply = session.assessed && !session.card_confirmed ? cardSummary(session) : nextQuestionReply(session, `Noted: ${tapped}.`);
+    const reply = session.assessed && !session.card_confirmed
+      ? cardSummary(session)
+      : nextQuestionReply(session, t(session.language, "noted", { body: tapped }));
     session.history.push({ who: "associate", text: String(event.action).slice(0, 300) });
     session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
     return reply;
@@ -379,15 +384,18 @@ export async function decide(
   const skipped = event.action?.match(/^skip:([a-z_]+)$/);
   if (skipped) {
     (session.card as Record<string, unknown>)[skipped[1]!] = "not stated";
-    return nextQuestionReply(session, "Noted: not sure.");
+    return nextQuestionReply(session, t(session.language, "noted.notsure"));
   }
+  // A request to switch language is a whole turn on its own.
+  if (switched && (event.text ?? "").trim().split(/\s+/).length <= 4)
+    return nextQuestionReply(session, t(session.language, "lang.switched"));
   // Extra points: both read from the pack and the database, so neither spends a request.
   if (store && wantsManagerView(event.text, event.action))
     return managerView(await store.today(), await store.openQuestions());
   if (store && wantsExpert(event.text, event.action)) {
     const question = (event.text ?? "").slice(0, 400);
     const reference = newReference();
-    const { reply, area, owner } = expertReply(pack, question, reference);
+    const { reply, area, owner } = expertReply(pack, question, reference, session.language);
     await store.logQuestion({ reference, phone: session.phone, area, owner, question });
     return reply;
   }
@@ -401,7 +409,7 @@ export async function decide(
       if (!session.steps_done.includes("assess") && session.assessed) session.steps_done.push("assess");
       const reply = session.assessed && !session.card_confirmed
         ? cardSummary(session)
-        : nextQuestionReply(session, `Noted: ${describe(Object.fromEntries(fields))}.`);
+        : nextQuestionReply(session, t(session.language, "noted", { body: describe(Object.fromEntries(fields)) }));
       session.history.push({ who: "associate", text: event.text.slice(0, 300) });
       session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
       session.history = session.history.slice(-12);
@@ -477,7 +485,7 @@ export async function decide(
     };
   else if (offerLeaked(reply.text, session.assessed, session.demonstrated))
     reply = {
-      text: `Offers come after the home. ${nextQuestionReply(session).text.split("\n").pop()}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
+      text: `${t(session.language, "gate.offers", { body: nextQuestionReply(session).text.split("\n").pop() ?? "" })}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
     };
   session.history.push({ who: "associate", text: (event.text ?? event.action ?? (event.audio ? "voice note" : "photo")).slice(0, 300) });
   session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });

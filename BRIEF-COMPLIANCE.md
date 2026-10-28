@@ -57,6 +57,15 @@ electricity example, in 7 ms; a claim the pack has nothing on still goes to the 
 are all deterministic — they answer in single-digit milliseconds, spend no quota, and cannot invent a
 figure. That is most of the §8 acceptance sequence running without the model at all.
 
+## Extra points (contest §2)
+
+| Item | State |
+| --- | --- |
+| Hindi and one more Indian language | **Done for every deterministic reply.** Hindi and Marathi, including the questions, the buttons, the card read-back, the recommendation reasons and the demonstration cues. Devanagari input fills the card too. Figures, product names and prices are never translated. |
+| Department manager view | **Done.** "team" returns today's volume, median score, how often the home was assessed, the most skipped step and open expert questions. |
+| Ask an expert | **Done.** Routed by subject to a named owner with a quotable reference and a line to hold the customer. |
+| Store visit log by voice note | **Not built** — needs voice, which needs a model. |
+
 ## Hosting state, 28 Oct
 
 Render cannot host this yet: every service in the workspace, `smartbazaar-demo` included, is `suspended`

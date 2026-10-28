@@ -1,4 +1,6 @@
 import type { Pack } from "./pack.js";
+import type { Lang } from "./i18n.js";
+import { t } from "./i18n.js";
 import type { Reply } from "./types.js";
 
 /** Section 4C: the customer says something partly true. Store IQ hands the associate a line that
@@ -51,10 +53,10 @@ export function looksLikeAClaim(text: string | undefined, action: string | undef
 }
 
 /** Confirm what is true, then correct what is not, in words the associate can say out loud. */
-export function validateReply(pack: Pack, text: string): Reply | null {
+export function validateReply(pack: Pack, text: string, lang: Lang = "en"): Reply | null {
   const myth = matchMyth(pack, text);
   if (!myth) return null;
   return {
-    text: [`Say: "${myth.confirm} ${myth.correct}"`, "↳ Confirm the true part before correcting it."].join("\n").slice(0, 1000),
+    text: [t(lang, "val.say", { body: `${myth.confirm} ${myth.correct}` }), t(lang, "val.reason")].join("\n").slice(0, 1000),
   };
 }

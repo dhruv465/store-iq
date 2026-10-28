@@ -1,4 +1,5 @@
 import { recommendedInches, type Pack, type Product } from "./pack.js";
+import { t, type Lang } from "./i18n.js";
 import type { HomeCard, Reply } from "./types.js";
 
 /** Section 4E and 6.5: three options, a reason for each, and the difference to demonstrate.
@@ -15,7 +16,7 @@ type Rule = {
   /** Points if it fires, and the reason it supplies when it is the strongest match. */
   weight: number;
   applies: (product: Product, card: HomeCard) => boolean;
-  reason: (product: Product) => string;
+  reason: (product: Product, lang: Lang) => string;
 };
 
 function wants(card: HomeCard, ...needles: string[]): boolean {
@@ -43,37 +44,36 @@ const RULES: Rule[] = [
     weight: 30,
     applies: (product, card) => wants(card, "ps5", "console", "gaming", "xbox") &&
       Number(product.specs.hdmi_21_ports) >= 1 && Number(product.specs.refresh_hz) >= 120,
-    reason: (product) =>
-      `${product.specs.refresh_hz} Hz and ${product.specs.hdmi_21_ports} HDMI 2.1 for the console`,
+    reason: (product, lang) => t(lang, "r.console", { hz: String(product.specs.refresh_hz), ports: String(product.specs.hdmi_21_ports) }),
   },
   {
     id: "brightness",
     weight: 25,
     applies: (product, card) => bright(card) && Number(product.specs.peak_nits) >= 600,
-    reason: (product) => `${product.specs.peak_nits} nits holds the picture in that afternoon sun`,
+    reason: (product, lang) => t(lang, "r.bright", { nits: String(product.specs.peak_nits) }),
   },
   {
     id: "motion",
     weight: 18,
     applies: (product, card) => wants(card, "cricket", "sport", "football") && Number(product.specs.refresh_hz) >= 120,
-    reason: (product) => `${product.specs.refresh_hz} Hz keeps the ball sharp`,
+    reason: (product, lang) => t(lang, "r.motion", { hz: String(product.specs.refresh_hz) }),
   },
   {
     id: "sound",
     weight: 12,
     applies: (product, card) => wants(card, "sound", "music", "audio") && Number(product.specs.speaker_watts) >= 30,
-    reason: (product) => `${product.specs.speaker_watts} W speakers, no soundbar needed yet`,
+    reason: (product, lang) => t(lang, "r.sound", { w: String(product.specs.speaker_watts) }),
   },
   {
     id: "apps",
     weight: 8,
     applies: (product, card) => wants(card, "ott", "netflix", "prime", "movie") && !!product.specs.os,
-    reason: (product) => `${product.specs.os} has the OTT apps built in`,
+    reason: (product, lang) => t(lang, "r.apps", { os: String(product.specs.os) }),
   },
 ];
 
 /** Ranked options for this home. Never more than three, never an out-of-stock product. */
-export function rank(pack: Pack, card: HomeCard): Option[] {
+export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
   const target = targetInches(card);
   const scored = pack.products
     .filter((product) => product.stock_units > 0)
@@ -83,7 +83,7 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
       for (const rule of RULES)
         if (rule.applies(product, card)) {
           score += rule.weight;
-          if (!best || rule.weight > best.weight) best = { weight: rule.weight, reason: rule.reason(product), key: rule.id };
+          if (!best || rule.weight > best.weight) best = { weight: rule.weight, reason: rule.reason(product, lang), key: rule.id };
         }
       // Size is the thing the brief leads with, so it always contributes and can always explain itself.
       if (target !== null) {
@@ -97,8 +97,8 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
             key: "size",
             reason:
               off <= 6
-                ? `${product.size_inch} inch is the fit at that distance`
-                : `${product.size_inch} inch, the closest we stock to the ${target} inch that distance suggests`,
+                ? t(lang, "r.fit", { inch: product.size_inch })
+                : t(lang, "r.closest", { inch: product.size_inch, target }),
           };
       }
       if (typeof card.budget_rupees === "number" && card.budget_rupees > 0) {
@@ -110,7 +110,7 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
         score,
         reason: best?.reason ?? `${product.panel} panel, ${product.good_for[0] ?? "general use"}`,
         key: best?.key ?? "panel",
-        cue: product.demo_cue,
+        cue: cueFor(product, lang),
       };
     });
   // Stable order: score, then the cheaper one, then the sku, so the same card always ranks the same way.
@@ -121,7 +121,7 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
 
 /** "One reason each" means one reason EACH. Where the same reason fits two options, the duplicate is
  *  replaced with a fact that actually separates it from the others, still read straight off the pack. */
-export function distinguish(options: Option[]): Option[] {
+export function distinguish(options: Option[], lang: Lang = "en"): Option[] {
   const cheapest = Math.min(...options.map((option) => option.product.price_rupees));
   const brightest = Math.max(...options.map((option) => Number(option.product.specs.peak_nits)));
   const loudest = Math.max(...options.map((option) => Number(option.product.specs.speaker_watts)));
@@ -133,11 +133,11 @@ export function distinguish(options: Option[]): Option[] {
     }
     const product = option.product;
     const separators = [
-      product.price_rupees === cheapest && `the lowest price of the three`,
-      Number(product.specs.peak_nits) === brightest && `${product.specs.peak_nits} nits, the brightest of the three`,
-      Number(product.specs.speaker_watts) === loudest && `${product.specs.speaker_watts} W speakers, the strongest sound here`,
-      product.panel !== options[0]!.product.panel && `${product.panel}, a different panel to compare`,
-      `${product.specs.os} for the apps`,
+      product.price_rupees === cheapest && t(lang, "s.cheapest"),
+      Number(product.specs.peak_nits) === brightest && t(lang, "s.brightest", { nits: String(product.specs.peak_nits) }),
+      Number(product.specs.speaker_watts) === loudest && t(lang, "s.loudest", { w: String(product.specs.speaker_watts) }),
+      product.panel !== options[0]!.product.panel && t(lang, "s.panel", { panel: product.panel }),
+      t(lang, "s.os", { os: String(product.specs.os) }),
     ].filter((entry): entry is string => typeof entry === "string" && !seen.has(entry));
     const reason = separators[0] ?? option.reason;
     seen.add(reason);
@@ -145,19 +145,25 @@ export function distinguish(options: Option[]): Option[] {
   });
 }
 
+/** The cue in the associate's language when the pack carries one, otherwise as the pack has it. */
+export function cueFor(product: Product, lang: Lang): string {
+  const localised = lang === "hi" ? product.demo_cue_hi : lang === "mr" ? product.demo_cue_mr : undefined;
+  return localised?.trim() || product.demo_cue;
+}
+
 function short(product: Product): string {
   return `${product.brand} ${product.size_inch}"`;
 }
 
 /** Three lines, each carrying its own reason and its own demonstration cue. */
-export function recommendReply(pack: Pack, card: HomeCard): Reply {
-  const options = distinguish(rank(pack, card));
-  if (!options.length) return { text: "Nothing in today's pack is in stock for this home." };
+export function recommendReply(pack: Pack, card: HomeCard, lang: Lang = "en"): Reply {
+  const options = distinguish(rank(pack, card, lang), lang);
+  if (!options.length) return { text: t(lang, "rec.nostock") };
   return {
     text: options
       .map(
         (option) =>
-          `${short(option.product)} Rs ${option.product.price_rupees.toLocaleString("en-IN")} — ${option.reason}. Show: ${option.cue}`,
+          `${short(option.product)} Rs ${option.product.price_rupees.toLocaleString("en-IN")} — ${option.reason}. ${t(lang, "rec.show")}: ${option.cue}`,
       )
       .join("\n")
       .slice(0, 1000),

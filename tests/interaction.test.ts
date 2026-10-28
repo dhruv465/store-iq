@@ -45,7 +45,7 @@ test("the associate can start a new customer by word or by tap", () => {
 
 test("the card is read back in the brief's I heard shape, with a correction button", () => {
   const reply = cardSummary(assessed());
-  assert.match(reply.text, /^I heard: hall; sits 3 m away; bright; sports and OTT; four people\./);
+  assert.match(reply.text, /^I heard: hall; sits 3 m away; bright; sports, OTT; four people\./);
   assert.deepEqual(reply.buttons?.map((b) => b.id), ["card:confirmed", "card:correct", "new_customer"]);
 });
 

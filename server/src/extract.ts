@@ -21,6 +21,49 @@ function number(raw: string): number | null {
 
 const NUM = "(\\d+(?:\\.\\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|paanch)";
 
+/** Devanagari spellings of the same facts, so a Hindi or Marathi associate is read too. */
+const DEVANAGARI_NUMBERS: Record<string, number> = {
+  "एक": 1, "दोन": 2, "दो": 2, "तीन": 3, "चार": 4, "पाच": 5, "पांच": 5, "पाँच": 5, "सहा": 6, "छह": 6,
+};
+
+function devanagari(text: string, card: Partial<HomeCard>): void {
+  const count = (word: string): number | null => {
+    const digits = text.match(new RegExp(`(\\d+)\\s*${word}`));
+    if (digits) return Number(digits[1]);
+    for (const [name, value] of Object.entries(DEVANAGARI_NUMBERS))
+      if (new RegExp(`${name}\\s*${word}`).test(text)) return value;
+    return null;
+  };
+  const metres = count("(?:मीटर|मिटर|मीटर्स)");
+  if (metres && metres > 0 && metres < 15) card.distance_m ??= metres;
+  const feet = count("(?:फुट|फीट|फूट)");
+  if (feet && feet > 0 && feet < 40) card.distance_feet ??= feet;
+  const people = count("(?:लोग|जन|माणसं|लोक|सदस्य)");
+  if (people && people > 0 && people < 30) card.family ??= `${people} people`;
+
+  if (/धूप|ऊन|उजाला|रोशनी|प्रकाश/.test(text)) card.light ??= "bright afternoon sun";
+  else if (/अंधेरा|अंधार|कम रोशनी/.test(text)) card.light ??= "dim";
+  if (/दीवार|भिंत/.test(text)) card.mount ??= "wall";
+  else if (/टेबल|मेज/.test(text)) card.mount ??= "table";
+  if (/हॉल|लिविंग|दिवाणखाना/.test(text)) card.room ??= "hall";
+  else if (/बेडरूम|शयन|कमरा|खोली/.test(text)) card.room ??= "bedroom";
+
+  const content: string[] = [];
+  if (/क्रिकेट|मैच|सामना/.test(text)) content.push("cricket");
+  if (/फिल्म|फ़िल्म|सिनेमा|मूवी/.test(text)) content.push("OTT");
+  if (/न्यूज़|समाचार|बातम्या|सीरियल|मालिका/.test(text)) content.push("news");
+  if (/खेल|स्पोर्ट्स/.test(text)) content.push("sports");
+  if (content.length) card.content ??= [...new Set(content)];
+
+  const devices: string[] = [];
+  if (/सेट.?टॉप|डिश|केबल/.test(text)) devices.push("set-top box");
+  if (/साउंडबार|होम थिएटर/.test(text)) devices.push("soundbar");
+  if (/कंसोल|प्लेस्टेशन/.test(text)) devices.push("PS5");
+  if (devices.length) card.devices ??= [...new Set(devices)];
+
+  if (/आवाज|आवाज़|साउंड|ध्वनी/.test(text)) card.priorities ??= ["sound"];
+}
+
 export function extractCard(text: string): Partial<HomeCard> {
   const card: Partial<HomeCard> = {};
   const lower = text.toLowerCase();
@@ -90,6 +133,7 @@ export function extractCard(text: string): Partial<HomeCard> {
   const replacing = lower.match(/\b(old|current|existing|purana)\s+(tv|television|set)\b[^.]{0,40}/);
   if (replacing) card.replacing = replacing[0].trim().slice(0, 60);
 
+  if (/[\u0900-\u097F]/.test(text)) devanagari(text, card);
   return card;
 }
 

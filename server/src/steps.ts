@@ -1,6 +1,7 @@
 import type { Pack } from "./pack.js";
 import { isAssessed } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
+import { t, v } from "./i18n.js";
 import { STEPS } from "./types.js";
 
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
@@ -16,32 +17,36 @@ export function wantsNewCustomer(text: string | undefined, action: string | unde
 /** Plain words for what Store IQ believes about this home, in the brief's "I heard" shape. */
 export function cardSummary(session: Session): Reply {
   const card = session.card;
+  const lang = session.language;
   const parts: string[] = [];
-  if (card.room) parts.push(String(card.room));
+  if (card.room) parts.push(v(lang, String(card.room)));
   if (card.space) parts.push(String(card.space));
-  if (card.distance_m) parts.push(`sits ${card.distance_m} m away`);
-  else if (card.distance_feet) parts.push(`sits ${card.distance_feet} feet away`);
-  if (card.light) parts.push(String(card.light));
-  if (card.mount) parts.push(`${card.mount} mount`);
-  if (card.content?.length) parts.push(card.content.join(" and "));
-  if (card.family) parts.push(String(card.family));
-  if (card.devices?.length) parts.push(`has ${card.devices.join(", ")}`);
-  if (card.replacing) parts.push(`replacing: ${card.replacing}`);
-  if (card.priorities?.length) parts.push(`cares about ${card.priorities.join(", ")}`);
-  if (card.site_constraints?.length) parts.push(`site: ${card.site_constraints.join(", ")}`);
+  if (card.distance_m) parts.push(t(lang, "sits.m", { n: card.distance_m }));
+  else if (card.distance_feet) parts.push(t(lang, "sits.ft", { n: card.distance_feet }));
+  if (card.light) parts.push(v(lang, String(card.light)));
+  if (card.mount) parts.push(t(lang, "mount.of", { v: v(lang, String(card.mount)) }));
+  if (card.content?.length) parts.push(card.content.map((entry) => v(lang, entry)).join(", "));
+  if (card.family) {
+    const people = String(card.family).match(/(\d+)/);
+    parts.push(people ? t(lang, "people.n", { n: people[1]! }) : String(card.family));
+  }
+  if (card.devices?.length) parts.push(t(lang, "has", { v: card.devices.map((entry) => v(lang, entry)).join(", ") }));
+  if (card.replacing) parts.push(String(card.replacing));
+  if (card.priorities?.length) parts.push(t(lang, "cares", { v: card.priorities.map((entry) => v(lang, entry)).join(", ") }));
+  if (card.site_constraints?.length) parts.push(card.site_constraints.join(", "));
   if (card.internet) parts.push(String(card.internet));
-  if (card.budget_rupees) parts.push(`budget Rs ${card.budget_rupees}`);
+  if (card.budget_rupees) parts.push(t(lang, "budget.of", { v: card.budget_rupees }));
   return {
     text: [
-      parts.length ? `I heard: ${parts.join("; ")}.` : "I have nothing on this home yet.",
-      parts.length ? "Right?" : "Tell me what the customer said.",
+      parts.length ? t(session.language, "card.heard", { body: parts.join("; ") }) : t(session.language, "card.nothing"),
+      parts.length ? t(session.language, "card.right") : t(session.language, "card.tellme"),
     ].join("\n"),
     ...(parts.length
       ? {
           buttons: [
-            { id: "card:confirmed", title: "Yes, correct" },
-            { id: "card:correct", title: "Let me fix it" },
-            { id: "new_customer", title: "New customer" },
+            { id: "card:confirmed", title: t(session.language, "btn.yes") },
+            { id: "card:correct", title: t(session.language, "btn.fix") },
+            { id: "new_customer", title: t(session.language, "btn.new") },
           ],
         }
       : {}),
@@ -130,9 +135,9 @@ export function reviewReply(session: Session): Reply {
   const next = missing.find((step) => step !== "review");
   return {
     text: [
-      `This conversation: ${points} of ${MAX_SCORE}.`,
-      covered.length ? `Covered: ${covered.join(", ")}.` : "No step is complete yet.",
-      next ? `Next time: ${ADVICE[next]}` : "Every step was covered. Keep the order.",
+      t(session.language, "rev.score", { points, max: MAX_SCORE }),
+      covered.length ? t(session.language, "rev.covered", { body: covered.join(", ") }) : t(session.language, "rev.none"),
+      next ? t(session.language, "rev.next", { body: ADVICE[next] }) : t(session.language, "rev.perfect"),
     ]
       .join("\n")
       .slice(0, 1000),
@@ -140,31 +145,34 @@ export function reviewReply(session: Session): Reply {
 }
 
 /** The floor order of questions, each with its own answers, so a tap never needs the model. */
-export const QUESTION_FLOW: { field: string; ask: string; options: [string, string][] }[] = [
-  { field: "distance_m", ask: 'Ask: "How far will you sit from the TV?"',
-    options: [["2-3", "2-3 m"], ["3-4", "3-4 m"], ["", "Not sure"]] },
-  { field: "light", ask: 'Ask: "How much light hits that wall in the afternoon?"',
-    options: [["bright afternoon sun", "Bright"], ["some light", "Some"], ["dim", "Dim"]] },
-  { field: "mount", ask: 'Ask: "Wall mount or table top?"',
-    options: [["wall", "Wall mount"], ["table", "Table top"], ["", "Not sure"]] },
-  { field: "content", ask: 'Ask: "What do they watch most?"',
-    options: [["cricket", "Cricket"], ["OTT", "OTT / Movies"], ["news", "News"]] },
-  { field: "devices", ask: 'Ask: "Any set-top box, console or soundbar?"',
-    options: [["set-top box", "Set-top box"], ["PS5", "Console"], ["none", "Nothing"]] },
-  { field: "family", ask: 'Ask: "Who watches together?"',
-    options: [["two people", "Two"], ["four people", "Four"], ["more than four", "More"]] },
-];
+export function questionFlow(lang: Session["language"]): { field: string; ask: string; options: [string, string][] }[] {
+  return [
+    { field: "distance_m", ask: t(lang, "ask.distance"),
+      options: [["2-3", "2-3 m"], ["3-4", "3-4 m"], ["", t(lang, "opt.notsure")]] },
+    { field: "light", ask: t(lang, "ask.light"),
+      options: [["bright afternoon sun", t(lang, "opt.bright")], ["some light", t(lang, "opt.some")], ["dim", t(lang, "opt.dim")]] },
+    { field: "mount", ask: t(lang, "ask.mount"),
+      options: [["wall", t(lang, "opt.wall")], ["table", t(lang, "opt.table")], ["", t(lang, "opt.notsure")]] },
+    { field: "content", ask: t(lang, "ask.content"),
+      options: [["cricket", t(lang, "opt.cricket")], ["OTT", t(lang, "opt.ott")], ["news", t(lang, "opt.news")]] },
+    { field: "devices", ask: t(lang, "ask.devices"),
+      options: [["set-top box", t(lang, "opt.settop")], ["PS5", t(lang, "opt.console")], ["none", t(lang, "opt.nothing")]] },
+    { field: "family", ask: t(lang, "ask.family"),
+      options: [["two people", t(lang, "opt.two")], ["four people", t(lang, "opt.four")], ["more than four", t(lang, "opt.more")]] },
+  ];
+}
 
 /** The next unanswered question, with its buttons. "Not sure" carries no value, so it fills nothing. */
 export function nextQuestionReply(session: Session, prefix?: string): Reply {
-  const step = QUESTION_FLOW.find((entry) => {
+  const lang = session.language;
+  const step = questionFlow(lang).find((entry) => {
     const value = (session.card as Record<string, unknown>)[entry.field];
     return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
   });
   if (!step)
     return {
-      text: [prefix, "The card is full. Read it back to them, then ask for three options."].filter(Boolean).join("\n"),
-      buttons: [{ id: "card:show", title: "Show the card" }, { id: "recommend", title: "Three options" }],
+      text: [prefix, t(lang, "card.full")].filter(Boolean).join("\n"),
+      buttons: [{ id: "card:show", title: t(lang, "btn.showcard") }, { id: "recommend", title: t(lang, "btn.three") }],
     };
   return {
     text: [prefix, step.ask].filter(Boolean).join("\n"),
@@ -224,7 +232,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   if (!selection) {
     const options = session.shortlist.length ? session.shortlist : pack.products.map((product) => product.sku);
     return {
-      text: "Which one did they pick?\n↳ I will not guess the selection before preparing a summary.",
+      text: t(session.language, "ft.which"),
       buttons: options.slice(0, 3).map((sku) => ({
         id: `select:${sku}`,
         title: (pack.products.find((product) => product.sku === sku)?.brand ?? sku).slice(0, 20),
@@ -239,21 +247,21 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   if (!session.consent)
     return {
       text: [
-        `Read this to the customer: "${product.name}, total Rs ${itemised.total.toLocaleString("en-IN")}. May I send you a summary?"`,
-        "Tap once they agree.",
+        t(session.language, "ft.read", { name: product.name, total: itemised.total.toLocaleString("en-IN") }),
+        t(session.language, "ft.tap"),
       ].join("\n"),
       buttons: [
-        { id: "consent:yes", title: "They agreed" },
-        { id: "consent:no", title: "Declined" },
+        { id: "consent:yes", title: t(session.language, "btn.agreed") },
+        { id: "consent:no", title: t(session.language, "btn.declined") },
       ],
     };
 
   return {
     text: [
       // The first itemised line already names the product; do not say it twice.
-      `Send: "${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}."`,
-      `Task: follow up this order · owner ${associate}`,
-      siteNeeds.length ? `Install job needs: ${siteNeeds.join("; ")}` : "Install job: no site requirements for these charges",
+      t(session.language, "ft.send", { body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.` }),
+      t(session.language, "ft.task", { owner: associate }),
+      siteNeeds.length ? t(session.language, "ft.site", { body: siteNeeds.join("; ") }) : t(session.language, "ft.nosite"),
     ].join("\n"),
   };
 }
