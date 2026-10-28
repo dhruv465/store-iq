@@ -70,6 +70,29 @@ Three rules are enforced in code, not asked of the model:
 
 `data/pack.json` is a stub written to unblock the build: TV SKUs, offers, finance, charges, label lines, myths and install requirements. Replace it with the official sample data pack when it lands (30 Oct) — same shape, or adjust `server/src/pack.ts`.
 
+## Hosting
+
+Meta needs a public HTTPS callback URL. Two options, and the laptop one is currently the better demo:
+
+**A stable ngrok domain (now).** The free tier includes one reserved domain, so the Meta callback URL is
+pasted once and never changes:
+
+```bash
+# claim the domain at dashboard.ngrok.com -> Domains, put it in .env as NGROK_DOMAIN
+npm run tunnel
+```
+
+This serves from the laptop, which means **no cold start** — the five-second rule in the brief is easier
+to hold here than on a sleeping free dyno. The cost is that the laptop and its network have to be up.
+
+**Render (when billing allows).** `render.yaml` and the `Dockerfile` are ready: free plan, Singapore,
+in-memory Postgres (the home card is interaction-scoped, so nothing needs a disk, and there is no lock
+file to go stale on restart). As of 28 Oct every service in the workspace, `smartbazaar-demo` included,
+is `suspended` with suspender `billing`, so `render blueprints validate` returns `billing_suspended` and
+no service can be created. Settle that and this deploys as it stands. Note that the free plan sleeps
+after 15 idle minutes and takes about a minute to wake, which can lose a webhook delivery outright and
+blows the five-second target on the first reply.
+
 ## Model
 
 Pinned to `gemini-2.5-flash` in `.env`, not an alias, so demo day cannot shift under us. The newer

@@ -39,6 +39,16 @@ Status is what the code actually does, verified, not what it intends to do.
 5. **Energy facts** — the brief's example objection is "a larger screen always uses much more electricity", answered with "the actual energy information for these models". The pack has no power data, so that exact exchange cannot be answered from facts.
 6. **Card fields from §3** — replacement reason / current product, site constraints, customer priorities, available space. Not in the card today.
 
+## Hosting state, 28 Oct
+
+Render cannot host this yet: every service in the workspace, `smartbazaar-demo` included, is `suspended`
+with suspender `billing`, and `render blueprints validate` returns `billing_suspended`. `render.yaml` and
+the `Dockerfile` are committed and ready for the moment that clears. The interim is a reserved ngrok
+domain (`npm run tunnel`), which serves from the laptop with no cold start.
+
+That suspension also explains the silence when the number was messaged: Meta was delivering to
+`smartbazaar-demo`, which was itself suspended, so nothing was running at either end.
+
 ## Deviation worth flagging to the organisers
 
 The brief says the first reply should land **within five seconds where possible**. Deterministic turns answer in
