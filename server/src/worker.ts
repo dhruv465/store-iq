@@ -85,7 +85,7 @@ export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) 
     const session = await db.session(row.phone);
     let reply: Reply;
     try {
-      reply = await decide(event, session, pack);
+      reply = await decide(event, session, pack, fetch, db);
     } catch (error) {
       // Silence in front of a customer is worse than an honest line. The session is left untouched,
       // so the associate can simply ask again from where they were.

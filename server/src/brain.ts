@@ -4,6 +4,7 @@ import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.j
 import { recommendReply } from "./recommend.js";
 import { looksLikeAClaim, validateReply } from "./validate.js";
 import { describe, extractCard } from "./extract.js";
+import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, nextQuestionReply, wantsFollowThrough, wantsNewCustomer, wantsRecommend, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
@@ -352,7 +353,19 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   return null;
 }
 
-export async function decide(event: Event, session: Session, pack: Pack, request: typeof fetch = fetch): Promise<Reply> {
+export type Store = {
+  today(): Promise<Session[]>;
+  openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
+  logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
+};
+
+export async function decide(
+  event: Event,
+  session: Session,
+  pack: Pack,
+  request: typeof fetch = fetch,
+  store?: Store,
+): Promise<Reply> {
   if (event.text) session.language = languageOf(event.text);
   const tapped = applyAction(session, event.action);
   if (tapped && !deterministic(event, session, pack)) {
@@ -367,6 +380,16 @@ export async function decide(event: Event, session: Session, pack: Pack, request
   if (skipped) {
     (session.card as Record<string, unknown>)[skipped[1]!] = "not stated";
     return nextQuestionReply(session, "Noted: not sure.");
+  }
+  // Extra points: both read from the pack and the database, so neither spends a request.
+  if (store && wantsManagerView(event.text, event.action))
+    return managerView(await store.today(), await store.openQuestions());
+  if (store && wantsExpert(event.text, event.action)) {
+    const question = (event.text ?? "").slice(0, 400);
+    const reference = newReference();
+    const { reply, area, owner } = expertReply(pack, question, reference);
+    await store.logQuestion({ reference, phone: session.phone, area, owner, question });
+    return reply;
   }
   // Read what we confidently can from the words before spending a request on them.
   if (event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {

@@ -11,6 +11,7 @@ export type Pack = {
   finance: Record<string, any>[];
   charges: Record<string, any>[];
   accessories: { id: string; title: string; price_rupees: number; for: string }[];
+  experts: { area: string; name: string }[];
   electricity: { tariff_rupees_per_unit: number; note: string };
   labels: { spec: string; say: string }[];
   myths: { claim: string; confirm: string; correct: string }[];

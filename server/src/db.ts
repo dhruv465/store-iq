@@ -33,6 +33,16 @@ create table if not exists outbox (
   error text
 );
 create index if not exists outbox_pending on outbox (id) where status = 'pending';
+create table if not exists expert_questions (
+  id bigserial primary key,
+  reference text not null unique,
+  phone text not null,
+  area text not null,
+  owner text not null,
+  question text not null,
+  asked_at timestamptz not null default now(),
+  answered_at timestamptz
+);
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -154,6 +164,30 @@ export class DB {
       [limit],
     );
     return rows.rows;
+  }
+
+  /** Extra points: a question the floor could not answer, routed to a named owner. */
+  async logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void> {
+    await this.pg.query(
+      `insert into expert_questions (reference, phone, area, owner, question) values ($1,$2,$3,$4,$5)
+       on conflict (reference) do nothing`,
+      [row.reference, row.phone, row.area, row.owner, row.question],
+    );
+  }
+
+  async openQuestions(): Promise<{ reference: string; area: string; owner: string }[]> {
+    const rows = await this.pg.query<{ reference: string; area: string; owner: string }>(
+      `select reference, area, owner from expert_questions where answered_at is null order by id desc limit 20`,
+    );
+    return rows.rows;
+  }
+
+  /** Every conversation touched today, for the department manager view. */
+  async today(): Promise<Session[]> {
+    const rows = await this.pg.query<{ state: Session }>(
+      `select state from sessions where updated_at > now() - interval '12 hours'`,
+    );
+    return rows.rows.map((row) => row.state);
   }
 
   async health(): Promise<Record<string, number>> {

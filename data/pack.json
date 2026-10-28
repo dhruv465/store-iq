@@ -289,5 +289,23 @@
       "price_rupees": 699,
       "for": "PS5 at full quality"
     }
+  ],
+  "experts": [
+    {
+      "area": "installation and site survey",
+      "name": "Suresh (service desk)"
+    },
+    {
+      "area": "finance and EMI",
+      "name": "Priya (billing)"
+    },
+    {
+      "area": "stock and delivery dates",
+      "name": "Anil (back office)"
+    },
+    {
+      "area": "product and specifications",
+      "name": "the department manager"
+    }
   ]
 }

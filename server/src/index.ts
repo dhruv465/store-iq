@@ -58,7 +58,7 @@ try {
       };
       const session = await db.session(phone);
       const started = Date.now();
-      const reply = await decide(event, session, pack);
+      const reply = await decide(event, session, pack, fetch, db);
       await db.commit(session, []);
       return c.json({ reply, ms: Date.now() - started, step: session.step, card: session.card, assessed: session.assessed, demonstrated: session.demonstrated });
     });
