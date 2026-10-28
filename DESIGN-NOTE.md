@@ -22,21 +22,25 @@ Three rules are enforced in code, not asked of a model:
 
 ## What does not need a model
 
-Eight of the nine stages answer from the pack and the session, in **0–24 ms**, spending nothing:
+All nine stages answer from the pack and the session, in **1–15 ms**, spending nothing:
 
 | Stage | How |
 | --- | --- |
 | Before the shift | Read from the pack |
 | Assess | Card read from plain words, or filled by tap, with the next question from a fixed floor order |
 | Validate | The pack carries the confirm/correct pair for each known claim |
+| Translate | The pack carries the sentence for each label spec; the figure is read off the words |
+| One set named | Matched by SKU, by the model code on the tag, or by brand and size, then read out of the pack |
 | Recommend + demonstrate | Scored rules over the pack: distance, light, console, sport, sound, budget |
 | Complete | The itemised total is arithmetic, so it is computed rather than generated |
 | Close / follow through | Consent gate, task owner, site needs from the pack |
 | Review | Coverage of the nine stages, mapped to the judges' 0–14 |
 
 A model is needed for exactly two things: reading a **voice note** in phrasing the extractor cannot,
-and reading a **label photo**. It extracts facts; the code writes the reply. That keeps the quota
-small, the latency low, and the invented-figure surface near zero.
+and reading the **text off a label photo** — and even there it only reads the tag, in one small call;
+the answer is then written from the pack, so a misread model number cannot become an invented price.
+A photo whose caption names the set needs no model at all. That keeps the quota small, the latency
+low, and the invented-figure surface near zero.
 
 ## Built for the floor
 
@@ -61,7 +65,9 @@ floor carries the same phone as everyone else.
 
 ## Limits, honestly
 
-Built against a stub data pack; the real pack will need the ranking weights retuned. Voice and photo
-input are wired but have not been exercised end to end. Hosting is a laptop behind a reserved tunnel,
+Built against a stub data pack; the real pack will need the ranking weights retuned, and its
+`good_for` / `weak_for` words are English, so those two words stay English in a Hindi reply. A voice
+note still needs the model, and has not been exercised end to end; a photo is answered from the pack
+once its tag or caption names the set, and asks for the model number when it cannot be read. Hosting is a laptop behind a reserved tunnel,
 which has no cold start but does need the laptop up. No live inventory, payment, CRM or real customer
 messaging — per the brief's implementation boundary.

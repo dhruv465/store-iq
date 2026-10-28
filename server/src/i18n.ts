@@ -92,6 +92,17 @@ const EN: Record<string, Phrase> = {
   "exp.say": (v) => `Say: "Let me confirm that with our ${v.area} desk and come straight back to you."`,
   "gate.offers": (v) => `Offers come after the home. ${v.body}`,
   "lang.switched": "Theek hai.",
+  "p.stock": (v) => `${v.n} in stock`,
+  "p.out": "not in stock today",
+  "p.strong": (v) => `Strong: ${v.v}.`,
+  "p.weak": (v) => `Weak: ${v.v}.`,
+  "p.show": (v) => `Show them: ${v.v}`,
+  "p.reason": "Ask where they will sit before you talk price; that is what the offer waits on.",
+  "p.unread": "I could not read a model off that photo.\nType the model number, or the brand and the size.",
+  "p.notfound": (v) => `I read "${v.v}" off that photo, and that model is not in today's data pack.\n\u21b3 Check the shelf tag; I will not guess a price.`,
+  "btn.pick": "Pick this one",
+  "tr.reason": "\u21b3 A label figure means nothing until it is about their wall.",
+  "rec.first": "Two quick questions first, then three options.",
 };
 
 const HI: Record<string, Phrase> = {
@@ -178,6 +189,17 @@ const HI: Record<string, Phrase> = {
   "exp.say": (v) => `कहिए: "मैं यह हमारे ${v.area} डेस्क से पक्का करके तुरंत आपको बताता हूँ।"`,
   "gate.offers": (v) => `ऑफ़र घर समझने के बाद। ${v.body}`,
   "lang.switched": "ठीक है, अब हिंदी में।",
+  "p.stock": (v) => `${v.n} स्टॉक में`,
+  "p.out": "आज स्टॉक में नहीं",
+  "p.strong": (v) => `मज़बूत: ${v.v}।`,
+  "p.weak": (v) => `कमज़ोर: ${v.v}।`,
+  "p.show": (v) => `यह दिखाइए: ${v.v}`,
+  "p.reason": "दाम से पहले पूछिए कि वे कहाँ बैठेंगे; ऑफ़र उसके बाद खुलता है।",
+  "p.unread": "उस फ़ोटो से मॉडल पढ़ नहीं पाया।\nमॉडल नंबर, या ब्रांड और साइज़ लिख दीजिए।",
+  "p.notfound": (v) => `फ़ोटो में "${v.v}" पढ़ा, और वह मॉडल आज के डेटा पैक में नहीं है।\n\u21b3 शेल्फ़ टैग देखिए; दाम का अंदाज़ा मैं नहीं लगाऊँगा।`,
+  "btn.pick": "यही लेंगे",
+  "tr.reason": "\u21b3 लेबल का आंकड़ा तब तक बेकार है जब तक वह उनकी दीवार की बात न बने।",
+  "rec.first": "पहले दो छोटे सवाल, फिर तीन विकल्प।",
 };
 
 const MR: Record<string, Phrase> = {
@@ -264,6 +286,17 @@ const MR: Record<string, Phrase> = {
   "exp.say": (v) => `म्हणा: "मी हे आमच्या ${v.area} डेस्ककडून पक्कं करून लगेच सांगतो."`,
   "gate.offers": (v) => `ऑफर घर समजल्यावर. ${v.body}`,
   "lang.switched": "ठीक आहे, आता मराठीत.",
+  "p.stock": (v) => `${v.n} स्टॉकमध्ये`,
+  "p.out": "आज स्टॉकमध्ये नाही",
+  "p.strong": (v) => `जमेची बाजू: ${v.v}.`,
+  "p.weak": (v) => `कमजोर बाजू: ${v.v}.`,
+  "p.show": (v) => `हे दाखवा: ${v.v}`,
+  "p.reason": "किंमतीच्या आधी विचारा की ते कुठे बसणार; ऑफर त्यानंतरच उघडते.",
+  "p.unread": "त्या फोटोतून मॉडेल वाचता आलं नाही.\nमॉडेल नंबर, किंवा ब्रँड आणि साइज लिहा.",
+  "p.notfound": (v) => `फोटोत "${v.v}" वाचलं, आणि ते मॉडेल आजच्या डेटा पॅकमध्ये नाही.\n\u21b3 शेल्फ टॅग पाहा; किंमतीचा अंदाज मी लावणार नाही.`,
+  "btn.pick": "हाच घेणार",
+  "tr.reason": "\u21b3 लेबलवरचा आकडा त्यांच्या भिंतीबद्दल होईपर्यंत निरुपयोगी आहे.",
+  "rec.first": "आधी दोन छोटे प्रश्न, मग तीन पर्याय.",
 };
 
 const TABLES: Record<Lang, Record<string, Phrase>> = { en: EN, hi: HI, mr: MR };

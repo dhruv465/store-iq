@@ -3,6 +3,7 @@ import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
 import { looksLikeAClaim, validateReply } from "./validate.js";
+import { findProduct, productReply, translateSpec } from "./product.js";
 import { describe, extractCard } from "./extract.js";
 import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
@@ -131,6 +132,36 @@ export async function assertModelAvailable(request: typeof fetch = fetch): Promi
   if (!names.includes(model))
     throw Error(`GEMINI_MODEL=${model} is not available to this key. Listed flash models: ${names.filter((n) => n.includes("flash")).slice(0, 8).join(", ")}`);
   return model;
+}
+
+const LABEL_PROMPT = `Read the shelf tag, the box or the TV label in this photo. Reply with only what is printed on it: the brand, the model number or code, the screen size and any spec figures, as one short plain line. If a QR code's text is legible, append it. If nothing is legible, reply with the single word NONE.`;
+
+/** One small vision call, and it only reads the tag. The answer is then written from the data pack,
+ *  so a misread model number can never become an invented price. */
+export async function labelText(image: NonNullable<Event["image"]>, request: typeof fetch = fetch): Promise<string> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) return "";
+  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+  const response = await geminiRequest(
+    request,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [
+          { text: LABEL_PROMPT },
+          { inline_data: { mime_type: image.mimeType, data: Buffer.from(image.bytes).toString("base64") } },
+        ] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 128, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+    },
+  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 64 * 1024)));
+  const text = String(
+    body?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text).filter((value: unknown) => typeof value === "string").join("") ?? "",
+  ).trim();
+  return /^none\b/i.test(text) ? "" : text.slice(0, 200);
 }
 
 const OFFER_WORDS = /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|chhoot|छूट)s?\b/i;
@@ -328,6 +359,10 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     session.demonstrated = true;
     return recommendReply(pack, session.card, session.language);
   }
+  // "Which TVs are good?" from a browsing customer. The answer is still a question, not a product.
+  // A home fact in the same message outranks it, so the card extractor is not robbed of the turn.
+  if (wantsRecommend(event.text, event.action) && !isAssessed(session.card) && !Object.keys(extractCard(event.text ?? "")).length)
+    return nextQuestionReply(session, t(session.language, "rec.first"));
   if (wantsFollowThrough(event.text, event.action)) {
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
@@ -352,6 +387,22 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     return reply;
   }
   return null;
+}
+
+/** One set named, or one label figure quoted: the pack answers both without a request.
+ *  A quoted figure is section 4D's demonstration, which is half of what opens the offer gate. */
+function packAnswer(pack: Pack, said: string, session: Session): Reply | null {
+  const product = findProduct(pack, said);
+  const translated = translateSpec(pack, said, product, session.language);
+  if (translated) {
+    session.step = "translate";
+    if (!session.steps_done.includes("translate")) session.steps_done.push("translate");
+    session.demonstrated = true;
+    return translated;
+  }
+  if (!product) return null;
+  if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
+  return productReply(product, session.language, isAssessed(session.card));
 }
 
 export type Store = {
@@ -415,6 +466,28 @@ export async function decide(
       session.history = session.history.slice(-12);
       return reply;
     }
+  }
+  // The customer is standing at one set, or asked what a figure on its label means. Both are pack
+  // facts, and both run after the card extractor so a home fact in the same message still wins.
+  if (event.text && !event.image && !event.audio) {
+    const reply = packAnswer(pack, event.text, session);
+    if (reply) {
+      session.history.push({ who: "associate", text: event.text.slice(0, 300) });
+      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+      session.history = session.history.slice(-12);
+      return reply;
+    }
+  }
+  // A photo of a shelf tag: read the tag, then answer from the pack.
+  if (event.image) {
+    const read = await labelText(event.image, request).catch(() => "");
+    const said = [read, event.text].filter(Boolean).join(" ");
+    const reply = packAnswer(pack, said, session);
+    session.history.push({ who: "associate", text: `photo: ${read || "unreadable"}`.slice(0, 300) });
+    const answer = reply ?? { text: read ? t(session.language, "p.notfound", { v: read.slice(0, 60) }) : t(session.language, "p.unread") };
+    session.history.push({ who: "storeiq", text: answer.text.slice(0, 300) });
+    session.history = session.history.slice(-12);
+    return answer;
   }
   const free = deterministic(event, session, pack);
   if (free) {
