@@ -1,15 +1,32 @@
 {
   "version": "stub-1",
   "note": "Placeholder data pack. Replace with the official sample data pack (Ashish Chandorkar, 30 Oct 2026). Test data only.",
-  "store": { "id": "RD-MUM-042", "name": "Reliance Digital Lower Parel", "city": "Mumbai" },
+  "store": {
+    "id": "RD-MUM-042",
+    "name": "Reliance Digital Lower Parel",
+    "city": "Mumbai"
+  },
   "shift_brief": {
     "date": "2026-10-28",
-    "stock_changes": ["Sony K-55S30 back in stock, 6 units", "LG 65UT8050 down to 2 units"],
-    "offer_changes": ["HDFC card instant discount moved from 10% to 7.5%, capped at 8000"],
-    "video": { "title": "Why the room decides the size", "minutes": 2, "url": "https://example.test/storeiq/room-size" },
+    "stock_changes": [
+      "Sony K-55S30 back in stock, 6 units",
+      "LG 65UT8050 down to 2 units"
+    ],
+    "offer_changes": [
+      "HDFC card instant discount moved from 10% to 7.5%, capped at 8000"
+    ],
+    "video": {
+      "title": "Why the room decides the size",
+      "minutes": 2,
+      "url": "https://example.test/storeiq/room-size"
+    },
     "question": {
       "text": "A customer sits 8 feet from the wall. Which size do you lead with?",
-      "options": ["43 inch", "55 inch", "75 inch"],
+      "options": [
+        "43 inch",
+        "55 inch",
+        "75 inch"
+      ],
       "answer": "55 inch",
       "reason": "At 8 feet a 55 inch 4K screen fills the eye without showing pixels; 75 inch at that distance forces head movement."
     }
@@ -24,9 +41,27 @@
       "mrp_rupees": 79900,
       "price_rupees": 62990,
       "stock_units": 6,
-      "specs": { "peak_nits": 400, "refresh_hz": 60, "hdmi_21_ports": 0, "speaker_watts": 20, "os": "Google TV" },
-      "good_for": ["bright living room", "OTT", "news"],
-      "weak_for": ["console gaming at 120 Hz"]
+      "specs": {
+        "peak_nits": 400,
+        "refresh_hz": 60,
+        "hdmi_21_ports": 0,
+        "speaker_watts": 20,
+        "os": "Google TV"
+      },
+      "good_for": [
+        "bright living room",
+        "OTT",
+        "news"
+      ],
+      "weak_for": [
+        "console gaming at 120 Hz"
+      ],
+      "demo_cue": "Play the OTT trailer and the news ticker side by side: the text stays crisp, no smearing.",
+      "energy": {
+        "typical_watts": 95,
+        "standby_watts": 0.5,
+        "units_per_year_4h_day": 139
+      }
     },
     {
       "sku": "LG-65UT8050",
@@ -37,9 +72,27 @@
       "mrp_rupees": 109990,
       "price_rupees": 79990,
       "stock_units": 2,
-      "specs": { "peak_nits": 350, "refresh_hz": 60, "hdmi_21_ports": 1, "speaker_watts": 20, "os": "webOS" },
-      "good_for": ["large hall", "OTT", "cricket"],
-      "weak_for": ["very bright afternoon light"]
+      "specs": {
+        "peak_nits": 350,
+        "refresh_hz": 60,
+        "hdmi_21_ports": 1,
+        "speaker_watts": 20,
+        "os": "webOS"
+      },
+      "good_for": [
+        "large hall",
+        "OTT",
+        "cricket"
+      ],
+      "weak_for": [
+        "very bright afternoon light"
+      ],
+      "demo_cue": "Stand them at 8 feet, then at 12: show how the 65 inch fills the wall only in the bigger room.",
+      "energy": {
+        "typical_watts": 125,
+        "standby_watts": 0.5,
+        "units_per_year_4h_day": 183
+      }
     },
     {
       "sku": "SAM-55QE1D",
@@ -50,9 +103,27 @@
       "mrp_rupees": 99900,
       "price_rupees": 71990,
       "stock_units": 4,
-      "specs": { "peak_nits": 600, "refresh_hz": 60, "hdmi_21_ports": 0, "speaker_watts": 20, "os": "Tizen" },
-      "good_for": ["bright living room", "afternoon cricket", "OTT"],
-      "weak_for": ["dark-room movie contrast"]
+      "specs": {
+        "peak_nits": 600,
+        "refresh_hz": 60,
+        "hdmi_21_ports": 0,
+        "speaker_watts": 20,
+        "os": "Tizen"
+      },
+      "good_for": [
+        "bright living room",
+        "afternoon cricket",
+        "OTT"
+      ],
+      "weak_for": [
+        "dark-room movie contrast"
+      ],
+      "demo_cue": "Walk them to the bright window display and compare against the LED beside it.",
+      "energy": {
+        "typical_watts": 110,
+        "standby_watts": 0.5,
+        "units_per_year_4h_day": 161
+      }
     },
     {
       "sku": "TCL-55C6KS",
@@ -63,36 +134,160 @@
       "mrp_rupees": 89990,
       "price_rupees": 54990,
       "stock_units": 9,
-      "specs": { "peak_nits": 800, "refresh_hz": 144, "hdmi_21_ports": 2, "speaker_watts": 30, "os": "Google TV" },
-      "good_for": ["bright living room", "PS5 gaming", "cricket"],
-      "weak_for": ["brand-first buyers"]
+      "specs": {
+        "peak_nits": 800,
+        "refresh_hz": 144,
+        "hdmi_21_ports": 2,
+        "speaker_watts": 30,
+        "os": "Google TV"
+      },
+      "good_for": [
+        "bright living room",
+        "PS5 gaming",
+        "cricket"
+      ],
+      "weak_for": [
+        "brand-first buyers"
+      ],
+      "demo_cue": "Run the cricket clip and pan the camera: the ball keeps its edge at 144 Hz, the 60 Hz set blurs it.",
+      "energy": {
+        "typical_watts": 105,
+        "standby_watts": 0.5,
+        "units_per_year_4h_day": 153
+      }
     }
   ],
   "offers": [
-    { "id": "HDFC-CC", "title": "HDFC credit card instant discount", "percent": 7.5, "cap_rupees": 8000, "applies_to": "all TVs", "needs": "HDFC credit card" },
-    { "id": "EXCH-TV", "title": "Old TV exchange bonus", "flat_rupees": 3000, "applies_to": "TVs above 50 inch", "needs": "working old TV, same household" }
+    {
+      "id": "HDFC-CC",
+      "title": "HDFC credit card instant discount",
+      "percent": 7.5,
+      "cap_rupees": 8000,
+      "applies_to": "all TVs",
+      "needs": "HDFC credit card"
+    },
+    {
+      "id": "EXCH-TV",
+      "title": "Old TV exchange bonus",
+      "flat_rupees": 3000,
+      "applies_to": "TVs above 50 inch",
+      "needs": "working old TV, same household"
+    }
   ],
   "finance": [
-    { "id": "NC-EMI-9", "title": "No-cost EMI 9 months", "months": 9, "interest_percent": 0, "processing_fee_rupees": 299, "note": "Bank discount cannot be combined with no-cost EMI" },
-    { "id": "EMI-18", "title": "Standard EMI 18 months", "months": 18, "interest_percent": 15, "processing_fee_rupees": 299, "note": "Interest is charged by the bank, not the store" }
+    {
+      "id": "NC-EMI-9",
+      "title": "No-cost EMI 9 months",
+      "months": 9,
+      "interest_percent": 0,
+      "processing_fee_rupees": 299,
+      "note": "Bank discount cannot be combined with no-cost EMI"
+    },
+    {
+      "id": "EMI-18",
+      "title": "Standard EMI 18 months",
+      "months": 18,
+      "interest_percent": 15,
+      "processing_fee_rupees": 299,
+      "note": "Interest is charged by the bank, not the store"
+    }
   ],
   "charges": [
-    { "id": "TV-WALL", "title": "Wall mount installation", "amount_rupees": 1499, "note": "Fixed bracket included; tilt bracket is 2499" },
-    { "id": "TV-DEMO", "title": "Table-top installation and demo", "amount_rupees": 599, "note": "Free with exchange" },
-    { "id": "TV-EXT-WARR", "title": "2-year extended warranty", "percent_of_price": 6, "note": "Optional, starts after brand warranty" }
+    {
+      "id": "TV-WALL",
+      "title": "Wall mount installation",
+      "amount_rupees": 1499,
+      "note": "Fixed bracket included; tilt bracket is 2499"
+    },
+    {
+      "id": "TV-DEMO",
+      "title": "Table-top installation and demo",
+      "amount_rupees": 599,
+      "note": "Free with exchange"
+    },
+    {
+      "id": "TV-EXT-WARR",
+      "title": "2-year extended warranty",
+      "percent_of_price": 6,
+      "note": "Optional, starts after brand warranty"
+    },
+    {
+      "id": "TV-DELIVERY",
+      "title": "Home delivery",
+      "amount_rupees": 499,
+      "note": "Free above 50000"
+    }
   ],
   "labels": [
-    { "spec": "peak_nits", "say": "{value} nits means the picture stays readable with your 2 PM sunlight on that wall." },
-    { "spec": "refresh_hz", "say": "{value} Hz: a cricket ball and a PS5 game stay sharp instead of smearing." },
-    { "spec": "hdmi_21_ports", "say": "{value} HDMI 2.1 port(s): that is where a PS5 plugs in at full quality." },
-    { "spec": "speaker_watts", "say": "{value} W speakers fill a normal hall; a soundbar is for a larger or open room." }
+    {
+      "spec": "peak_nits",
+      "say": "{value} nits means the picture stays readable with your 2 PM sunlight on that wall."
+    },
+    {
+      "spec": "refresh_hz",
+      "say": "{value} Hz: a cricket ball and a PS5 game stay sharp instead of smearing."
+    },
+    {
+      "spec": "hdmi_21_ports",
+      "say": "{value} HDMI 2.1 port(s): that is where a PS5 plugs in at full quality."
+    },
+    {
+      "spec": "speaker_watts",
+      "say": "{value} W speakers fill a normal hall; a soundbar is for a larger or open room."
+    }
   ],
   "myths": [
-    { "claim": "More inches always means a better picture", "confirm": "You are right that size is the first thing to get right.", "correct": "At 8 feet, 55 inch is the sweet spot. Beyond that you move your head instead of watching." },
-    { "claim": "QLED and OLED are the same thing", "confirm": "Both are premium panels, so the confusion is fair.", "correct": "QLED is a bright LED panel. OLED switches each pixel off for true black, and costs more." }
+    {
+      "claim": "More inches always means a better picture",
+      "confirm": "You are right that size is the first thing to get right.",
+      "correct": "At 8 feet, 55 inch is the sweet spot. Beyond that you move your head instead of watching."
+    },
+    {
+      "claim": "QLED and OLED are the same thing",
+      "confirm": "Both are premium panels, so the confusion is fair.",
+      "correct": "QLED is a bright LED panel. OLED switches each pixel off for true black, and costs more."
+    },
+    {
+      "claim": "A larger screen always uses much more electricity",
+      "confirm": "Fair question, running cost is worth checking.",
+      "correct": "Compare the actual figures: the 55 inch TCL draws 105 W, the 65 inch LG 125 W. At 4 hours a day that is 153 against 183 units a year, about Rs 240 apart."
+    }
   ],
   "install_requirements": {
-    "TV-WALL": ["wall type: concrete or brick", "power socket within 1.5 m", "distance from floor", "existing bracket removal"],
-    "TV-DEMO": ["table depth", "power socket", "set-top box and WiFi password available"]
-  }
+    "TV-WALL": [
+      "wall type: concrete or brick",
+      "power socket within 1.5 m",
+      "distance from floor",
+      "existing bracket removal"
+    ],
+    "TV-DEMO": [
+      "table depth",
+      "power socket",
+      "set-top box and WiFi password available"
+    ]
+  },
+  "electricity": {
+    "tariff_rupees_per_unit": 8,
+    "note": "Mumbai domestic slab used for the yearly running cost."
+  },
+  "accessories": [
+    {
+      "id": "ACC-SOUNDBAR",
+      "title": "Soundbar 2.1",
+      "price_rupees": 11990,
+      "for": "open or large halls"
+    },
+    {
+      "id": "ACC-STAB",
+      "title": "Voltage stabiliser",
+      "price_rupees": 2490,
+      "for": "areas with unstable supply"
+    },
+    {
+      "id": "ACC-HDMI",
+      "title": "HDMI 2.1 cable 2 m",
+      "price_rupees": 699,
+      "for": "PS5 at full quality"
+    }
+  ]
 }

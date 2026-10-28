@@ -157,3 +157,26 @@ test("every other step still shows the reason line", () => {
   assert.equal(reply.text.split("\n").length, 3);
   assert.ok(reply.text.endsWith("↳ the room decides the size"));
 });
+
+test("every product carries a demonstration cue, as section 6.5 requires", () => {
+  for (const product of pack.products) {
+    assert.ok(product.demo_cue && product.demo_cue.length > 20, `${product.sku} has no usable demo cue`);
+    assert.ok(product.energy?.typical_watts > 0, `${product.sku} has no energy figure`);
+  }
+});
+
+test("an itemised total with an accessory and delivery is sayable", () => {
+  // TCL 54990 + soundbar 11990 + delivery 499
+  assert.deepEqual(unsupportedNumbers("TCL Rs 54990 plus soundbar Rs 11990 plus delivery Rs 499 is Rs 67479.", allowed, ""), []);
+});
+
+test("the running-cost answer to the electricity objection is sayable from facts", () => {
+  assert.deepEqual(
+    unsupportedNumbers("The 55 inch draws 105 W against 125 W, so 153 units a year against 183, about Rs 240 apart.", allowed, ""),
+    [],
+  );
+});
+
+test("a running cost that is not in the data is still refused", () => {
+  assert.deepEqual(unsupportedNumbers("It will cost you Rs 4321 a year to run.", allowed, ""), ["4321"]);
+});

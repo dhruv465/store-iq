@@ -8,14 +8,14 @@ Status is what the code actually does, verified, not what it intends to do.
 | # | Requirement | Status |
 | --- | --- | --- |
 | 1 | Receive and process associate voice notes | **Wired, untested.** Audio goes to Gemini inline, no transcription hop. No real voice note has been sent through it. |
-| 2 | Create, display and correct a home card | **Partial.** Created and persisted; §3 also demands it be shown back for correction. Added this round. |
+| 2 | Create, display and correct a home card | **Done.** Read back in the brief's "I heard" shape with confirm and fix buttons; recommend, complete and close are held until confirmed. |
 | 3 | Suggest the next question based on the current card | **Done.** `nextQuestion()` walks the floor order; the model also proposes one. |
 | 4 | Accept a product-label image, return a customer-friendly explanation | **Wired, untested.** Image goes inline; `labels[]` in the pack supplies the phrasing. |
-| 5 | Three recommendations, one reason **and one demonstration cue** each | **Partial.** Three options with reasons verified live. The demonstration cue is missing — gap. |
-| 6 | Calculate and display an itemised total from supplied data | **Partial.** Product + installation verified (Rs 56,489). Accessories and delivery are not in the pack — gap. |
+| 5 | Three recommendations, one reason **and one demonstration cue** each | **Done, unverified live.** Every product carries a `demo_cue`; the prompt requires it on each option. Needs quota to confirm the model uses it. |
+| 6 | Calculate and display an itemised total from supplied data | **Done.** `itemisedTotal()` computes it in code, not the model, so it cannot be wrong. Accessories and delivery added. Verified live: 54,990 + 1,499 + 499 = Rs 56,988. |
 | 7 | Gate offers until assessment and demonstration are complete | **Done.** `offerLeaked()`, fires on an offer word plus a figure. Tested. |
 | 8 | Explain finance using only supplied terms and full cost | **Partial.** Terms are in the pack; the one-sentence full-cost form is unverified. |
-| 9 | Consent-based summary and follow-up task | **Not built** — gap. Needs the close and follow-through steps. |
+| 9 | Consent-based summary and follow-up task | **Done, deterministic.** Selection comes from a tap only, the summary is withheld until `consent:yes`, and changing the product withdraws consent. Task owner is the associate; site needs come from the pack. Verified live at 1 ms. |
 | 10 | Conversation score and one improvement suggestion | **Done.** Deterministic, 0–14, costs no model request. |
 
 ## 7. Guardrails
@@ -32,12 +32,9 @@ Status is what the code actually does, verified, not what it intends to do.
 
 ## Open gaps, in the order they are worth doing
 
-1. **Follow-through (§4H, §6.9)** — consent summary, task with an owner, installation job with site requirements. Needed for the §8 acceptance sequence.
-2. **Demonstration cue (§6.5)** — each option needs the difference to show, e.g. "motion on the cricket clip". Needs a `demo_cue` per product in the pack.
-3. **Itemised total (§6.6)** — add accessories and delivery charges to the pack so the total is complete.
-4. **Metres, and "Not sure" (§4B)** — the brief's own example is `[2–3 m] [3–4 m] [Not sure]`. The card stores feet and offers no unknown.
-5. **Energy facts** — the brief's example objection is "a larger screen always uses much more electricity", answered with "the actual energy information for these models". The pack has no power data, so that exact exchange cannot be answered from facts.
-6. **Card fields from §3** — replacement reason / current product, site constraints, customer priorities, available space. Not in the card today.
+1. **Metres, and "Not sure" (§4B)** — the brief's own example is `[2–3 m] [3–4 m] [Not sure]`. The card stores feet and offers no unknown.
+2. **Card fields from §3** — the fields exist on the card now; the prompt does not yet actively ask for the replacement reason or site constraints.
+3. **Verify everything model-dependent** — the `Ask:` framing, the demonstration cue and the itemised total's one-sentence finance all need live model turns, which need quota.
 
 ## Hosting state, 28 Oct
 

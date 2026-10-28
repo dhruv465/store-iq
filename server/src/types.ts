@@ -58,6 +58,10 @@ export type Session = {
   assessed: boolean;
   demonstrated: boolean;
   shortlist: string[];
+  /** What the customer actually picked. Set only from an explicit tap, never inferred. */
+  selection?: { sku: string; accessories: string[]; charges: string[] };
+  /** Section 4H: the customer summary only goes out with consent. */
+  consent: boolean;
   /** Bounded conversation memory; the full log lives in the database. */
   history: Turn[];
   steps_done: Step[];
@@ -87,6 +91,7 @@ export function newSession(phone: string, interactionId = randomUUID()): Session
     assessed: false,
     demonstrated: false,
     shortlist: [],
+    consent: false,
     history: [],
     steps_done: [],
   };

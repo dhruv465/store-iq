@@ -10,6 +10,8 @@ export type Pack = {
   offers: Record<string, any>[];
   finance: Record<string, any>[];
   charges: Record<string, any>[];
+  accessories: { id: string; title: string; price_rupees: number; for: string }[];
+  electricity: { tariff_rupees_per_unit: number; note: string };
   labels: { spec: string; say: string }[];
   myths: { claim: string; confirm: string; correct: string }[];
   install_requirements: Record<string, string[]>;
@@ -26,6 +28,9 @@ export type Product = {
   specs: Record<string, number | string>;
   good_for: string[];
   weak_for: string[];
+  /** Section 6.5: the difference to show the customer, not just the reason to say. */
+  demo_cue: string;
+  energy: { typical_watts: number; standby_watts: number; units_per_year_4h_day: number };
 };
 
 /** Single source of facts. Prices, offers, stock and finance terms exist only here. */
@@ -49,7 +54,9 @@ export function allowedNumbers(pack: Pack): Set<number> {
     else if (Array.isArray(value)) value.forEach(walk);
     else if (value && typeof value === "object") Object.values(value).forEach(walk);
   };
-  walk({ p: pack.products, o: pack.offers, f: pack.finance, c: pack.charges, b: pack.shift_brief, l: pack.labels, m: pack.myths, i: pack.install_requirements, s: pack.store });
+  walk({ p: pack.products, o: pack.offers, f: pack.finance, c: pack.charges, b: pack.shift_brief,
+    l: pack.labels, m: pack.myths, i: pack.install_requirements, s: pack.store,
+    a: pack.accessories, e: pack.electricity });
   // Derived totals an answer may legitimately state.
   for (const product of pack.products) {
     for (const offer of pack.offers) {
@@ -59,6 +66,15 @@ export function allowedNumbers(pack: Pack): Set<number> {
       if (percent > 0) { allowed.add(percent); allowed.add(product.price_rupees - percent); }
     }
     allowed.add(product.mrp_rupees - product.price_rupees);
+    // An itemised total may name the product with any accessory, and the yearly running cost.
+    for (const accessory of pack.accessories ?? []) {
+      allowed.add(product.price_rupees + accessory.price_rupees);
+      for (const charge of pack.charges)
+        if (typeof charge.amount_rupees === "number")
+          allowed.add(product.price_rupees + accessory.price_rupees + charge.amount_rupees);
+    }
+    if (pack.electricity?.tariff_rupees_per_unit && product.energy?.units_per_year_4h_day)
+      allowed.add(product.energy.units_per_year_4h_day * pack.electricity.tariff_rupees_per_unit);
     for (const term of pack.finance)
       if (Number(term.months) > 0) allowed.add(Math.round(product.price_rupees / Number(term.months)));
     for (const charge of pack.charges) {
@@ -84,6 +100,8 @@ export function factsFor(pack: Pack, card: HomeCard, shortlist: string[]): strin
     offers: pack.offers,
     finance: pack.finance,
     charges: pack.charges,
+    accessories: pack.accessories,
+    electricity: pack.electricity,
     labels: pack.labels,
     myths: pack.myths,
     install_requirements: pack.install_requirements,

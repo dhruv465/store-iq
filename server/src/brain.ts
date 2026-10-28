@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
-import { briefAnswer, cardSummary, reviewReply, shiftBrief, wantsBrief, wantsNewCustomer, wantsReview } from "./steps.js";
+import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, wantsFollowThrough, wantsNewCustomer, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
 
@@ -13,8 +13,11 @@ Work through these steps in order, one turn at a time:
 1. assess - build a card of the customer's HOME from what the associate tells you, and give the single next question to ask. Room, viewing distance, light, wall or table, what they watch, devices, family, internet, budget.
 2. validate - when the customer has said something partly correct, give one polite line that confirms the true part, then corrects.
 3. translate - turn a spec on a label into one line about THIS home, e.g. "8 kg: two pairs of jeans and two bedsheets in one wash".
-4. recommend - exactly three options. Give exactly three lines, one per option, and each line must carry that option's own reason in the same line. No separate reason line is shown for this step, so the reason has to be in the line.
-5. complete - the full solution and the full cost, charge by charge. Finance with its full cost in one sentence.
+4. recommend - exactly three options. Give exactly three lines, one per option. Each line carries that
+   option's own reason AND the difference to demonstrate, taken from that product's demo_cue in FACTS.
+   No separate reason line is shown for this step, so both have to be in the line.
+5. complete - the full solution and the full itemised cost: product, any accessory, delivery,
+   installation, every applicable charge. Finance with its full cost in one sentence.
 6. close - a summary for the customer with consent, a task with an owner, and the installation job with its site needs.
 7. review - a score for the steps and one thing to try next time.
 
@@ -271,6 +274,39 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   if (event.action === "card:correct") {
     session.card_confirmed = false;
     return { text: "Tell me what to change and I will update the card." };
+  }
+  const picked = event.action?.match(/^select:([A-Za-z0-9_-]+)$/);
+  if (picked) {
+    const sku = picked[1]!;
+    if (!pack.products.some((product) => product.sku === sku)) return { text: "That product is not in today's data pack." };
+    session.selection = { sku, accessories: [], charges: session.selection?.charges ?? [] };
+    session.consent = false;
+    return followThrough(session, pack, event.name ?? session.phone);
+  }
+  const added = event.action?.match(/^add:([A-Za-z0-9_-]+)$/);
+  if (added && session.selection) {
+    const id = added[1]!;
+    const known = (pack.accessories ?? []).some((a) => a.id === id) || pack.charges.some((c) => c.id === id);
+    if (!known) return { text: "That line is not in today's data pack." };
+    const target = (pack.accessories ?? []).some((a) => a.id === id) ? "accessories" : "charges";
+    if (!session.selection[target].includes(id)) session.selection[target].push(id);
+    session.consent = false;
+    return followThrough(session, pack, event.name ?? session.phone);
+  }
+  if (event.action === "consent:yes") {
+    session.consent = true;
+    if (!session.steps_done.includes("close")) session.steps_done.push("close");
+    if (!session.steps_done.includes("follow_through")) session.steps_done.push("follow_through");
+    session.step = "follow_through";
+    return followThrough(session, pack, event.name ?? session.phone);
+  }
+  if (event.action === "consent:no") {
+    session.consent = false;
+    return { text: "No summary sent.\n↳ Section 4H: the summary only goes out with the customer's consent." };
+  }
+  if (wantsFollowThrough(event.text, event.action)) {
+    session.step = "follow_through";
+    return followThrough(session, pack, event.name ?? session.phone);
   }
   if (event.action === "card:show" || /^\s*(card|home card|what do you have)\b/i.test(event.text ?? "")) {
     return cardSummary(session);

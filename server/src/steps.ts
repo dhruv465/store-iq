@@ -138,3 +138,80 @@ export function reviewReply(session: Session): Reply {
       .slice(0, 1000),
   };
 }
+
+const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|consent|summary bhejo)\b/i;
+
+export function wantsFollowThrough(text: string | undefined, action: string | undefined): boolean {
+  return action === "follow_through" || (!!text && FOLLOW_WORDS.test(text));
+}
+
+/** Section 6.6: the total is computed here, never by the model, so it cannot be wrong. */
+export function itemisedTotal(
+  pack: Pack,
+  selection: NonNullable<Session["selection"]>,
+): { lines: string[]; total: number } | null {
+  const product = pack.products.find((candidate) => candidate.sku === selection.sku);
+  if (!product) return null;
+  const lines = [`${product.name} — Rs ${product.price_rupees.toLocaleString("en-IN")}`];
+  let total = product.price_rupees;
+  for (const id of selection.accessories) {
+    const accessory = (pack.accessories ?? []).find((candidate) => candidate.id === id);
+    if (!accessory) return null;
+    lines.push(`${accessory.title} — Rs ${accessory.price_rupees.toLocaleString("en-IN")}`);
+    total += accessory.price_rupees;
+  }
+  for (const id of selection.charges) {
+    const charge = pack.charges.find((candidate) => candidate.id === id);
+    if (!charge) return null;
+    const amount =
+      typeof charge.amount_rupees === "number"
+        ? charge.amount_rupees
+        : typeof charge.percent_of_price === "number"
+          ? Math.round((product.price_rupees * charge.percent_of_price) / 100)
+          : null;
+    if (amount === null) return null;
+    lines.push(`${charge.title} — Rs ${amount.toLocaleString("en-IN")}`);
+    total += amount;
+  }
+  return { lines, total };
+}
+
+/** Section 4H: the customer summary, a task with an owner, and the installation job's site needs. */
+export function followThrough(session: Session, pack: Pack, associate: string): Reply {
+  const selection = session.selection;
+  if (!selection) {
+    const options = session.shortlist.length ? session.shortlist : pack.products.map((product) => product.sku);
+    return {
+      text: "Which one did they pick?\n↳ I will not guess the selection before preparing a summary.",
+      buttons: options.slice(0, 3).map((sku) => ({
+        id: `select:${sku}`,
+        title: (pack.products.find((product) => product.sku === sku)?.brand ?? sku).slice(0, 20),
+      })),
+    };
+  }
+  const itemised = itemisedTotal(pack, selection);
+  if (!itemised) return { text: "That selection is not in today's data pack, so I cannot total it." };
+  const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
+  const siteNeeds = [...new Set(selection.charges.flatMap((id) => pack.install_requirements?.[id] ?? []))];
+
+  if (!session.consent)
+    return {
+      text: [
+        `Read this to the customer: "${product.name}, total Rs ${itemised.total.toLocaleString("en-IN")}. May I send you a summary?"`,
+        "Tap once they agree.",
+      ].join("\n"),
+      buttons: [
+        { id: "consent:yes", title: "They agreed" },
+        { id: "consent:no", title: "Declined" },
+      ],
+    };
+
+  return {
+    text: [
+      // The first itemised line already names the product; do not say it twice.
+      `Send: "${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}."`,
+      `Task: follow up this order · owner ${associate}`,
+      siteNeeds.length ? `Install job needs: ${siteNeeds.join("; ")}` : "Install job: no site requirements for these charges",
+    ].join("\n"),
+  };
+}
