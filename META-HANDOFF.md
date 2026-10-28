@@ -150,3 +150,56 @@ workaround. Notes for whoever does it:
 | `Missing Permission` | You used the system user token instead of the `<app-id>|<app-secret>` app token. |
 | Subscription saved but still no messages | `fields` was replaced without `messages`. Re-read and re-POST the full list. |
 | Nothing in ngrok's request log | Meta never called you. The subscription did not save, or the URL is wrong. `GET /api/requests/http` on `localhost:4040` shows every inbound request. |
+
+---
+
+## Remaining work, 28 Oct — needs a browser, cannot be done by API
+
+Verified by read-only Graph calls at the time of writing. Everything the API can change has been
+changed already: `about`, `description` and `vertical` all read as Store IQ / RETAIL. Two things
+are left, and neither has an API.
+
+### 1. Display name: `SmartbazarAI` → `Store IQ`
+
+The chat header still shows **SmartbazarAI** to every associate and judge. The Cloud API has no
+field for this; it is WhatsApp Manager only.
+
+- **business.facebook.com/wa/manage/phone-numbers** → **+91 95189 56645** → Settings → Profile →
+  Display name → set `Store IQ` → Submit.
+- Submitting starts a name review. `name_status` goes `PENDING_REVIEW`; the old name keeps working
+  until it clears. Declined costs nothing but the attempt.
+- Current state: `name_status: AVAILABLE_WITHOUT_REVIEW`, `new_name_status: AVAILABLE_WITHOUT_REVIEW`,
+  `is_official_business_account: false`.
+- Meta wants a display name that relates to the real business behind the account, so a decline is
+  possible. Display-name changes are also rate limited, historically about two per 30 days.
+
+### 2. Profile photo: still the Smart Bazaar logo
+
+Meta refuses to clear it — `profile_picture_handle: ""` returns `131009, uploaded media handle is
+invalid`. It can only be **replaced**, which needs an actual image file:
+
+- Easiest: WhatsApp Manager → the same Profile page → change the photo there.
+- By API it needs a resumable upload to get a handle, then
+  `POST /<phone-number-id>/whatsapp_business_profile` with `profile_picture_handle`.
+
+### Do not change
+
+- **The callback URL.** It is working. Changing it silently breaks inbound messages, and a failed
+  "Verify and save" leaves the old one in place with no warning.
+- The phone number id, the system user token, or the `messages` field subscription.
+- **Never use Reliance Digital branding.** This WABA belongs to the owner, not to Reliance. The
+  contest entry is built for them; the number does not represent them. A display name or profile
+  claiming otherwise is a false brand claim on a number that messages real associates.
+
+### Verifying afterwards
+
+```bash
+cd /Users/dhruvsmac/Desktop/store-iq
+T=$(grep -E '^WHATSAPP_ACCESS_TOKEN=' .env | cut -d= -f2-)
+P=$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' .env | cut -d= -f2-)
+curl -s "https://graph.facebook.com/v25.0/$P?fields=verified_name,name_status,status" -H "authorization: Bearer $T"
+curl -s "https://graph.facebook.com/v25.0/$P/whatsapp_business_profile?fields=about,description,vertical,profile_picture_url" -H "authorization: Bearer $T"
+```
+
+Done looks like: `verified_name: Store IQ` (or `PENDING_REVIEW` while it clears), `status: CONNECTED`
+unchanged, and a `profile_picture_url` that is not the Smart Bazaar logo.
