@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
+import { looksLikeAClaim, validateReply } from "./validate.js";
 import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, nextQuestionReply, wantsFollowThrough, wantsNewCustomer, wantsRecommend, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
@@ -305,6 +306,15 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   if (event.action === "consent:no") {
     session.consent = false;
     return { text: "No summary sent.\n↳ Section 4H: the summary only goes out with the customer's consent." };
+  }
+  // Section 4C: the pack carries the confirm/correct pair, so a known claim needs no request.
+  if (looksLikeAClaim(event.text, event.action) && event.text) {
+    const corrected = validateReply(pack, event.text);
+    if (corrected) {
+      session.step = "validate";
+      if (!session.steps_done.includes("validate")) session.steps_done.push("validate");
+      return corrected;
+    }
   }
   // Section 4E: ranking the pack against a confirmed card is arithmetic, so no request is spent.
   if (wantsRecommend(event.text, event.action) && isAssessed(session.card)) {

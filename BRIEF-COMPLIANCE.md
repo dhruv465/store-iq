@@ -18,6 +18,19 @@ Status is what the code actually does, verified, not what it intends to do.
 | 9 | Consent-based summary and follow-up task | **Done, deterministic.** Selection comes from a tap only, the summary is withheld until `consent:yes`, and changing the product withdraws consent. Task owner is the associate; site needs come from the pack. Verified live at 1 ms. |
 | 10 | Conversation score and one improvement suggestion | **Done.** Deterministic, 0–14, costs no model request. |
 
+## Section 8 acceptance sequence
+
+| Stage | Built | Needs a model |
+| --- | --- | --- |
+| assess | yes | only for free-form voice or text; by tap it is deterministic |
+| validate | yes | only for a claim the pack does not list |
+| translate | yes | **yes** — reading the label photo |
+| recommend + demonstrate | yes | no |
+| complete | yes | no |
+| close | yes | no |
+| follow through | yes | no |
+| review | yes | no |
+
 ## 7. Guardrails
 
 | Guardrail | Status |
@@ -38,8 +51,9 @@ Status is what the code actually does, verified, not what it intends to do.
 
 ## What still needs a model
 
-After this round, only two things: turning a free-form voice note or sentence into card fields, and
-reading a label photo. Assess by tap, recommend, complete, close, follow-through, brief and review
+Two things: turning a free-form voice note or sentence into card fields, and reading a label photo.
+Validate answers known claims from the pack's confirm/correct pairs, including the brief's own
+electricity example, in 7 ms; a claim the pack has nothing on still goes to the model. Assess by tap, validate, recommend, complete, close, follow-through, brief and review
 are all deterministic — they answer in single-digit milliseconds, spend no quota, and cannot invent a
 figure. That is most of the §8 acceptance sequence running without the model at all.
 
