@@ -1,0 +1,98 @@
+{
+  "version": "stub-1",
+  "note": "Placeholder data pack. Replace with the official sample data pack (Ashish Chandorkar, 30 Oct 2026). Test data only.",
+  "store": { "id": "RD-MUM-042", "name": "Reliance Digital Lower Parel", "city": "Mumbai" },
+  "shift_brief": {
+    "date": "2026-10-28",
+    "stock_changes": ["Sony K-55S30 back in stock, 6 units", "LG 65UT8050 down to 2 units"],
+    "offer_changes": ["HDFC card instant discount moved from 10% to 7.5%, capped at 8000"],
+    "video": { "title": "Why the room decides the size", "minutes": 2, "url": "https://example.test/storeiq/room-size" },
+    "question": {
+      "text": "A customer sits 8 feet from the wall. Which size do you lead with?",
+      "options": ["43 inch", "55 inch", "75 inch"],
+      "answer": "55 inch",
+      "reason": "At 8 feet a 55 inch 4K screen fills the eye without showing pixels; 75 inch at that distance forces head movement."
+    }
+  },
+  "products": [
+    {
+      "sku": "SON-K55S30",
+      "brand": "Sony",
+      "name": "Sony Bravia 2 55 inch 4K LED",
+      "size_inch": 55,
+      "panel": "LED",
+      "mrp_rupees": 79900,
+      "price_rupees": 62990,
+      "stock_units": 6,
+      "specs": { "peak_nits": 400, "refresh_hz": 60, "hdmi_21_ports": 0, "speaker_watts": 20, "os": "Google TV" },
+      "good_for": ["bright living room", "OTT", "news"],
+      "weak_for": ["console gaming at 120 Hz"]
+    },
+    {
+      "sku": "LG-65UT8050",
+      "brand": "LG",
+      "name": "LG 65 inch UT80 4K LED",
+      "size_inch": 65,
+      "panel": "LED",
+      "mrp_rupees": 109990,
+      "price_rupees": 79990,
+      "stock_units": 2,
+      "specs": { "peak_nits": 350, "refresh_hz": 60, "hdmi_21_ports": 1, "speaker_watts": 20, "os": "webOS" },
+      "good_for": ["large hall", "OTT", "cricket"],
+      "weak_for": ["very bright afternoon light"]
+    },
+    {
+      "sku": "SAM-55QE1D",
+      "brand": "Samsung",
+      "name": "Samsung 55 inch QLED QE1D",
+      "size_inch": 55,
+      "panel": "QLED",
+      "mrp_rupees": 99900,
+      "price_rupees": 71990,
+      "stock_units": 4,
+      "specs": { "peak_nits": 600, "refresh_hz": 60, "hdmi_21_ports": 0, "speaker_watts": 20, "os": "Tizen" },
+      "good_for": ["bright living room", "afternoon cricket", "OTT"],
+      "weak_for": ["dark-room movie contrast"]
+    },
+    {
+      "sku": "TCL-55C6KS",
+      "brand": "TCL",
+      "name": "TCL 55 inch C6K QD-Mini LED",
+      "size_inch": 55,
+      "panel": "QD-Mini LED",
+      "mrp_rupees": 89990,
+      "price_rupees": 54990,
+      "stock_units": 9,
+      "specs": { "peak_nits": 800, "refresh_hz": 144, "hdmi_21_ports": 2, "speaker_watts": 30, "os": "Google TV" },
+      "good_for": ["bright living room", "PS5 gaming", "cricket"],
+      "weak_for": ["brand-first buyers"]
+    }
+  ],
+  "offers": [
+    { "id": "HDFC-CC", "title": "HDFC credit card instant discount", "percent": 7.5, "cap_rupees": 8000, "applies_to": "all TVs", "needs": "HDFC credit card" },
+    { "id": "EXCH-TV", "title": "Old TV exchange bonus", "flat_rupees": 3000, "applies_to": "TVs above 50 inch", "needs": "working old TV, same household" }
+  ],
+  "finance": [
+    { "id": "NC-EMI-9", "title": "No-cost EMI 9 months", "months": 9, "interest_percent": 0, "processing_fee_rupees": 299, "note": "Bank discount cannot be combined with no-cost EMI" },
+    { "id": "EMI-18", "title": "Standard EMI 18 months", "months": 18, "interest_percent": 15, "processing_fee_rupees": 299, "note": "Interest is charged by the bank, not the store" }
+  ],
+  "charges": [
+    { "id": "TV-WALL", "title": "Wall mount installation", "amount_rupees": 1499, "note": "Fixed bracket included; tilt bracket is 2499" },
+    { "id": "TV-DEMO", "title": "Table-top installation and demo", "amount_rupees": 599, "note": "Free with exchange" },
+    { "id": "TV-EXT-WARR", "title": "2-year extended warranty", "percent_of_price": 6, "note": "Optional, starts after brand warranty" }
+  ],
+  "labels": [
+    { "spec": "peak_nits", "say": "{value} nits means the picture stays readable with your 2 PM sunlight on that wall." },
+    { "spec": "refresh_hz", "say": "{value} Hz: a cricket ball and a PS5 game stay sharp instead of smearing." },
+    { "spec": "hdmi_21_ports", "say": "{value} HDMI 2.1 port(s): that is where a PS5 plugs in at full quality." },
+    { "spec": "speaker_watts", "say": "{value} W speakers fill a normal hall; a soundbar is for a larger or open room." }
+  ],
+  "myths": [
+    { "claim": "More inches always means a better picture", "confirm": "You are right that size is the first thing to get right.", "correct": "At 8 feet, 55 inch is the sweet spot. Beyond that you move your head instead of watching." },
+    { "claim": "QLED and OLED are the same thing", "confirm": "Both are premium panels, so the confusion is fair.", "correct": "QLED is a bright LED panel. OLED switches each pixel off for true black, and costs more." }
+  ],
+  "install_requirements": {
+    "TV-WALL": ["wall type: concrete or brick", "power socket within 1.5 m", "distance from floor", "existing bracket removal"],
+    "TV-DEMO": ["table depth", "power socket", "set-top box and WiFi password available"]
+  }
+}

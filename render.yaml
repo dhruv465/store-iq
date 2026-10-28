@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: store-iq
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: LOCAL_DB_PATH
+        value: "memory://"
+      - key: PACK_PATH
+        value: data/pack.json
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      # Secrets are set in the Render dashboard, never committed.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: WHATSAPP_GRAPH_VERSION
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      # Empty means any associate who messages the number gets a reply.
+      - key: ALLOWED_PHONES
+        value: ""
