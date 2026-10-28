@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack, allowedNumbers } from "../server/src/pack.js";
-import { rank, recommendReply, targetInches } from "../server/src/recommend.js";
+import { distinguish, rank, recommendReply, targetInches } from "../server/src/recommend.js";
 import { unsupportedNumbers } from "../server/src/brain.js";
 import type { HomeCard } from "../server/src/types.js";
 
@@ -93,18 +93,28 @@ test("a size that genuinely fits still says so", () => {
   assert.ok(options.some((o) => /is the fit at that distance/.test(o.reason)));
 });
 
-test("three options never give the same reason twice", () => {
+test("three options never argue the same point twice", () => {
   for (const card of [
     { distance_feet: 8, light: "dim", content: ["news"] },
     { distance_feet: 8, light: "bright sun", content: ["cricket"], devices: ["PS5"] },
     { distance_m: 3, content: ["OTT"] },
   ] as HomeCard[]) {
+    const keys = rank(pack, card).map((o) => o.key);
+    const after = distinguish(rank(pack, card)).map((o) => o.key);
+    assert.equal(new Set(after).size, after.length, `duplicate reason kind for ${JSON.stringify(card)}, from ${keys}`);
+    // "800 nits holds the picture" and "600 nits holds the picture" are the same point, not two.
     const reasons = recommendReply(pack, card).text.split("\n").map((line) => line.split(" — ")[1]);
-    assert.equal(new Set(reasons).size, reasons.length, `duplicate reason for ${JSON.stringify(card)}`);
+    assert.equal(new Set(reasons).size, reasons.length);
   }
 });
 
 test("a distinguishing reason is still a fact from the pack", () => {
   const reply = recommendReply(pack, { distance_feet: 8, light: "dim", content: ["news"] });
   assert.deepEqual(unsupportedNumbers(reply.text, allowed, ""), []);
+});
+
+test("a bright room does not let two options both argue brightness", () => {
+  const options = distinguish(rank(pack, { distance_m: 3, light: "strong afternoon sun", content: ["OTT"], priorities: ["sound"] }));
+  const brightness = options.filter((o) => /nits holds the picture/.test(o.reason));
+  assert.ok(brightness.length <= 1, `two options argued brightness: ${options.map((o) => o.reason)}`);
 });

@@ -7,9 +7,11 @@ import type { HomeCard, Reply } from "./types.js";
  *  it is done here rather than by the model: the result is reproducible, instant, costs no request,
  *  and every number in the reason is read straight off the product it describes. */
 
-export type Option = { product: Product; score: number; reason: string; cue: string };
+export type Option = { product: Product; score: number; reason: string; cue: string; /** Which kind of reason this is, so two options never argue the same point. */ key: string };
 
 type Rule = {
+  /** Identifies the kind of argument, so "800 nits" and "600 nits" count as the same point. */
+  id: string;
   /** Points if it fires, and the reason it supplies when it is the strongest match. */
   weight: number;
   applies: (product: Product, card: HomeCard) => boolean;
@@ -37,6 +39,7 @@ export function targetInches(card: HomeCard): number | null {
 
 const RULES: Rule[] = [
   {
+    id: "console",
     weight: 30,
     applies: (product, card) => wants(card, "ps5", "console", "gaming", "xbox") &&
       Number(product.specs.hdmi_21_ports) >= 1 && Number(product.specs.refresh_hz) >= 120,
@@ -44,21 +47,25 @@ const RULES: Rule[] = [
       `${product.specs.refresh_hz} Hz and ${product.specs.hdmi_21_ports} HDMI 2.1 for the console`,
   },
   {
+    id: "brightness",
     weight: 25,
     applies: (product, card) => bright(card) && Number(product.specs.peak_nits) >= 600,
     reason: (product) => `${product.specs.peak_nits} nits holds the picture in that afternoon sun`,
   },
   {
+    id: "motion",
     weight: 18,
     applies: (product, card) => wants(card, "cricket", "sport", "football") && Number(product.specs.refresh_hz) >= 120,
     reason: (product) => `${product.specs.refresh_hz} Hz keeps the ball sharp`,
   },
   {
+    id: "sound",
     weight: 12,
     applies: (product, card) => wants(card, "sound", "music", "audio") && Number(product.specs.speaker_watts) >= 30,
     reason: (product) => `${product.specs.speaker_watts} W speakers, no soundbar needed yet`,
   },
   {
+    id: "apps",
     weight: 8,
     applies: (product, card) => wants(card, "ott", "netflix", "prime", "movie") && !!product.specs.os,
     reason: (product) => `${product.specs.os} has the OTT apps built in`,
@@ -72,11 +79,11 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
     .filter((product) => product.stock_units > 0)
     .map((product) => {
       let score = 0;
-      let best: { weight: number; reason: string } | null = null;
+      let best: { weight: number; reason: string; key: string } | null = null;
       for (const rule of RULES)
         if (rule.applies(product, card)) {
           score += rule.weight;
-          if (!best || rule.weight > best.weight) best = { weight: rule.weight, reason: rule.reason(product) };
+          if (!best || rule.weight > best.weight) best = { weight: rule.weight, reason: rule.reason(product), key: rule.id };
         }
       // Size is the thing the brief leads with, so it always contributes and can always explain itself.
       if (target !== null) {
@@ -87,6 +94,7 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
         if (!best)
           best = {
             weight: 1,
+            key: "size",
             reason:
               off <= 6
                 ? `${product.size_inch} inch is the fit at that distance`
@@ -101,6 +109,7 @@ export function rank(pack: Pack, card: HomeCard): Option[] {
         product,
         score,
         reason: best?.reason ?? `${product.panel} panel, ${product.good_for[0] ?? "general use"}`,
+        key: best?.key ?? "panel",
         cue: product.demo_cue,
       };
     });
@@ -118,8 +127,8 @@ export function distinguish(options: Option[]): Option[] {
   const loudest = Math.max(...options.map((option) => Number(option.product.specs.speaker_watts)));
   const seen = new Set<string>();
   return options.map((option) => {
-    if (!seen.has(option.reason)) {
-      seen.add(option.reason);
+    if (!seen.has(option.key)) {
+      seen.add(option.key);
       return option;
     }
     const product = option.product;
@@ -132,7 +141,7 @@ export function distinguish(options: Option[]): Option[] {
     ].filter((entry): entry is string => typeof entry === "string" && !seen.has(entry));
     const reason = separators[0] ?? option.reason;
     seen.add(reason);
-    return { ...option, reason };
+    return { ...option, reason, key: reason };
   });
 }
 

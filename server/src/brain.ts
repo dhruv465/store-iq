@@ -3,6 +3,7 @@ import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
 import { looksLikeAClaim, validateReply } from "./validate.js";
+import { describe, extractCard } from "./extract.js";
 import { briefAnswer, cardSummary, followThrough, reviewReply, shiftBrief, wantsBrief, nextQuestionReply, wantsFollowThrough, wantsNewCustomer, wantsRecommend, wantsReview } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
@@ -366,6 +367,23 @@ export async function decide(event: Event, session: Session, pack: Pack, request
   if (skipped) {
     (session.card as Record<string, unknown>)[skipped[1]!] = "not stated";
     return nextQuestionReply(session, "Noted: not sure.");
+  }
+  // Read what we confidently can from the words before spending a request on them.
+  if (event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
+    const read = extractCard(event.text);
+    const fields = Object.entries(read).filter(([, value]) => value !== undefined && !(Array.isArray(value) && !value.length));
+    if (fields.length) {
+      for (const [field, value] of fields) (session.card as Record<string, unknown>)[field] = value;
+      session.assessed = isAssessed(session.card);
+      if (!session.steps_done.includes("assess") && session.assessed) session.steps_done.push("assess");
+      const reply = session.assessed && !session.card_confirmed
+        ? cardSummary(session)
+        : nextQuestionReply(session, `Noted: ${describe(Object.fromEntries(fields))}.`);
+      session.history.push({ who: "associate", text: event.text.slice(0, 300) });
+      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+      session.history = session.history.slice(-12);
+      return reply;
+    }
   }
   const free = deterministic(event, session, pack);
   if (free) {
