@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { IncomingMessage } from "./webhook.js";
 import { newSession, type Reply, type Session } from "./types.js";
@@ -201,16 +201,57 @@ export class DB {
   }
 }
 
-export async function openDatabase(path = process.env.LOCAL_DB_PATH || "data/runtime/pg"): Promise<DB> {
+/** Whether the lock directory was left behind by a process that is no longer running. A kill, a
+ *  crash or a closed laptop leaves one, and a lock nobody owns must not keep the number off the air. */
+async function abandoned(lock: string): Promise<boolean> {
+  let pid: number;
+  try {
+    pid = Number((await readFile(`${lock}/pid`, "utf8")).trim());
+  } catch {
+    return true; // No pid file: the owner never finished claiming it.
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    // EPERM means the process is alive and someone else's, which is not abandoned.
+    return (error as NodeJS.ErrnoException).code !== "EPERM";
+  }
+}
+
+/** Claims the lock, waiting out a predecessor that is still shutting down. A watch restart and a
+ *  quick manual restart are both exactly that: the new server starts while the old one is closing. */
+async function claimLock(lock: string, waitMs: number): Promise<void> {
+  const deadline = Date.now() + waitMs;
+  for (let first = true; ; first = false) {
+    if (!first && Date.now() >= deadline)
+      throw Error(`Database already open by pid ${await readFile(`${lock}/pid`, "utf8").catch(() => "?")}. Run one server only.`);
+    try {
+      await mkdir(lock, { mode: 0o700 });
+      return;
+    } catch {
+      if (await abandoned(lock)) {
+        console.error("Clearing a lock left behind by a stopped server");
+        await rm(lock, { recursive: true, force: true });
+      } else await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+}
+
+export async function openDatabase(
+  path = process.env.LOCAL_DB_PATH || "data/runtime/pg",
+  claimWaitMs = 4000,
+): Promise<DB> {
   if (path !== "memory://") await mkdir(resolve(path), { recursive: true, mode: 0o700 });
   const lock = path === "memory://" ? null : `${resolve(path)}.lock`;
   if (lock) {
-    try {
-      await mkdir(lock, { mode: 0o700 });
-    } catch {
-      throw Error("Database already open or unclean shutdown. Check the .lock/pid and run one server only.");
-    }
+    await claimLock(lock, claimWaitMs);
     await writeFile(`${lock}/pid`, String(process.pid), { mode: 0o600 });
+    // Two servers reclaiming the same abandoned lock would both get this far; the last pid written
+    // owns it, and the other steps aside rather than sharing one database.
+    if ((await readFile(`${lock}/pid`, "utf8")).trim() !== String(process.pid))
+      throw Error("Another server claimed the database first. Run one server only.");
   }
   const pg = new PGlite(path);
   try {
