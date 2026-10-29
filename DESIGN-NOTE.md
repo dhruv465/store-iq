@@ -2,80 +2,70 @@
 
 One WhatsApp number. The associate owns the conversation; Store IQ holds the facts.
 
-## The idea the build rests on
+## The idea
 
-The store visits of 10 and 11 October found that our median associate scores 6 of 14 while our best
-scored 13 and 12, that we open with price in 6 of 6 conversations against the customer asking first
-at the competitors, and that a median of 2 questions come before the first product. So the problem
-is not knowledge, it is **order**. Store IQ enforces the order our best associate already follows,
-and refuses to skip ahead. It scores itself on the visits' own card — Validate, Assess, Translate,
-Demonstrate, Complete, Close, Follow through, 0 to 2 each — so a conversation here and a conversation
-on that workbook are the same number.
+The store visits found our median associate scores 6 of 14 while our best scored 13, that we spoke
+about price first in 6 of 6 conversations while at the competitors the customer asked first, and
+that a median of 2 questions came before the first product. The problem is not knowledge, it is
+**order**. Store IQ enforces the order our best associate already follows and refuses to skip ahead.
+It scores itself on the visits' own card — Validate, Assess, Translate, Demonstrate, Complete,
+Close, Follow through, 0 to 2 each — so a conversation here and one in that workbook are the same
+number.
 
-Three rules are enforced in code, not asked of a model:
+## Three rules, enforced in code rather than asked of a model
 
-1. **No invented figures.** Every money amount, percentage and specification in a reply must exist
-   in the data pack, be derivable from it, or have been said by the associate. Matching is on exact
-   values, so `999` is not excused by `79990` containing it. Anything else becomes "that figure is
-   not in today's data pack".
-2. **The offer stays shut** until the home is assessed *and* a difference has been demonstrated.
-   The gate fires on an offer word next to a figure, so declining to discuss offers is not a leak.
-3. **Nothing is sent without consent.** The customer summary waits for an explicit tap, and changing
-   the selected product withdraws consent again.
+1. **No invented figures.** Every amount, percentage and specification must exist in the data pack,
+   be derivable from it, or have been said by the associate. Matching is on exact values, so `999`
+   is not excused by `79990` containing it. Anything else becomes "that figure is not in today's
+   data pack".
+2. **The offer stays shut** until the home is assessed *and* a difference demonstrated. The gate
+   fires on an offer word beside a figure, so declining to discuss offers is not a leak.
+3. **Nothing is sent without consent.** The summary waits for a tap, and changing the product
+   withdraws consent again.
 
-## What does not need a model
+## Almost none of it needs a model
 
-All nine stages answer from the pack and the session, in **1–15 ms**, spending nothing:
+All nine stages — brief, assess, validate, translate, recommend with its demonstration cue,
+complete, close, follow through, review — answer from the pack and the session in **1–15 ms**,
+spending nothing. The card is read from plain words or filled by tap; a claim, myth or objection is
+matched to the pack's own confirm/correct pair; three options are ranked by scored rules over
+distance, light, console, sport and sound; the itemised total, the net payable after offers and the
+saving off MRP are arithmetic.
 
-| Stage | How |
-| --- | --- |
-| Before the shift | Read from the pack |
-| Assess | Card read from plain words, or filled by tap, with the next question from a fixed floor order |
-| Validate | The pack carries the confirm/correct pair for each known claim |
-| Translate | The pack carries the sentence for each label spec; the figure is read off the words |
-| One set named | Matched by SKU, by the model code on the tag, or by brand and size, then read out of the pack |
-| Recommend + demonstrate | Scored rules over the pack: distance, light, console, sport, sound, budget |
-| Complete | The itemised total is arithmetic, so it is computed rather than generated |
-| Close / follow through | Consent gate, the site asked about before the installer is booked, task owner, the check that it works |
-| Review | The store visits' own scorecard: seven steps, 0 to 2 each, Guide at 11 |
+A model is needed for two things: a **voice note** phrased beyond the extractor, and the **text on
+a label photo** — and there it only reads the tag, in one small call. The answer is then written
+from the pack, so a misread model number cannot become an invented price.
 
-A model is needed for exactly two things: reading a **voice note** in phrasing the extractor cannot,
-and reading the **text off a label photo** — and even there it only reads the tag, in one small call;
-the answer is then written from the pack, so a misread model number cannot become an invented price.
-A photo whose caption names the set needs no model at all. That keeps the quota small, the latency
-low, and the invented-figure surface near zero.
+## The close, in the pack's own figures
+
+The visits found we open with price and then have nothing left to say. So the close says what an
+associate usually improvises, each line a fact from the pack: the net payable with the saving off
+MRP; one accessory the card justifies, taken by tap and never offered twice; the three objections
+that lose the sale, answered in the same confirm-then-correct shape as a spec myth, in English,
+Hinglish and Devanagari; and an option over the budget kept on the card with the gap stated. With
+the home unknown, none of these lines exist.
 
 ## Built for the floor
 
-At most three lines and three buttons, enforced in the renderer, not requested in a prompt. Every
+At most three lines and three buttons, enforced in the renderer rather than asked of a prompt. Every
 answer carries its reason. The associate is handed words to say — `Ask: "How far will you sit from
-the TV?"` — never instructions about selling, and Store IQ never addresses the customer. Voice notes
-and photos get an acknowledgement inside the five-second rule while the real answer is prepared.
-
-## Safety
-
-Replies go only to numbers that messaged first, inside Meta's 24-hour window. Test data and a test
-number throughout. The home card is interaction-scoped, so the next customer never inherits the last
-one's home. The associate sets the starting level; nothing is inferred from appearance.
+the TV?"` — never instructions about selling, and Store IQ never addresses the customer. Replies go
+only to numbers that messaged first, inside Meta's 24-hour window. The home card is
+interaction-scoped, so the next customer never inherits the last one's home. The associate sets the
+starting level; nothing is inferred from appearance.
 
 ## Extra points
 
-**Ask an expert** routes a question by subject, logs it against a named owner with a reference the
-associate can quote, and returns a line to hold the customer with. **The department manager view**
-answers "team" with the store visits' own table, computed live: today's volume, the median against
-14, how many conversations reached Guide, what the floor scores on Assess, how often the home came
-before the price — which the visits found went the other way in 6 of 6 — the step the floor is
-weakest on today, and open questions. It is delivered on the same number, because a manager on the
-floor carries the same phone as everyone else.
+**Ask an expert** routes a question by subject and logs it against a named owner with a quotable
+reference. **The department manager view** answers "team" with the visits' own table, computed live,
+and a browser portal adds each associate's seven step marks, so the gap is a person and a step
+rather than a median. Hindi and Marathi throughout, not only the greetings.
 
 ## Limits, honestly
 
-Built against a stub data pack. The real one is read through a single adapter, so its own field
-names and formats are a few minutes in `adapt.ts` and a restart, and `npm run pack:check` names
-every row it cannot serve before the number ever sees it. The ranking weights will still need
-retuning on real data, and the pack's `good_for` / `weak_for` words are English, so those two stay
-English in a Hindi reply. A voice note still needs the model and has not been exercised end to end;
-a photo is answered from the pack once its tag or caption names the set, and asks for the model
-number when it cannot be read. Hosting is a laptop behind a reserved tunnel,
-which has no cold start but does need the laptop up. No live inventory, payment, CRM or real customer
-messaging — per the brief's implementation boundary.
+Built against a stub pack; the real one is read through a single adapter, so its field names are a
+few minutes' work and a restart, and `npm run pack:check` names every row it cannot serve first.
+Ranking weights will need retuning on real data. A voice note and a label photo have not been
+exercised with real media. Hosting is a laptop behind a reserved tunnel: no cold start, but the
+laptop has to be up. No live inventory, payment, CRM or customer messaging, per the brief's
+implementation boundary.

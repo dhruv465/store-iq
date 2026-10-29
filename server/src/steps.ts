@@ -547,7 +547,9 @@ export function proposeAccessory(
     .toLowerCase();
   const people = Number(String(card.family ?? "").match(/(\d+)\s*(people|members|persons)/)?.[1] ?? 0);
   for (const accessory of pack.accessories ?? []) {
-    if (selection?.accessories.includes(accessory.id)) continue;
+    // A selection always carries an accessories array in practice; guard it anyway, because this
+    // throwing would take down the whole close rather than skip one accessory.
+    if (selection?.accessories?.includes(accessory.id)) continue;
     const forWhat = String(accessory.for ?? "").toLowerCase();
     if (/ps5|console|gaming/i.test(forWhat) && /ps5|console|gaming/i.test(hay)) return accessory;
     if (/unstable|voltage|supply/i.test(forWhat) && /unstable|voltage|supply|inverter|generator/i.test(hay))
