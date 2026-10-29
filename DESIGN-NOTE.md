@@ -62,15 +62,20 @@ one's home. The associate sets the starting level; nothing is inferred from appe
 
 **Ask an expert** routes a question by subject, logs it against a named owner with a reference the
 associate can quote, and returns a line to hold the customer with. **The department manager view**
-answers "team" with today's volume, median score, how often the home was actually assessed, the step
-the floor skips most, and open questions — delivered on the same number, because a manager on the
+answers "team" with the store visits' own table, computed live: today's volume, the median against
+14, how many conversations reached Guide, what the floor scores on Assess, how often the home came
+before the price — which the visits found went the other way in 6 of 6 — the step the floor is
+weakest on today, and open questions. It is delivered on the same number, because a manager on the
 floor carries the same phone as everyone else.
 
 ## Limits, honestly
 
-Built against a stub data pack; the real pack will need the ranking weights retuned, and its
-`good_for` / `weak_for` words are English, so those two words stay English in a Hindi reply. A voice
-note still needs the model, and has not been exercised end to end; a photo is answered from the pack
-once its tag or caption names the set, and asks for the model number when it cannot be read. Hosting is a laptop behind a reserved tunnel,
+Built against a stub data pack. The real one is read through a single adapter, so its own field
+names and formats are a few minutes in `adapt.ts` and a restart, and `npm run pack:check` names
+every row it cannot serve before the number ever sees it. The ranking weights will still need
+retuning on real data, and the pack's `good_for` / `weak_for` words are English, so those two stay
+English in a Hindi reply. A voice note still needs the model and has not been exercised end to end;
+a photo is answered from the pack once its tag or caption names the set, and asks for the model
+number when it cannot be read. Hosting is a laptop behind a reserved tunnel,
 which has no cold start but does need the laptop up. No live inventory, payment, CRM or real customer
 messaging — per the brief's implementation boundary.

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HomeCard } from "./types.js";
+import { adaptPack } from "./adapt.js";
 
 export type Pack = {
   version: string;
@@ -37,13 +38,29 @@ export type Product = {
   energy: { typical_watts: number; standby_watts: number; units_per_year_4h_day: number };
 };
 
-/** Single source of facts. Prices, offers, stock and finance terms exist only here. */
-export async function loadPack(path = process.env.PACK_PATH || "data/pack.json"): Promise<Pack> {
-  const pack = JSON.parse(await readFile(resolve(path), "utf8")) as Pack;
-  if (!Array.isArray(pack.products) || !pack.products.length) throw Error("Data pack has no products");
-  for (const product of pack.products)
-    if (!product.sku || !Number.isFinite(product.price_rupees) || !Number.isInteger(product.stock_units))
-      throw Error(`Data pack product incomplete: ${product.sku}`);
+/** A file on disk or an http(s) feed, so pointing at the real catalogue is one environment
+ *  variable. PACK_TOKEN is sent as a bearer token when the feed needs one. */
+export async function readSource(source: string): Promise<string> {
+  if (!/^https?:\/\//.test(source)) return readFile(resolve(source), "utf8");
+  const token = process.env.PACK_TOKEN?.trim();
+  const response = await fetch(source, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw Error(`Data pack ${source} answered HTTP ${response.status}`);
+  return response.text();
+}
+
+/** Single source of facts. Prices, offers, stock and finance terms exist only here.
+ *
+ *  The catalogue is read through the adapter, so a real export with its own field names loads
+ *  without touching anything but the name lists in adapt.ts. A pack that cannot be served says
+ *  every reason at once, by row, rather than failing on the first one. */
+export async function loadPack(source = process.env.PACK_PATH || "data/pack.json"): Promise<Pack> {
+  const raw = JSON.parse(await readSource(source));
+  if (!Array.isArray(raw?.products) || !raw.products.length) throw Error(`Data pack ${source} has no products`);
+  const { pack, problems } = adaptPack(raw);
+  if (problems.length) throw Error(`Data pack ${source} cannot be served:\n- ${problems.join("\n- ")}`);
   return pack;
 }
 

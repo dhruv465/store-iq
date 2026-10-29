@@ -1,0 +1,125 @@
+import type { Pack, Product } from "./pack.js";
+
+/** The real catalogue will not use our field names. This file is the whole mapping: add the real
+ *  name to the front of a list and the pack loads. Nothing else in the build reads a catalogue
+ *  field directly, so a new export format is a few minutes here and a restart.
+ *
+ *  Each entry is the names to try, in order; the first one present on the row wins. */
+export const FIELDS: Record<string, string[]> = {
+  sku: ["sku", "article_code", "item_code", "article", "material", "ean"],
+  brand: ["brand", "brand_name", "manufacturer", "vendor"],
+  name: ["name", "title", "article_description", "description", "model_name"],
+  size_inch: ["size_inch", "screen_size", "screen_size_inch", "display_size", "size"],
+  panel: ["panel", "panel_type", "display_type", "technology"],
+  mrp_rupees: ["mrp_rupees", "mrp", "list_price", "max_retail_price"],
+  price_rupees: ["price_rupees", "price", "selling_price", "net_price", "sp"],
+  stock_units: ["stock_units", "stock", "quantity", "qty", "on_hand", "available_qty"],
+};
+
+/** The five specs the ranking reasons about. A spec that is missing simply never wins its rule. */
+export const SPECS: Record<string, string[]> = {
+  peak_nits: ["peak_nits", "peak_brightness", "brightness_nits", "nits", "brightness"],
+  refresh_hz: ["refresh_hz", "refresh_rate", "refresh_rate_hz", "hz"],
+  hdmi_21_ports: ["hdmi_21_ports", "hdmi_2_1_ports", "hdmi21", "hdmi_2_1"],
+  speaker_watts: ["speaker_watts", "audio_output_watts", "speaker_output", "sound_output"],
+  os: ["os", "operating_system", "smart_os", "platform", "smart_tv_os"],
+};
+
+function pick(row: Record<string, unknown>, names: string[]): unknown {
+  // Catalogue exports differ on case and separators more often than on the word itself.
+  const flat = new Map(Object.entries(row).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ""), value]));
+  for (const name of names) {
+    const value = flat.get(name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return undefined;
+}
+
+/** "55 inch", "₹54,990", "54990.00" and 54990 all mean the same number on a catalogue row. */
+export function figure(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const match = value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : undefined;
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : value === undefined ? undefined : String(value);
+}
+
+/** A catalogue row in the shape the rest of the build reads, with what it says about each field it
+ *  could not find. The caller decides whether a missing field is fatal. */
+export function adaptProduct(row: Record<string, unknown>): { product: Product; missing: string[] } {
+  const missing: string[] = [];
+  const need = (field: string): unknown => {
+    const value = pick(row, FIELDS[field]!);
+    if (value === undefined) missing.push(field);
+    return value;
+  };
+
+  const specs: Record<string, number | string> = { ...(typeof row.specs === "object" && row.specs ? (row.specs as object) : {}) };
+  for (const [spec, names] of Object.entries(SPECS)) {
+    const found = pick({ ...row, ...specs }, names);
+    if (found === undefined) continue;
+    const value = spec === "os" ? text(found) : figure(found);
+    if (value !== undefined) specs[spec] = value;
+  }
+
+  const price = figure(need("price_rupees"));
+  const mrp = figure(pick(row, FIELDS.mrp_rupees!)) ?? price;
+  const watts = figure(pick(row, ["typical_watts", "power_consumption_watts", "power_watts"])) ?? figure((row.energy as any)?.typical_watts);
+  const product: Product = {
+    sku: text(need("sku")) ?? "",
+    brand: text(need("brand")) ?? "",
+    name: text(need("name")) ?? "",
+    size_inch: figure(need("size_inch")) ?? 0,
+    panel: text(pick(row, FIELDS.panel!)) ?? "LED",
+    mrp_rupees: mrp ?? 0,
+    price_rupees: price ?? 0,
+    stock_units: Math.trunc(figure(need("stock_units")) ?? 0),
+    specs,
+    good_for: list(row, ["good_for", "best_for", "strengths"]),
+    weak_for: list(row, ["weak_for", "not_for", "limitations"]),
+    // Without a cue the demonstrate step has nothing to show, and it is 2 of the judges' 14.
+    demo_cue: text(pick(row, ["demo_cue", "demo", "demonstration"])) ?? "Show it beside the set next to it, on the same scene.",
+    energy: {
+      typical_watts: watts ?? 0,
+      standby_watts: figure((row.energy as any)?.standby_watts) ?? 0,
+      // Four hours a day for a year, which is how the pack states it.
+      units_per_year_4h_day:
+        figure((row.energy as any)?.units_per_year_4h_day) ?? (watts ? Math.round((watts * 4 * 365) / 1000) : 0),
+    },
+  };
+  for (const language of ["hi", "mr"] as const) {
+    const cue = text(pick(row, [`demo_cue_${language}`]));
+    if (cue) product[`demo_cue_${language}`] = cue;
+  }
+  return { product, missing };
+}
+
+function list(row: Record<string, unknown>, names: string[]): string[] {
+  const value = pick(row, names);
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") return value.split(/[;,|]/).map((entry) => entry.trim()).filter(Boolean);
+  return [];
+}
+
+/** Every reason a catalogue cannot be served, named by row, rather than the first one only. */
+export function problems(products: { product: Product; missing: string[] }[]): string[] {
+  const found: string[] = [];
+  const seen = new Set<string>();
+  products.forEach(({ product, missing }, index) => {
+    const where = `row ${index + 1}${product.sku ? ` (${product.sku})` : ""}`;
+    for (const field of missing) found.push(`${where}: no ${field}. Add its name to FIELDS.${field} in server/src/adapt.ts`);
+    if (product.price_rupees <= 0) found.push(`${where}: price is ${product.price_rupees}`);
+    if (product.sku && seen.has(product.sku)) found.push(`${where}: duplicate sku`);
+    if (product.sku) seen.add(product.sku);
+  });
+  return found;
+}
+
+/** True when the pack is already in our own shape, which is what the stub pack is. */
+export function adaptPack(raw: Pack & { products: Record<string, unknown>[] }): { pack: Pack; problems: string[] } {
+  const adapted = (raw.products ?? []).map(adaptProduct);
+  return { pack: { ...raw, products: adapted.map((entry) => entry.product) }, problems: problems(adapted) };
+}

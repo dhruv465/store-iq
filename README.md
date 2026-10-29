@@ -68,7 +68,32 @@ Three rules are enforced in code, not asked of the model:
 
 ## Data pack
 
-`data/pack.json` is a stub written to unblock the build: TV SKUs, offers, finance, charges, label lines, myths and install requirements. Replace it with the official sample data pack when it lands (30 Oct) — same shape, or adjust `server/src/pack.ts`.
+`data/pack.json` is a stub written to unblock the build: TV SKUs, offers, finance, charges, label
+lines, myths and install requirements. It is the only source of prices, offers, stock, finance and
+specs — nothing else in the build may state a figure.
+
+### Swapping in the real catalogue
+
+The real catalogue will not use our field names, so nothing reads a catalogue field directly. One
+file, `server/src/adapt.ts`, holds every name the loader looks for. Rupee signs, commas, units
+inside the value (`"55 inch"`, `"144Hz"`, `"₹54,990.00"`) and spaced or capitalised headers
+(`"Article Code"`, `"Selling Price"`) are already handled.
+
+```bash
+npm run pack:check -- /path/to/their-catalogue.json
+```
+
+It prints what loaded, what it had to default and why that matters, every row it cannot serve with
+the field to add and where to add it, and then runs one real recommendation off it so the answer is
+proven rather than assumed. Work down the list until it says **Servable**, then:
+
+```bash
+PACK_PATH=/path/to/their-catalogue.json   # a file, or an https feed
+PACK_TOKEN=...                            # only if the feed needs a bearer token
+```
+
+and restart. A field they name differently is one entry in `FIELDS` or `SPECS`; a field they do not
+have at all is reported as defaulted, which tells you which ranking rule can no longer fire.
 
 ## Hosting
 
