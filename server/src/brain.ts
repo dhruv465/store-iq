@@ -1,23 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
-import {
-  allowedNumbers,
-  factsFor,
-  recommendedInches,
-  type Pack,
-} from "./pack.js";
+import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
 import { looksLikeAClaim, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
 import { describe, extractCard } from "./extract.js";
 import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
-import {
-  expertReply,
-  managerView,
-  newReference,
-  wantsExpert,
-  wantsManagerView,
-} from "./extras.js";
+import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import {
   briefAnswer,
   cardSummary,
@@ -77,15 +66,7 @@ export type Decision = {
 
 const schema = {
   type: "OBJECT",
-  required: [
-    "step",
-    "card",
-    "shortlist",
-    "demonstrated",
-    "lines",
-    "buttons",
-    "reason",
-  ],
+  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "reason"],
   properties: {
     step: { type: "STRING", enum: [...STEPS] },
     card: {
@@ -110,8 +91,7 @@ const schema = {
     },
     demonstrated: {
       type: "BOOLEAN",
-      description:
-        "true when this turn turned a spec into a line about this home",
+      description: "true when this turn turned a spec into a line about this home",
     },
     lines: {
       type: "ARRAY",
@@ -133,8 +113,7 @@ const schema = {
 /** Gemini answers 503 UNAVAILABLE under load and sometimes just hangs; both clear on a retry.
  *  429 is deliberately absent: the free tier's limit is per DAY (Google asked for a 19 hour delay
  *  when it was hit), so retrying only spends two more of the day's requests on a certain failure. */
-const RETRYABLE =
-  /request failed or timed out|unavailable: HTTP (404|500|502|503|504)/;
+const RETRYABLE = /request failed or timed out|unavailable: HTTP (404|500|502|503|504)/;
 const ATTEMPT_TIMEOUT_MS = 9000;
 const ATTEMPTS = 3;
 
@@ -144,18 +123,11 @@ export async function geminiRequest(
   url: string,
   init: RequestInit,
   attempts = ATTEMPTS,
-  wait: (ms: number) => Promise<void> = (ms) =>
-    new Promise((resolve) => setTimeout(resolve, ms)),
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await providerRequest(
-        request,
-        url,
-        init,
-        "Gemini",
-        ATTEMPT_TIMEOUT_MS,
-      );
+      return await providerRequest(request, url, init, "Gemini", ATTEMPT_TIMEOUT_MS);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (attempt >= attempts || !RETRYABLE.test(message)) throw error;
@@ -166,9 +138,7 @@ export async function geminiRequest(
 }
 
 /** Fails loudly for a wrong model name, but never blocks start-up just because Google is unreachable. */
-export async function assertModelAvailable(
-  request: typeof fetch = fetch,
-): Promise<string> {
+export async function assertModelAvailable(request: typeof fetch = fetch): Promise<string> {
   const key = process.env.GEMINI_API_KEY?.trim();
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
   if (!key) throw Error("Missing GEMINI_API_KEY");
@@ -181,16 +151,10 @@ export async function assertModelAvailable(
       "Gemini models",
       8000,
     );
-    const body = JSON.parse(
-      new TextDecoder().decode(await readLimited(response, 1024 * 1024)),
-    );
-    names = (body?.models ?? []).map((entry: any) =>
-      String(entry?.name ?? "").replace("models/", ""),
-    );
+    const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 1024 * 1024)));
+    names = (body?.models ?? []).map((entry: any) => String(entry?.name ?? "").replace("models/", ""));
   } catch {
-    console.error(
-      `Could not list Gemini models; trusting GEMINI_MODEL=${model}`,
-    );
+    console.error(`Could not list Gemini models; trusting GEMINI_MODEL=${model}`);
     return model;
   }
   if (!names.includes(model))
@@ -207,10 +171,7 @@ const LABEL_PROMPT = `Read the shelf tag, the box or the TV label in this photo.
 
 /** One small vision call, and it only reads the tag. The answer is then written from the data pack,
  *  so a misread model number can never become an invented price. */
-export async function labelText(
-  image: NonNullable<Event["image"]>,
-  request: typeof fetch = fetch,
-): Promise<string> {
+export async function labelText(image: NonNullable<Event["image"]>, request: typeof fetch = fetch): Promise<string> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return "";
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
@@ -243,9 +204,7 @@ export async function labelText(
       }),
     },
   );
-  const body = JSON.parse(
-    new TextDecoder().decode(await readLimited(response, 64 * 1024)),
-  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 64 * 1024)));
   const text = String(
     body?.candidates?.[0]?.content?.parts
       ?.map((part: any) => part?.text)
@@ -255,20 +214,13 @@ export async function labelText(
   return /^none\b/i.test(text) ? "" : text.slice(0, 200);
 }
 
-const OFFER_WORDS =
-  /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|chhoot|छूट)s?\b/i;
+const OFFER_WORDS = /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|chhoot|छूट)s?\b/i;
 /** A figure beside the offer word is the difference between quoting a deal and declining to. */
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
 
 /** Fires only when a reply would put a number on an offer before the home has been earned. */
-export function offerLeaked(
-  text: string,
-  assessed: boolean,
-  demonstrated: boolean,
-): boolean {
-  return (
-    !(assessed && demonstrated) && OFFER_WORDS.test(text) && A_FIGURE.test(text)
-  );
+export function offerLeaked(text: string, assessed: boolean, demonstrated: boolean): boolean {
+  return !(assessed && demonstrated) && OFFER_WORDS.test(text) && A_FIGURE.test(text);
 }
 
 /** Four home facts, including how far they sit, is enough to stop talking about price first. */
@@ -286,30 +238,22 @@ export function isAssessed(card: Session["card"]): boolean {
     "budget_rupees",
   ].filter((key) => {
     const value = (card as Record<string, unknown>)[key];
-    return Array.isArray(value)
-      ? value.length > 0
-      : value !== undefined && value !== null && value !== "";
+    return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
   });
-  const hasDistance =
-    card.distance_m !== undefined || card.distance_feet !== undefined;
+  const hasDistance = card.distance_m !== undefined || card.distance_feet !== undefined;
   return filled.length >= 4 && hasDistance;
 }
 
 /** Every number a text states, as exact tokens. */
 export function numbersIn(text: string): Set<number> {
   const found = new Set<number>();
-  for (const token of text.matchAll(/\d[\d,]*(?:\.\d+)?/g))
-    found.add(Number(token[0].replace(/,/g, "")));
+  for (const token of text.matchAll(/\d[\d,]*(?:\.\d+)?/g)) found.add(Number(token[0].replace(/,/g, "")));
   return found;
 }
 
 /** Money, percentages and large figures must exist in the data pack or in what the associate said.
  *  Matching is on exact values: 999 is not supported by 79990 merely containing it. */
-export function unsupportedNumbers(
-  text: string,
-  allowed: Set<number>,
-  said: string,
-): string[] {
+export function unsupportedNumbers(text: string, allowed: Set<number>, said: string): string[] {
   const quoted = numbersIn(said);
   const bad: string[] = [];
   for (const match of text.matchAll(
@@ -338,10 +282,7 @@ export function render(decision: Decision): Reply {
     .filter(Boolean)
     .slice(0, options ? 3 : 2);
   const reason = moneySafe(decision.reason).trim();
-  const text = [...lines, options || !reason ? "" : `↳ ${reason}`]
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, 1000);
+  const text = [...lines, options || !reason ? "" : `↳ ${reason}`].filter(Boolean).join("\n").slice(0, 1000);
   const buttons = decision.buttons
     .filter((button) => button?.id?.trim() && button?.title?.trim())
     .slice(0, 3)
@@ -355,9 +296,7 @@ export function render(decision: Decision): Reply {
       buttons.findIndex((other) => other.title === button.title) === index,
   );
   return {
-    text:
-      text ||
-      "Tell me about the customer's room and I will give you the next question.",
+    text: text || "Tell me about the customer's room and I will give you the next question.",
     ...(unique.length ? { buttons: unique } : {}),
   };
 }
@@ -379,23 +318,11 @@ const CARD_FIELDS = new Set([
   "priorities",
   "site_constraints",
 ]);
-const NUMERIC_FIELDS = new Set([
-  "distance_m",
-  "distance_feet",
-  "budget_rupees",
-]);
-const LIST_FIELDS = new Set([
-  "content",
-  "devices",
-  "priorities",
-  "site_constraints",
-]);
+const NUMERIC_FIELDS = new Set(["distance_m", "distance_feet", "budget_rupees"]);
+const LIST_FIELDS = new Set(["content", "devices", "priorities", "site_constraints"]);
 
 /** A tap already carries its answer, so the card is filled in code and never depends on the model repeating it. */
-export function applyAction(
-  session: Session,
-  action: string | undefined,
-): string | undefined {
+export function applyAction(session: Session, action: string | undefined): string | undefined {
   const match = action?.match(/^card:([a-z_]+):(.+)$/);
   if (!match) return undefined;
   const [, field, raw] = match as unknown as [string, string, string];
@@ -407,9 +334,7 @@ export function applyAction(
     if (!Number.isFinite(number) || number <= 0) return undefined;
     (session.card as Record<string, unknown>)[field] = number;
   } else if (LIST_FIELDS.has(field)) {
-    const list = Array.isArray(session.card[field as "content"])
-      ? [...session.card[field as "content"]!]
-      : [];
+    const list = Array.isArray(session.card[field as "content"]) ? [...session.card[field as "content"]!] : [];
     if (!list.includes(value)) list.push(value);
     (session.card as Record<string, unknown>)[field] = list.slice(0, 6);
   } else (session.card as Record<string, unknown>)[field] = value;
@@ -421,12 +346,7 @@ export function languageOf(text: string | undefined): "en" | "hi" {
   return text && /[\u0900-\u097F]/.test(text) ? "hi" : "en";
 }
 
-function prompt(
-  event: Event,
-  session: Session,
-  pack: Pack,
-  tapped?: string,
-): string {
+function prompt(event: Event, session: Session, pack: Pack, tapped?: string): string {
   const facts = factsFor(pack, session.card, session.shortlist);
   const sizeHint = session.card.distance_feet
     ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
@@ -470,19 +390,14 @@ export function startInteraction(session: Session): void {
   session.history = [];
 }
 
-export function deterministic(
-  event: Event,
-  session: Session,
-  pack: Pack,
-): Reply | null {
+export function deterministic(event: Event, session: Session, pack: Pack): Reply | null {
   if (wantsNewCustomer(event.text, event.action)) {
     startInteraction(session);
     return { text: t(session.language, "newcustomer") };
   }
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
-    if (!session.steps_done.includes("assess"))
-      session.steps_done.push("assess");
+    if (!session.steps_done.includes("assess")) session.steps_done.push("assess");
     return nextQuestionReply(session, t(session.language, "card.confirmed"));
   }
   if (event.action === "card:correct") {
@@ -509,23 +424,17 @@ export function deterministic(
   const added = event.action?.match(/^add:([A-Za-z0-9_-]+)$/);
   if (added && session.selection) {
     const id = added[1]!;
-    const known =
-      (pack.accessories ?? []).some((a) => a.id === id) ||
-      pack.charges.some((c) => c.id === id);
+    const known = (pack.accessories ?? []).some((a) => a.id === id) || pack.charges.some((c) => c.id === id);
     if (!known) return { text: "That line is not in today's data pack." };
-    const target = (pack.accessories ?? []).some((a) => a.id === id)
-      ? "accessories"
-      : "charges";
-    if (!session.selection[target].includes(id))
-      session.selection[target].push(id);
+    const target = (pack.accessories ?? []).some((a) => a.id === id) ? "accessories" : "charges";
+    if (!session.selection[target].includes(id)) session.selection[target].push(id);
     session.consent = false;
     return followThrough(session, pack, event.name ?? session.phone);
   }
   if (event.action === "consent:yes") {
     session.consent = true;
     if (!session.steps_done.includes("close")) session.steps_done.push("close");
-    if (!session.steps_done.includes("follow_through"))
-      session.steps_done.push("follow_through");
+    if (!session.steps_done.includes("follow_through")) session.steps_done.push("follow_through");
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
   }
@@ -538,8 +447,7 @@ export function deterministic(
     const corrected = validateReply(pack, event.text, session.language);
     if (corrected) {
       session.step = "validate";
-      if (!session.steps_done.includes("validate"))
-        session.steps_done.push("validate");
+      if (!session.steps_done.includes("validate")) session.steps_done.push("validate");
       return corrected;
     }
   }
@@ -547,8 +455,7 @@ export function deterministic(
   if (wantsRecommend(event.text, event.action) && isAssessed(session.card)) {
     if (!session.card_confirmed) return cardSummary(session);
     session.step = "recommend";
-    if (!session.steps_done.includes("recommend"))
-      session.steps_done.push("recommend");
+    if (!session.steps_done.includes("recommend")) session.steps_done.push("recommend");
     // A cue given is a difference demonstrated, which is what opens the offer gate.
     session.demonstrated = true;
     return recommendReply(pack, session.card, session.language);
@@ -565,10 +472,7 @@ export function deterministic(
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
   }
-  if (
-    event.action === "card:show" ||
-    /^\s*(card|home card|what do you have)\b/i.test(event.text ?? "")
-  ) {
+  if (event.action === "card:show" || /^\s*(card|home card|what do you have)\b/i.test(event.text ?? "")) {
     return cardSummary(session);
   }
   const answered = event.action?.match(/^brief:answer:(.+)$/);
@@ -584,8 +488,7 @@ export function deterministic(
   if (wantsReview(event.text, event.action)) {
     session.step = "review";
     const reply = reviewReply(session);
-    if (!session.steps_done.includes("review"))
-      session.steps_done.push("review");
+    if (!session.steps_done.includes("review")) session.steps_done.push("review");
     return reply;
   }
   return null;
@@ -593,47 +496,31 @@ export function deterministic(
 
 /** One set named, or one label figure quoted: the pack answers both without a request.
  *  A quoted figure is section 4D's demonstration, which is half of what opens the offer gate. */
-function packAnswer(
-  pack: Pack,
-  said: string,
-  session: Session,
-  wants: "set" | "spec" = "spec",
-): Reply | null {
+function packAnswer(pack: Pack, said: string, session: Session, wants: "set" | "spec" = "spec"): Reply | null {
   const product = findProduct(pack, said);
   // Photographing a tag means "tell me about this set"; the tag carries figures too, and answering
   // one of those instead would answer a question the associate never asked. Typing a figure is the
   // opposite case: there the figure IS the question.
   if (wants === "set" && product) {
-    if (!session.shortlist.includes(product.sku))
-      session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
+    if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
     return productReply(product, session.language, isAssessed(session.card));
   }
   const translated = translateSpec(pack, said, product, session.language);
   if (translated) {
     session.step = "translate";
-    if (!session.steps_done.includes("translate"))
-      session.steps_done.push("translate");
+    if (!session.steps_done.includes("translate")) session.steps_done.push("translate");
     session.demonstrated = true;
     return translated;
   }
   if (!product) return null;
-  if (!session.shortlist.includes(product.sku))
-    session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
+  if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
   return productReply(product, session.language, isAssessed(session.card));
 }
 
 export type Store = {
   today(): Promise<Session[]>;
-  openQuestions(): Promise<
-    { reference: string; area: string; owner: string }[]
-  >;
-  logQuestion(row: {
-    reference: string;
-    phone: string;
-    area: string;
-    owner: string;
-    question: string;
-  }): Promise<void>;
+  openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
+  logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
 
 export async function decide(
@@ -645,18 +532,14 @@ export async function decide(
 ): Promise<Reply> {
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
-  else if (event.text)
-    session.language = languageFrom(event.text, session.language);
+  else if (event.text) session.language = languageFrom(event.text, session.language);
   const tapped = applyAction(session, event.action);
   if (tapped && !deterministic(event, session, pack)) {
     session.assessed = isAssessed(session.card);
     const reply =
       session.assessed && !session.card_confirmed
         ? cardSummary(session)
-        : nextQuestionReply(
-            session,
-            t(session.language, "noted", { body: tapped }),
-          );
+        : nextQuestionReply(session, t(session.language, "noted", { body: tapped }));
     session.history.push({
       who: "associate",
       text: String(event.action).slice(0, 300),
@@ -687,12 +570,7 @@ export async function decide(
   if (store && wantsExpert(event.text, event.action)) {
     const question = (event.text ?? "").slice(0, 400);
     const reference = newReference();
-    const { reply, area, owner } = expertReply(
-      pack,
-      question,
-      reference,
-      session.language,
-    );
+    const { reply, area, owner } = expertReply(pack, question, reference, session.language);
     await store.logQuestion({
       reference,
       phone: session.phone,
@@ -703,23 +581,15 @@ export async function decide(
     return reply;
   }
   // Read what we confidently can from the words before spending a request on them.
-  if (
-    event.text &&
-    !event.image &&
-    !event.audio &&
-    !deterministic(event, session, pack)
-  ) {
+  if (event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
     const read = extractCard(event.text);
     const fields = Object.entries(read).filter(
-      ([, value]) =>
-        value !== undefined && !(Array.isArray(value) && !value.length),
+      ([, value]) => value !== undefined && !(Array.isArray(value) && !value.length),
     );
     if (fields.length) {
-      for (const [field, value] of fields)
-        (session.card as Record<string, unknown>)[field] = value;
+      for (const [field, value] of fields) (session.card as Record<string, unknown>)[field] = value;
       session.assessed = isAssessed(session.card);
-      if (!session.steps_done.includes("assess") && session.assessed)
-        session.steps_done.push("assess");
+      if (!session.steps_done.includes("assess") && session.assessed) session.steps_done.push("assess");
       const reply =
         session.assessed && !session.card_confirmed
           ? cardSummary(session)
@@ -762,9 +632,7 @@ export async function decide(
       text: `photo: ${read || "unreadable"}`.slice(0, 300),
     });
     const answer = reply ?? {
-      text: read
-        ? t(session.language, "p.notfound", { v: read.slice(0, 60) })
-        : t(session.language, "p.unread"),
+      text: read ? t(session.language, "p.notfound", { v: read.slice(0, 60) }) : t(session.language, "p.unread"),
     };
     session.history.push({ who: "storeiq", text: answer.text.slice(0, 300) });
     session.history = session.history.slice(-12);
@@ -783,9 +651,7 @@ export async function decide(
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw Error("Missing GEMINI_API_KEY");
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-  const parts: Record<string, unknown>[] = [
-    { text: prompt(event, session, pack, tapped) },
-  ];
+  const parts: Record<string, unknown>[] = [{ text: prompt(event, session, pack, tapped) }];
   // One call carries the voice note or the label photo: no transcription hop before the answer.
   for (const media of [event.audio, event.image])
     if (media)
@@ -814,9 +680,7 @@ export async function decide(
       }),
     },
   );
-  const body = JSON.parse(
-    new TextDecoder().decode(await readLimited(response, 512 * 1024)),
-  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024)));
   const text: string | undefined = body?.candidates?.[0]?.content?.parts
     ?.map((part: any) => part?.text)
     .filter((value: unknown) => typeof value === "string")
@@ -830,11 +694,7 @@ export async function decide(
 
   // Merge the card before the gate: this turn's answers count towards being assessed.
   for (const [field, value] of Object.entries(decision.card ?? {}))
-    if (
-      value !== null &&
-      value !== undefined &&
-      !(Array.isArray(value) && !value.length)
-    )
+    if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
       (session.card as Record<string, unknown>)[field] = value;
   session.shortlist = (decision.shortlist ?? [])
     .filter((sku) => pack.products.some((product) => product.sku === sku))
@@ -843,16 +703,11 @@ export async function decide(
   if (decision.demonstrated) session.demonstrated = true;
   if (STEPS.includes(decision.step)) {
     session.step = decision.step;
-    if (!session.steps_done.includes(decision.step))
-      session.steps_done.push(decision.step);
+    if (!session.steps_done.includes(decision.step)) session.steps_done.push(decision.step);
   }
 
   // Section 3: show what was understood and allow correction before the card drives a recommendation.
-  if (
-    !session.card_confirmed &&
-    session.assessed &&
-    ["recommend", "complete", "close"].includes(decision.step)
-  )
+  if (!session.card_confirmed && session.assessed && ["recommend", "complete", "close"].includes(decision.step))
     return cardSummary(session);
 
   let reply = render(decision);
@@ -868,11 +723,7 @@ export async function decide(
     };
   session.history.push({
     who: "associate",
-    text: (
-      event.text ??
-      event.action ??
-      (event.audio ? "voice note" : "photo")
-    ).slice(0, 300),
+    text: (event.text ?? event.action ?? (event.audio ? "voice note" : "photo")).slice(0, 300),
   });
   session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
   session.history = session.history.slice(-12);
@@ -893,11 +744,7 @@ export function nextQuestion(session: Session): string {
   ];
   const next = questions.find(([field]) => {
     const value = session.card[field];
-    return Array.isArray(value)
-      ? !value.length
-      : value === undefined || value === null || value === "";
+    return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
   });
-  return next
-    ? `Ask: ${next[1]}`
-    : "Ask what they want to see on the screen first.";
+  return next ? `Ask: ${next[1]}` : "Ask what they want to see on the screen first.";
 }

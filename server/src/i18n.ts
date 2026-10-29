@@ -15,8 +15,7 @@ const EN: Record<string, Phrase> = {
   "r.sound": (v) => `${v.w} W speakers, no soundbar needed yet`,
   "r.apps": (v) => `${v.os} has the OTT apps built in`,
   "r.fit": (v) => `${v.inch} inch is the fit at that distance`,
-  "r.closest": (v) =>
-    `${v.inch} inch, the closest we stock to the ${v.target} inch that distance suggests`,
+  "r.closest": (v) => `${v.inch} inch, the closest we stock to the ${v.target} inch that distance suggests`,
   "s.cheapest": "the lowest price of the three",
   "s.brightest": (v) => `${v.nits} nits, the brightest of the three`,
   "s.loudest": (v) => `${v.w} W speakers, the strongest sound here`,
@@ -82,19 +81,15 @@ const EN: Record<string, Phrase> = {
   noted: (v) => `Noted: ${v.body}.`,
   "noted.notsure": "Noted: not sure.",
   "card.confirmed": "Card confirmed.",
-  "card.full":
-    "The card is full. Read it back to them, then ask for three options.",
+  "card.full": "The card is full. Read it back to them, then ask for three options.",
   "card.fixwhat": "Tell me what to change and I will update the card.",
-  newcustomer:
-    "New customer, clean card.\nTell me what they said and I will give you the first question.",
+  newcustomer: "New customer, clean card.\nTell me what they said and I will give you the first question.",
   "rec.show": "Show",
   "rec.nostock": "Nothing in today's pack is in stock for this home.",
   "val.say": (v) => `Say: "${v.body}"`,
   "val.reason": "↳ Confirm the true part before correcting it.",
-  "ft.which":
-    "Which one did they pick?\n↳ I will not guess the selection before preparing a summary.",
-  "ft.read": (v) =>
-    `Read this to the customer: "${v.name}, total Rs ${v.total}. May I send you a summary?"`,
+  "ft.which": "Which one did they pick?\n↳ I will not guess the selection before preparing a summary.",
+  "ft.read": (v) => `Read this to the customer: "${v.name}, total Rs ${v.total}. May I send you a summary?"`,
   "ft.tap": "Tap once they agree.",
   "btn.agreed": "They agreed",
   "btn.declined": "Declined",
@@ -102,15 +97,13 @@ const EN: Record<string, Phrase> = {
   "ft.task": (v) => `Task: follow up this order · owner ${v.owner}`,
   "ft.site": (v) => `Install job needs: ${v.body}`,
   "ft.nosite": "Install job: no site requirements for these charges",
-  "ft.noconsent":
-    "No summary sent.\n↳ The summary only goes out with the customer's consent.",
+  "ft.noconsent": "No summary sent.\n↳ The summary only goes out with the customer's consent.",
   "rev.score": (v) => `This conversation: ${v.points} of ${v.max}.`,
   "rev.covered": (v) => `Covered: ${v.body}.`,
   "rev.none": "No step is complete yet.",
   "rev.next": (v) => `Next time: ${v.body}`,
   "rev.perfect": "Every step was covered. Keep the order.",
-  "exp.say": (v) =>
-    `Say: "Let me confirm that with our ${v.area} desk and come straight back to you."`,
+  "exp.say": (v) => `Say: "Let me confirm that with our ${v.area} desk and come straight back to you."`,
   "gate.offers": (v) => `Offers come after the home. ${v.body}`,
   "lang.switched": "Theek hai.",
   "adv.assess": "Ask about the home before the product: distance, light, what they watch, then read it back.",
@@ -118,8 +111,10 @@ const EN: Record<string, Phrase> = {
   "adv.translate": "Turn one spec on the label into a line about their home.",
   "adv.demonstrate": "Point at one difference they can see on the floor, not a number on a sheet.",
   "adv.complete": "Give the full cost charge by charge: product, accessories, delivery, installation.",
-  "adv.close": "Open the offer only after assessing and demonstrating, and state finance in one sentence with its full cost.",
-  "adv.follow_through": "With consent, send the customer summary, raise the task with an owner and the installation site needs.",
+  "adv.close":
+    "Open the offer only after assessing and demonstrating, and state finance in one sentence with its full cost.",
+  "adv.follow_through":
+    "With consent, send the customer summary, raise the task with an owner and the installation site needs.",
   "ft.sitecheck": (v) => `Ask: "Before I book the installer — ${v.body}?"`,
   "btn.sitefine": "All fine",
   "btn.siteproblem": "Needs work",
@@ -131,15 +126,12 @@ const EN: Record<string, Phrase> = {
   "p.strong": (v) => `Strong: ${v.v}.`,
   "p.weak": (v) => `Weak: ${v.v}.`,
   "p.show": (v) => `Show them: ${v.v}`,
-  "p.reason":
-    "Ask where they will sit before you talk price; that is what the offer waits on.",
-  "p.unread":
-    "I could not read a model off that photo.\nType the model number, or the brand and the size.",
+  "p.reason": "Ask where they will sit before you talk price; that is what the offer waits on.",
+  "p.unread": "I could not read a model off that photo.\nType the model number, or the brand and the size.",
   "p.notfound": (v) =>
     `I read "${v.v}" off that photo, and that model is not in today's data pack.\n\u21b3 Check the shelf tag; I will not guess a price.`,
   "btn.pick": "Pick this one",
-  "tr.reason":
-    "\u21b3 A label figure means nothing until it is about their wall.",
+  "tr.reason": "\u21b3 A label figure means nothing until it is about their wall.",
   "rec.first": "Two quick questions first, then three options.",
 };
 
@@ -150,8 +142,7 @@ const HI: Record<string, Phrase> = {
   "r.sound": (v) => `${v.w} W स्पीकर, अभी साउंडबार की ज़रूरत नहीं`,
   "r.apps": (v) => `${v.os}, OTT ऐप्स पहले से मौजूद`,
   "r.fit": (v) => `${v.inch} इंच इस दूरी के लिए सही`,
-  "r.closest": (v) =>
-    `${v.inch} इंच, इस दूरी के ${v.target} इंच के सबसे पास जो हमारे पास है`,
+  "r.closest": (v) => `${v.inch} इंच, इस दूरी के ${v.target} इंच के सबसे पास जो हमारे पास है`,
   "s.cheapest": "तीनों में सबसे कम दाम",
   "s.brightest": (v) => `${v.nits} nits, तीनों में सबसे ज़्यादा ब्राइट`,
   "s.loudest": (v) => `${v.w} W स्पीकर, यहाँ सबसे तेज़ आवाज़`,
@@ -217,19 +208,15 @@ const HI: Record<string, Phrase> = {
   noted: (v) => `नोट कर लिया: ${v.body}।`,
   "noted.notsure": "नोट कर लिया: पता नहीं।",
   "card.confirmed": "कार्ड पक्का हो गया।",
-  "card.full":
-    "कार्ड पूरा हो गया। ग्राहक को एक बार पढ़कर सुनाइए, फिर तीन विकल्प माँगिए।",
+  "card.full": "कार्ड पूरा हो गया। ग्राहक को एक बार पढ़कर सुनाइए, फिर तीन विकल्प माँगिए।",
   "card.fixwhat": "बताइए क्या बदलना है, मैं कार्ड अपडेट कर दूँगा।",
-  newcustomer:
-    "नया ग्राहक, कार्ड साफ़।\nबताइए उन्होंने क्या कहा, मैं पहला सवाल दूँगा।",
+  newcustomer: "नया ग्राहक, कार्ड साफ़।\nबताइए उन्होंने क्या कहा, मैं पहला सवाल दूँगा।",
   "rec.show": "दिखाइए",
   "rec.nostock": "आज के पैक में इस घर के लिए कुछ स्टॉक में नहीं है।",
   "val.say": (v) => `कहिए: "${v.body}"`,
   "val.reason": "↳ जो सही है पहले मानिए, फिर सुधारिए।",
-  "ft.which":
-    "उन्होंने कौन सा पसंद किया?\n↳ सारांश बनाने से पहले मैं अंदाज़ा नहीं लगाऊँगा।",
-  "ft.read": (v) =>
-    `ग्राहक को यह पढ़कर सुनाइए: "${v.name}, कुल Rs ${v.total}। क्या मैं आपको सारांश भेज दूँ?"`,
+  "ft.which": "उन्होंने कौन सा पसंद किया?\n↳ सारांश बनाने से पहले मैं अंदाज़ा नहीं लगाऊँगा।",
+  "ft.read": (v) => `ग्राहक को यह पढ़कर सुनाइए: "${v.name}, कुल Rs ${v.total}। क्या मैं आपको सारांश भेज दूँ?"`,
   "ft.tap": "वे हाँ कहें तो दबाइए।",
   "btn.agreed": "हाँ कहा",
   "btn.declined": "मना किया",
@@ -237,15 +224,13 @@ const HI: Record<string, Phrase> = {
   "ft.task": (v) => `काम: इस ऑर्डर का फ़ॉलो-अप · ज़िम्मेदारी ${v.owner}`,
   "ft.site": (v) => `इंस्टॉलेशन के लिए चाहिए: ${v.body}`,
   "ft.nosite": "इंस्टॉलेशन: इन चार्ज के लिए कोई साइट ज़रूरत नहीं",
-  "ft.noconsent":
-    "सारांश नहीं भेजा।\n↳ ग्राहक की अनुमति के बिना सारांश नहीं जाता।",
+  "ft.noconsent": "सारांश नहीं भेजा।\n↳ ग्राहक की अनुमति के बिना सारांश नहीं जाता।",
   "rev.score": (v) => `यह बातचीत: ${v.max} में से ${v.points}।`,
   "rev.covered": (v) => `हुए स्टेप: ${v.body}।`,
   "rev.none": "अभी कोई स्टेप पूरा नहीं हुआ।",
   "rev.next": (v) => `अगली बार: ${v.body}`,
   "rev.perfect": "सारे स्टेप हो गए। यही क्रम रखिए।",
-  "exp.say": (v) =>
-    `कहिए: "मैं यह हमारे ${v.area} डेस्क से पक्का करके तुरंत आपको बताता हूँ।"`,
+  "exp.say": (v) => `कहिए: "मैं यह हमारे ${v.area} डेस्क से पक्का करके तुरंत आपको बताता हूँ।"`,
   "gate.offers": (v) => `ऑफ़र घर समझने के बाद। ${v.body}`,
   "lang.switched": "ठीक है, अब हिंदी में।",
   "adv.assess": "प्रोडक्ट से पहले घर के बारे में पूछिए: दूरी, रोशनी, क्या देखते हैं — फिर वापस पढ़कर सुनाइए।",
@@ -254,7 +239,8 @@ const HI: Record<string, Phrase> = {
   "adv.demonstrate": "एक फ़र्क़ फ़्लोर पर दिखाइए जो वे देख सकें, काग़ज़ का आंकड़ा नहीं।",
   "adv.complete": "पूरा खर्च एक-एक करके बताइए: प्रोडक्ट, एक्सेसरी, डिलीवरी, इंस्टॉलेशन।",
   "adv.close": "ऑफ़र घर समझने और फ़र्क़ दिखाने के बाद ही खोलिए, और फ़ाइनेंस उसकी पूरी लागत के साथ एक वाक्य में कहिए।",
-  "adv.follow_through": "अनुमति लेकर ग्राहक को सारांश भेजिए, काम ज़िम्मेदारी के साथ उठाइए और इंस्टॉलेशन की साइट ज़रूरतें बताइए।",
+  "adv.follow_through":
+    "अनुमति लेकर ग्राहक को सारांश भेजिए, काम ज़िम्मेदारी के साथ उठाइए और इंस्टॉलेशन की साइट ज़रूरतें बताइए।",
   "ft.sitecheck": (v) => `पूछिए: "इंस्टॉलर बुक करने से पहले — ${v.body}?"`,
   "btn.sitefine": "सब ठीक है",
   "btn.siteproblem": "काम चाहिए",
@@ -267,13 +253,11 @@ const HI: Record<string, Phrase> = {
   "p.weak": (v) => `कमज़ोर: ${v.v}।`,
   "p.show": (v) => `यह दिखाइए: ${v.v}`,
   "p.reason": "दाम से पहले पूछिए कि वे कहाँ बैठेंगे; ऑफ़र उसके बाद खुलता है।",
-  "p.unread":
-    "उस फ़ोटो से मॉडल पढ़ नहीं पाया।\nमॉडल नंबर, या ब्रांड और साइज़ लिख दीजिए।",
+  "p.unread": "उस फ़ोटो से मॉडल पढ़ नहीं पाया।\nमॉडल नंबर, या ब्रांड और साइज़ लिख दीजिए।",
   "p.notfound": (v) =>
     `फ़ोटो में "${v.v}" पढ़ा, और वह मॉडल आज के डेटा पैक में नहीं है।\n\u21b3 शेल्फ़ टैग देखिए; दाम का अंदाज़ा मैं नहीं लगाऊँगा।`,
   "btn.pick": "यही लेंगे",
-  "tr.reason":
-    "\u21b3 लेबल का आंकड़ा तब तक बेकार है जब तक वह उनकी दीवार की बात न बने।",
+  "tr.reason": "\u21b3 लेबल का आंकड़ा तब तक बेकार है जब तक वह उनकी दीवार की बात न बने।",
   "rec.first": "पहले दो छोटे सवाल, फिर तीन विकल्प।",
 };
 
@@ -284,8 +268,7 @@ const MR: Record<string, Phrase> = {
   "r.sound": (v) => `${v.w} W स्पीकर, अजून साउंडबार नको`,
   "r.apps": (v) => `${v.os}, OTT अ‍ॅप्स आधीच आहेत`,
   "r.fit": (v) => `${v.inch} इंच या अंतरासाठी योग्य`,
-  "r.closest": (v) =>
-    `${v.inch} इंच, या अंतराच्या ${v.target} इंचाच्या सर्वात जवळचा आमच्याकडे`,
+  "r.closest": (v) => `${v.inch} इंच, या अंतराच्या ${v.target} इंचाच्या सर्वात जवळचा आमच्याकडे`,
   "s.cheapest": "तिघांत सर्वात कमी किंमत",
   "s.brightest": (v) => `${v.nits} nits, तिघांत सर्वात ब्राइट`,
   "s.loudest": (v) => `${v.w} W स्पीकर, इथे सर्वात मोठा आवाज`,
@@ -353,15 +336,13 @@ const MR: Record<string, Phrase> = {
   "card.confirmed": "कार्ड पक्कं झालं.",
   "card.full": "कार्ड पूर्ण झालं. ग्राहकाला वाचून दाखवा, मग तीन पर्याय मागा.",
   "card.fixwhat": "काय बदलायचं ते सांगा, मी कार्ड अपडेट करतो.",
-  newcustomer:
-    "नवीन ग्राहक, कार्ड कोरं.\nते काय म्हणाले सांगा, मी पहिला प्रश्न देतो.",
+  newcustomer: "नवीन ग्राहक, कार्ड कोरं.\nते काय म्हणाले सांगा, मी पहिला प्रश्न देतो.",
   "rec.show": "दाखवा",
   "rec.nostock": "आजच्या पॅकमध्ये या घरासाठी काहीही स्टॉकमध्ये नाही.",
   "val.say": (v) => `म्हणा: "${v.body}"`,
   "val.reason": "↳ जे खरं आहे ते आधी मान्य करा, मग दुरुस्त करा.",
   "ft.which": "त्यांनी कोणता निवडला?\n↳ सारांश करण्याआधी मी अंदाज लावणार नाही.",
-  "ft.read": (v) =>
-    `ग्राहकाला हे वाचून दाखवा: "${v.name}, एकूण Rs ${v.total}. सारांश पाठवू का?"`,
+  "ft.read": (v) => `ग्राहकाला हे वाचून दाखवा: "${v.name}, एकूण Rs ${v.total}. सारांश पाठवू का?"`,
   "ft.tap": "त्यांनी हो म्हटलं की दाबा.",
   "btn.agreed": "हो म्हटलं",
   "btn.declined": "नको म्हटलं",
@@ -369,15 +350,13 @@ const MR: Record<string, Phrase> = {
   "ft.task": (v) => `काम: या ऑर्डरचा पाठपुरावा · जबाबदारी ${v.owner}`,
   "ft.site": (v) => `इन्स्टॉलेशनसाठी लागेल: ${v.body}`,
   "ft.nosite": "इन्स्टॉलेशन: या चार्जसाठी साइटची गरज नाही",
-  "ft.noconsent":
-    "सारांश पाठवला नाही.\n↳ ग्राहकाच्या परवानगीशिवाय सारांश जात नाही.",
+  "ft.noconsent": "सारांश पाठवला नाही.\n↳ ग्राहकाच्या परवानगीशिवाय सारांश जात नाही.",
   "rev.score": (v) => `ही बातचीत: ${v.max} पैकी ${v.points}.`,
   "rev.covered": (v) => `झालेले टप्पे: ${v.body}.`,
   "rev.none": "अजून एकही टप्पा पूर्ण नाही.",
   "rev.next": (v) => `पुढच्या वेळी: ${v.body}`,
   "rev.perfect": "सगळे टप्पे झाले. हाच क्रम ठेवा.",
-  "exp.say": (v) =>
-    `म्हणा: "मी हे आमच्या ${v.area} डेस्ककडून पक्कं करून लगेच सांगतो."`,
+  "exp.say": (v) => `म्हणा: "मी हे आमच्या ${v.area} डेस्ककडून पक्कं करून लगेच सांगतो."`,
   "gate.offers": (v) => `ऑफर घर समजल्यावर. ${v.body}`,
   "lang.switched": "ठीक आहे, आता मराठीत.",
   "adv.assess": "प्रॉडक्टच्या आधी घराबद्दल विचारा: अंतर, उजेड, काय बघतात — मग वाचून दाखवा.",
@@ -386,7 +365,8 @@ const MR: Record<string, Phrase> = {
   "adv.demonstrate": "त्यांना दिसेल असा एक फरक फ्लोअरवर दाखवा, कागदावरचा आकडा नको.",
   "adv.complete": "पूर्ण खर्च एक-एक करून सांगा: प्रॉडक्ट, अॅक्सेसरी, डिलिव्हरी, इन्स्टॉलेशन.",
   "adv.close": "ऑफर घर समजल्यावर आणि फरक दाखवल्यावरच उघडा, आणि फायनान्स त्याच्या पूर्ण खर्चासह एका वाक्यात सांगा.",
-  "adv.follow_through": "परवानगी घेऊन ग्राहकाला सारांश पाठवा, काम जबाबदारीसह नोंदवा आणि इन्स्टॉलेशनच्या साइट गरजा सांगा.",
+  "adv.follow_through":
+    "परवानगी घेऊन ग्राहकाला सारांश पाठवा, काम जबाबदारीसह नोंदवा आणि इन्स्टॉलेशनच्या साइट गरजा सांगा.",
   "ft.sitecheck": (v) => `विचारा: "इन्स्टॉलर बुक करण्याआधी — ${v.body}?"`,
   "btn.sitefine": "सगळं ठीक",
   "btn.siteproblem": "काम लागेल",
@@ -399,13 +379,11 @@ const MR: Record<string, Phrase> = {
   "p.weak": (v) => `कमजोर बाजू: ${v.v}.`,
   "p.show": (v) => `हे दाखवा: ${v.v}`,
   "p.reason": "किंमतीच्या आधी विचारा की ते कुठे बसणार; ऑफर त्यानंतरच उघडते.",
-  "p.unread":
-    "त्या फोटोतून मॉडेल वाचता आलं नाही.\nमॉडेल नंबर, किंवा ब्रँड आणि साइज लिहा.",
+  "p.unread": "त्या फोटोतून मॉडेल वाचता आलं नाही.\nमॉडेल नंबर, किंवा ब्रँड आणि साइज लिहा.",
   "p.notfound": (v) =>
     `फोटोत "${v.v}" वाचलं, आणि ते मॉडेल आजच्या डेटा पॅकमध्ये नाही.\n\u21b3 शेल्फ टॅग पाहा; किंमतीचा अंदाज मी लावणार नाही.`,
   "btn.pick": "हाच घेणार",
-  "tr.reason":
-    "\u21b3 लेबलवरचा आकडा त्यांच्या भिंतीबद्दल होईपर्यंत निरुपयोगी आहे.",
+  "tr.reason": "\u21b3 लेबलवरचा आकडा त्यांच्या भिंतीबद्दल होईपर्यंत निरुपयोगी आहे.",
   "rec.first": "आधी दोन छोटे प्रश्न, मग तीन पर्याय.",
 };
 
@@ -420,11 +398,7 @@ export function v(lang: Lang, value: string): string {
   return typeof phrase === "string" ? phrase : value;
 }
 
-export function t(
-  lang: Lang,
-  key: string,
-  vars: Record<string, string | number> = {},
-): string {
+export function t(lang: Lang, key: string, vars: Record<string, string | number> = {}): string {
   const phrase = TABLES[lang]?.[key] ?? EN[key];
   if (phrase === undefined) return key;
   return typeof phrase === "function" ? phrase(vars) : phrase;
