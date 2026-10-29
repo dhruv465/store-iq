@@ -4,6 +4,16 @@ import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.j
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
+import {
+  endVisitLog,
+  newVisitReference,
+  startVisitLog,
+  storeNamed,
+  visitFiled,
+  visitOpened,
+  wantsVisitLog,
+  worthFiling,
+} from "./visit.js";
 import { describe, extractCard } from "./extract.js";
 import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
@@ -653,6 +663,7 @@ function packAnswer(pack: Pack, said: string, session: Session, wants: "set" | "
 
 export type Store = {
   today(): Promise<Session[]>;
+  logVisit(row: { reference: string; phone: string; associate?: string; store: string; body: string }): Promise<void>;
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
@@ -711,6 +722,27 @@ async function answer(
   // A request to switch language is a whole turn on its own.
   if (switched && (event.text ?? "").trim().split(/\s+/).length <= 4)
     return nextQuestionReply(session, t(session.language, "lang.switched"));
+  // Extra points: a store visit, in the visitor's own words. It comes before everything that reads
+  // text as a customer, because a visit note is full of rooms, prices and brands and would
+  // otherwise be read as somebody's home.
+  if (store && session.logging_visit && event.text) {
+    if (!worthFiling(event.text)) return { text: t(session.language, "visit.tooshort") };
+    const reference = newVisitReference();
+    const where = storeNamed(event.text, pack);
+    await store.logVisit({
+      reference,
+      phone: session.phone,
+      ...(session.associate ? { associate: session.associate } : {}),
+      store: where,
+      body: event.text.slice(0, 2000),
+    });
+    endVisitLog(session);
+    return visitFiled(reference, where, session.language);
+  }
+  if (store && wantsVisitLog(event.text, event.action)) {
+    startVisitLog(session);
+    return visitOpened(session.language);
+  }
   // Extra points: both read from the pack and the database, so neither spends a request.
   if (store && wantsManagerView(event.text, event.action))
     return managerView(await store.today(), await store.openQuestions());

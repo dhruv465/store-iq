@@ -47,6 +47,15 @@ create table if not exists expert_questions (
   asked_at timestamptz not null default now(),
   answered_at timestamptz
 );
+create table if not exists visits (
+  reference text primary key,
+  phone text not null,
+  associate text,
+  store text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists visits_recent on visits (created_at desc);
 create table if not exists notices (
   id serial primary key,
   body text not null,
@@ -235,11 +244,37 @@ export class DB {
       "inbox",
       "outbox",
       "expert_questions",
+      "visits",
     ]) {
       const result = await this.pg.query(`delete from ${table} where phone = $1`, [phone]);
       counts[table] = result.affectedRows ?? 0;
     }
     return counts;
+  }
+
+  /** Extra points: a store visit, spoken by whoever made it. The visits of 10 and 11 October are
+   *  the reason this product exists, and they were written up by hand afterwards; an associate
+   *  standing in a competitor's shop can only speak. */
+  async logVisit(row: {
+    reference: string;
+    phone: string;
+    associate?: string;
+    store: string;
+    body: string;
+  }): Promise<void> {
+    await this.pg.query(
+      `insert into visits (reference, phone, associate, store, body) values ($1, $2, $3, $4, $5)
+       on conflict (reference) do nothing`,
+      [row.reference, row.phone, row.associate ?? null, row.store, row.body],
+    );
+  }
+
+  async recentVisits(limit = 20): Promise<Record<string, unknown>[]> {
+    const rows = await this.pg.query<Record<string, unknown>>(
+      `select reference, phone, associate, store, body, created_at from visits order by created_at desc limit $1`,
+      [limit],
+    );
+    return rows.rows;
   }
 
   /** Extra points: a question the floor could not answer, routed to a named owner. */

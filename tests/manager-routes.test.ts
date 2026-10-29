@@ -37,6 +37,16 @@ function harness(options: { reachable?: string[] } = {}): {
     addAssociate: async (): Promise<void> => {},
     removeAssociate: async (phone: string): Promise<void> => void removed.push(phone),
     noticesWaiting: async (): Promise<number> => 0,
+    recentVisits: async () => [
+      {
+        reference: "SIV-1234",
+        phone: "919820000001",
+        associate: "Ramesh",
+        store: "Croma CBD Belapur",
+        body: "the demo was better than ours",
+        created_at: "2026-10-29T10:00:00.000Z",
+      },
+    ],
     queueNotice: async (body: string, phones: string[]): Promise<number> => {
       held.push({ body, phones });
       return 1;
@@ -143,6 +153,7 @@ test("the floor data carries the rows, the summary and who can be reached", asyn
     ["Ramesh", "Asha"],
   );
   assert.equal(body.rows[1].quiet, true, "Asha is on the roster and has taken nobody today");
+  assert.equal(body.visits[0].store, "Croma CBD Belapur", "and the store visits the floor logged");
 });
 
 test("the preview says who it reaches and queues nothing", async () => {

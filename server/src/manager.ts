@@ -155,6 +155,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
       summary: managerView(sessions, open).text,
       // Who is waiting on an answer, and which associate is holding the customer meanwhile.
       openQuestions: open,
+      visits: await db.recentVisits(),
       rows: floorRows(perAssociate(sessions, roster)),
       reachable: recipients(roster, reachable).to.length,
       waiting: await db.noticesWaiting(),

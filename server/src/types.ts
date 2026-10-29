@@ -63,6 +63,9 @@ export type Session = {
   selection?: { sku: string; accessories: string[]; charges: string[] };
   /** Section 4H: the customer summary only goes out with consent. */
   consent: boolean;
+  /** The next thing they say is a store visit, not a customer. Set by asking to log one, cleared
+   *  as soon as it is filed, so a visit can never be mistaken for a home. */
+  logging_visit?: boolean;
   /** The associate's own name, as WhatsApp gives it, so the manager's view is people not numbers. */
   associate?: string;
   /** A figure left Store IQ before the home was assessed. The store visits' headline measure was

@@ -95,6 +95,15 @@ PACK_TOKEN=...                            # only if the feed needs a bearer toke
 and restart. A field they name differently is one entry in `FIELDS` or `SPECS`; a field they do not
 have at all is reported as defaulted, which tells you which ranking rule can no longer fire.
 
+## Logging a store visit
+
+The visits of 10 and 11 October are why this product exists, and they were written up from memory
+hours afterwards. Somebody standing in a competitor's shop cannot write, so they speak: say
+`visit`, then send a voice note or type it. It is filed against the store its own words name —
+"Croma CBD Belapur" out of a sentence that mentions it — with a reference, the associate's name and
+the date, and the manager reads it in the portal. A visit is never read as a customer's home, even
+though it is full of rooms and prices and brands.
+
 ## The manager portal
 
 `web/` is a React app (Vite, Tailwind, shadcn/ui components) served by the same server at
