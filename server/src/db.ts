@@ -259,11 +259,29 @@ export class DB {
 
   /** The phone comes back too: a manager looking at an open question wants to know which associate
    *  is waiting on the answer, and it is the only handle for clearing a test one. */
-  async openQuestions(): Promise<{ reference: string; area: string; owner: string; phone: string }[]> {
-    const rows = await this.pg.query<{ reference: string; area: string; owner: string; phone: string }>(
-      `select reference, area, owner, phone from expert_questions where answered_at is null order by id desc limit 20`,
+  async openQuestions(): Promise<
+    { reference: string; area: string; owner: string; phone: string; question: string; asked_at: string }[]
+  > {
+    const rows = await this.pg.query<{
+      reference: string;
+      area: string;
+      owner: string;
+      phone: string;
+      question: string;
+      asked_at: string;
+    }>(
+      `select reference, area, owner, phone, question, asked_at from expert_questions where answered_at is null order by id desc limit 20`,
     );
     return rows.rows;
+  }
+
+  /** Mark an expert question answered/resolved once the manager or specialist handles it. */
+  async resolveQuestion(reference: string): Promise<boolean> {
+    const result = await this.pg.query(
+      `update expert_questions set answered_at = now() where reference = $1 and answered_at is null`,
+      [reference],
+    );
+    return (result.affectedRows ?? 0) > 0;
   }
 
   /** Every conversation touched today, for the department manager view. */

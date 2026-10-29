@@ -1,6 +1,6 @@
-import type { Pack } from "./pack.js";
+import { offerAmount, type Pack, type Product } from "./pack.js";
 import { isAssessed, stated } from "./brain.js";
-import type { Reply, Session, Step } from "./types.js";
+import type { HomeCard, Reply, Session, Step } from "./types.js";
 import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
 
@@ -337,28 +337,59 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   if (!itemised) return { text: "That selection is not in today's data pack, so I cannot total it." };
   const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
   const needs = siteNeeds(pack, selection);
+  // The offer gate holds here too: no MRP saving, offer figure or net total until the home is
+  // assessed and a difference has been demonstrated — the same test the model is held to.
+  const gateOpen = isAssessed(session.card) && session.demonstrated;
+  // One accessory the card says this home would use. The follow-through's own add tap brings the
+  // next draft, so the proposal clears itself as soon as they take it.
+  const suggested = proposeAccessory(pack, session.card, selection);
 
   if (!session.consent)
     return {
       text: [
         t(session.language, "ft.read", { name: product.name, total: itemised.total.toLocaleString("en-IN") }),
+        // The saving off MRP is the first figure the close hangs on, and it is pack arithmetic.
+        ...(gateOpen && product.mrp_rupees - product.price_rupees > 0
+          ? [
+              t(session.language, "off.save", {
+                save: (product.mrp_rupees - product.price_rupees).toLocaleString("en-IN"),
+                mrp: product.mrp_rupees.toLocaleString("en-IN"),
+                price: product.price_rupees.toLocaleString("en-IN"),
+              }),
+            ]
+          : []),
+        ...(suggested
+          ? [
+              t(session.language, "acc.line", {
+                title: suggested.title,
+                v: suggested.price_rupees.toLocaleString("en-IN"),
+                for: suggested.for,
+              }),
+            ]
+          : []),
         t(session.language, "ft.tap"),
       ].join("\n"),
       buttons: [
+        ...(suggested ? [{ id: `add:${suggested.id}`, title: suggested.title.slice(0, 20) }] : []),
         { id: "consent:yes", title: t(session.language, "btn.agreed") },
         { id: "consent:no", title: t(session.language, "btn.declined") },
-      ],
+      ].slice(0, 3),
     };
 
   // The store visits watched an install fail because nobody asked about the wall first, and watched
   // nobody check afterwards that the thing worked. So the site is a question asked now, out loud,
   // and the last task is the check-back.
+  // The close: the pack's offers with their conditions, then the net payable after them, so the
+  // associate reads the two figures in order — the big number, then the number they pay.
+  const closing = closeLines(pack, product, itemised.total, session.language, gateOpen);
+
   if (needs.length && !session.site_checked)
     return {
       text: [
         t(session.language, "ft.send", {
           body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
         }),
+        ...closing,
         t(session.language, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }),
       ].join("\n"),
       buttons: [
@@ -373,6 +404,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
       t(session.language, "ft.send", {
         body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
       }),
+      ...closing,
       t(session.language, "ft.task", { owner: associate }),
       t(session.language, "ft.verify", { owner: associate }),
     ].join("\n"),
@@ -451,4 +483,90 @@ export function wantsFinance(text: string | undefined, action: string | undefine
 /** What the installer will need on site, from the charges the customer is actually paying for. */
 export function siteNeeds(pack: Pack, selection: NonNullable<Session["selection"]>): string[] {
   return [...new Set(selection.charges.flatMap((id) => pack.install_requirements?.[id] ?? []))];
+}
+
+/** Offers from today's pack that could apply to this set, read off its own applies_to line. An
+ *  applies_to the code cannot parse is skipped: an invented applicability is an invented saving. */
+export function applicableOffers(pack: Pack, product: Product): Pack["offers"] {
+  return pack.offers.filter((offer) => {
+    const applies = String(offer.applies_to ?? "").trim();
+    if (/^all/i.test(applies)) return true;
+    const above = applies.match(/(?:above|over|larger than)\s+(\d+)/i);
+    if (above) return product.size_inch > Number(above[1]);
+    const below = applies.match(/(?:below|under|smaller than)\s+(\d+)/i);
+    if (below) return product.size_inch < Number(below[1]);
+    return !applies;
+  });
+}
+
+/** One line per applicable offer: the pack's figure and the pack's own conditions, out loud.
+ *  This is what closing sounds like — not "there are offers", but what they take off. */
+export function offerLines(pack: Pack, product: Product, lang: Lang): string[] {
+  const lines: string[] = [];
+  for (const offer of applicableOffers(pack, product)) {
+    const amount = offerAmount(product, offer);
+    if (amount <= 0) continue;
+    const needs = String(offer.needs ?? "").trim();
+    lines.push(
+      t(lang, "off.line", {
+        title: String(offer.title ?? "").trim() || "Offer",
+        v: amount.toLocaleString("en-IN"),
+        needs,
+      }),
+    );
+  }
+  return lines;
+}
+
+/** The itemised total after every applicable offer — the number the deal actually closes on. */
+export function netPayable(pack: Pack, product: Product, total: number): number {
+  return Math.max(
+    0,
+    total - applicableOffers(pack, product).reduce((sum, offer) => sum + offerAmount(product, offer), 0),
+  );
+}
+
+/** The one accessory this home would actually use, read off the pack's own for-line next to what
+ *  the card says. One suggestion only — the associate decides what to pitch, so nothing is added
+ *  without a tap, and what they already took never comes back around. */
+export function proposeAccessory(
+  pack: Pack,
+  card: HomeCard,
+  selection: Session["selection"],
+): Pack["accessories"][number] | null {
+  const hay = [
+    ...(card.content ?? []),
+    ...(card.devices ?? []),
+    ...(card.priorities ?? []),
+    ...(card.site_constraints ?? []),
+    card.room ?? "",
+    card.space ?? "",
+    card.family ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  const people = Number(String(card.family ?? "").match(/(\d+)\s*(people|members|persons)/)?.[1] ?? 0);
+  for (const accessory of pack.accessories ?? []) {
+    if (selection?.accessories.includes(accessory.id)) continue;
+    const forWhat = String(accessory.for ?? "").toLowerCase();
+    if (/ps5|console|gaming/i.test(forWhat) && /ps5|console|gaming/i.test(hay)) return accessory;
+    if (/unstable|voltage|supply/i.test(forWhat) && /unstable|voltage|supply|inverter|generator/i.test(hay))
+      return accessory;
+    if (
+      /large|open|\bhalls?\b/i.test(forWhat) &&
+      (/large|open|\bbig\b/i.test(hay) || people > 4 || /more than four/i.test(hay))
+    )
+      return accessory;
+  }
+  return null;
+}
+
+/** The pack's offers with the net payable, as lines an associate can read straight out, or nothing
+ *  if the offer gate is still shut. The gate here is the same test the model's replies are judged
+ *  by: the home assessed, and a difference demonstrated. */
+export function closeLines(pack: Pack, product: Product, total: number, lang: Lang, gateOpen: boolean): string[] {
+  if (!gateOpen) return [];
+  const offers = offerLines(pack, product, lang);
+  if (!offers.length) return [];
+  return [...offers, t(lang, "off.net", { v: netPayable(pack, product, total).toLocaleString("en-IN") })];
 }

@@ -58,7 +58,7 @@ try {
     });
   // The manager's dashboard is off unless a password is set, because it is reachable through the
   // same tunnel as the webhook and it can message the whole floor.
-  if (process.env.ADMIN_PASSWORD) managerRoutes(app, db);
+  if (process.env.ADMIN_PASSWORD) managerRoutes(app, db, pack);
   else console.error("Manager dashboard off: set ADMIN_PASSWORD in .env to turn it on");
   // Local text harness: iterate on the seven steps without WhatsApp. Never exposed off localhost.
   if (local)

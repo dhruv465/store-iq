@@ -41,6 +41,7 @@ function harness(options: { reachable?: string[] } = {}): {
       held.push({ body, phones });
       return 1;
     },
+    resolveQuestion: async (ref: string): Promise<boolean> => ref === "SIQ-1234",
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
@@ -133,6 +134,9 @@ test("the floor data carries the rows, the summary and who can be reached", asyn
   assert.equal(response.status, 200);
   assert.equal(body.maxScore, 14);
   assert.equal(body.guide, 11);
+  assert.ok(Array.isArray(body.objections), "objections heatmap is returned");
+  assert.ok(Array.isArray(body.products), "product distribution is returned");
+  assert.ok(Array.isArray(body.feed), "floor feed is returned");
   assert.equal(body.reachable, 2, "the stranger is not one of the manager's associates");
   assert.deepEqual(
     body.rows.map((row: any) => row.name),
@@ -209,4 +213,14 @@ test("an associate outside the window is held rather than dropped", async () => 
     [{ body: sent[0]!.reply.text, phones: ["919820000002"] }],
     "Asha's waits for her, word for word",
   );
+});
+
+test("an expert question can be marked resolved from the portal", async () => {
+  const { app } = harness();
+  const res = await app.request(...post("/api/manager/expert/SIQ-1234/resolve", {}));
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()) as unknown, { ok: true, reference: "SIQ-1234" });
+
+  const notFound = await app.request(...post("/api/manager/expert/SIQ-9999/resolve", {}));
+  assert.equal(notFound.status, 404);
 });

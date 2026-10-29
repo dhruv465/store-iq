@@ -261,6 +261,26 @@
       "correct": "Compare the actual figures: the 55 inch TCL draws 105 W, the 65 inch LG 125 W. At 4 hours a day that is 153 against 183 units a year, about Rs 240 apart."
     }
   ],
+  "objections": [
+    {
+      "claim": "It is too costly",
+      "when": "too costly|too expensive|too (high|much)|expensive|costly|pricey|mehenga|mahenga|महँगा|महंगा|महाग|कीमत ज़्यादा",
+      "confirm": "It is a large amount, so thinking it over carefully is fair.",
+      "correct": "Ask which part feels high: the set, or what it costs to run and install — the yearly running cost is usually far smaller than the price tag suggests."
+    },
+    {
+      "claim": "I can buy the same set online",
+      "when": "online|amazon|flipkart|website|ऑनलाइन",
+      "confirm": "Checking the same set online before deciding is fair.",
+      "correct": "But a web page cannot be demonstrated at their distance — here they see the picture in their own light, and delivery and installation come from this store."
+    },
+    {
+      "claim": "I will think about it and come back",
+      "when": "think (it )?over|think about|thinking about|let me think|come back|tomorrow|next week|weekend|decide with|wife|husband|parents|सोच|बाद में",
+      "confirm": "Taking time for a decision of this size is fair.",
+      "correct": "But the set must fit that wall and that distance — shall we decide on the one that fits while they are standing next to it?"
+    }
+  ],
   "install_requirements": {
     "TV-WALL": [
       "wall type: concrete or brick",

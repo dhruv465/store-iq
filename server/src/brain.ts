@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
-import { looksLikeAClaim, validateReply } from "./validate.js";
+import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
 import { describe, extractCard } from "./extract.js";
 import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
@@ -454,10 +454,15 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   }
   // Section 4C: the pack carries the confirm/correct pair, so a known claim needs no request.
   if (looksLikeAClaim(event.text, event.action) && event.text) {
+    const myth = matchMyth(pack, event.text) ?? matchObjection(pack, event.text);
     const corrected = validateReply(pack, event.text, session.language);
     if (corrected) {
       session.step = "validate";
       if (!session.steps_done.includes("validate")) session.steps_done.push("validate");
+      if (myth) {
+        session.objections = session.objections ?? [];
+        if (!session.objections.includes(myth.claim)) session.objections.push(myth.claim);
+      }
       return corrected;
     }
   }

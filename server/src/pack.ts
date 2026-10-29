@@ -16,6 +16,9 @@ export type Pack = {
   electricity: { tariff_rupees_per_unit: number; note: string };
   labels: { spec: string; say: string }[];
   myths: { claim: string; confirm: string; correct: string }[];
+  /** Closing objections in the customer's own words. `when` is how the words are matched; without
+   *  it the claim's own words are counted, the way myths are. */
+  objections?: { claim: string; when?: string; confirm: string; correct: string }[];
   install_requirements: Record<string, string[]>;
 };
 export type Product = {
@@ -64,6 +67,18 @@ export async function loadPack(source = process.env.PACK_PATH || "data/pack.json
   return pack;
 }
 
+/** The rupee value of one offer against one product: the percent, capped, or the flat amount.
+ *  One definition, so the closing lines and the allowed-figure set can never drift apart. */
+export function offerAmount(product: Product, offer: Record<string, any>): number {
+  if (typeof offer.percent === "number")
+    return Math.max(
+      0,
+      Math.min(Math.round((product.price_rupees * offer.percent) / 100), Number(offer.cap_rupees ?? Infinity)),
+    );
+  if (typeof offer.flat_rupees === "number") return Math.max(0, Number(offer.flat_rupees));
+  return 0;
+}
+
 /** Every number Store IQ is allowed to say. Anything else in a reply is an invention. */
 export function allowedNumbers(pack: Pack): Set<number> {
   const allowed = new Set<number>();
@@ -91,10 +106,7 @@ export function allowedNumbers(pack: Pack): Set<number> {
   // Derived totals an answer may legitimately state.
   for (const product of pack.products) {
     for (const offer of pack.offers) {
-      const percent =
-        typeof offer.percent === "number"
-          ? Math.min(Math.round((product.price_rupees * offer.percent) / 100), Number(offer.cap_rupees ?? Infinity))
-          : Number(offer.flat_rupees ?? 0);
+      const percent = offerAmount(product, offer);
       if (percent > 0) {
         allowed.add(percent);
         allowed.add(product.price_rupees - percent);
@@ -117,6 +129,24 @@ export function allowedNumbers(pack: Pack): Set<number> {
       if (typeof charge.percent_of_price === "number")
         allowed.add(Math.round((product.price_rupees * charge.percent_of_price) / 100));
     }
+  }
+  // The closing figure: any itemised base less any subset of the pack's own offers, because the
+  // deal is closed on the net payable, not on each offer in isolation.
+  for (const product of pack.products) {
+    const discounts = pack.offers.map((offer) => offerAmount(product, offer)).filter((amount) => amount > 0);
+    if (!discounts.length) continue;
+    const bases = new Set<number>([product.price_rupees]);
+    for (const accessory of pack.accessories ?? [])
+      for (const charge of pack.charges) {
+        const extra = typeof charge.amount_rupees === "number" ? charge.amount_rupees : 0;
+        bases.add(product.price_rupees + accessory.price_rupees);
+        bases.add(product.price_rupees + accessory.price_rupees + extra);
+        bases.add(product.price_rupees + extra);
+      }
+    // Subsets by folding each amount into the set of sums so far; the pack's offers are few.
+    const sums = new Set<number>([0]);
+    for (const discount of discounts) for (const existing of [...sums]) sums.add(existing + discount);
+    for (const base of bases) for (const sum of sums) if (base - sum > 0) allowed.add(base - sum);
   }
   return allowed;
 }

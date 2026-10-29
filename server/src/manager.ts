@@ -5,8 +5,20 @@ import { csrf } from "hono/csrf";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Hono } from "hono";
 import type { DB } from "./db.js";
-import { managerView, perAssociate, type AssociateRow, type Rostered } from "./extras.js";
+import {
+  floorFeed,
+  managerView,
+  objectionInsights,
+  perAssociate,
+  productInsights,
+  type AssociateRow,
+  type FeedItem,
+  type ObjectionInsight,
+  type ProductInsight,
+  type Rostered,
+} from "./extras.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
+import { loadPack, type Pack } from "./pack.js";
 
 /** The department manager's own view: how each associate worked today, and one box to tell the
  *  floor what is on. The portal itself is the React app in web/; everything below is its data.
@@ -86,7 +98,7 @@ export function validSession(password: string, raw: string | undefined, now = Da
   return given.length === want.length && timingSafeEqual(given, want);
 }
 
-export function managerRoutes(app: Hono, db: DB): void {
+export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
   const user = process.env.ADMIN_USER?.trim() || "manager";
   const password = process.env.ADMIN_PASSWORD!;
   const from = process.env.ADMIN_NAME?.trim() || "Store manager";
@@ -134,6 +146,7 @@ export function managerRoutes(app: Hono, db: DB): void {
   // not signed in is to show the sign-in card. Everything it then asks for needs the session.
 
   app.get("/api/manager/floor", async (c) => {
+    const packData = pack ?? (await loadPack().catch(() => undefined));
     const sessions = await db.today();
     const roster = await db.roster();
     const reachable = await db.reachable();
@@ -149,7 +162,18 @@ export function managerRoutes(app: Hono, db: DB): void {
       maxScore: MAX_SCORE,
       guide: GUIDE,
       from,
+      objections: objectionInsights(sessions, packData),
+      products: productInsights(sessions, packData),
+      feed: floorFeed(sessions),
     });
+  });
+
+  app.post("/api/manager/expert/:reference/resolve", async (c) => {
+    const reference = c.req.param("reference");
+    if (!reference) return c.json({ error: "Reference is required." }, 400);
+    const resolved = await db.resolveQuestion(reference);
+    if (!resolved) return c.json({ error: "Question not found or already answered." }, 404);
+    return c.json({ ok: true, reference });
   });
 
   app.post("/api/manager/roster", async (c) => {

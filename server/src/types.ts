@@ -71,6 +71,8 @@ export type Session = {
   /** The site was checked with the customer before the installer was booked. The store visits found
    *  an installer who came and left because the wall needed a hole nobody had asked about. */
   site_checked?: boolean;
+  /** Customer objections / claims validated during this interaction. */
+  objections?: string[];
   /** Bounded conversation memory; the full log lives in the database. */
   history: Turn[];
   steps_done: Step[];
@@ -101,6 +103,7 @@ export function newSession(phone: string, interactionId = randomUUID()): Session
     demonstrated: false,
     shortlist: [],
     consent: false,
+    objections: [],
     history: [],
     steps_done: [],
   };

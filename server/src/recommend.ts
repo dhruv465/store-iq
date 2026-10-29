@@ -112,10 +112,21 @@ export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
         if (product.price_rupees <= card.budget_rupees) score += 10;
         else score -= 40;
       }
+      // Over the budget it stays on the list, but it has to sell itself: the gap in the open,
+      // then the pack's own reason, so the associate can say both and let the customer decide.
+      const over =
+        typeof card.budget_rupees === "number" && product.price_rupees > card.budget_rupees
+          ? (product.price_rupees - card.budget_rupees).toLocaleString("en-IN")
+          : null;
       return {
         product,
         score,
-        reason: best?.reason ?? `${product.panel} panel, ${product.good_for[0] ?? "general use"}`,
+        reason: over
+          ? t(lang, "r.above", {
+              gap: over,
+              why: best?.reason ?? `${product.panel} panel, ${product.good_for[0] ?? "general use"}`,
+            })
+          : (best?.reason ?? `${product.panel} panel, ${product.good_for[0] ?? "general use"}`),
         key: best?.key ?? "panel",
         cue: cueFor(product, lang),
       };

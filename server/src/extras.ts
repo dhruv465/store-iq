@@ -3,7 +3,7 @@ import { isAssessed } from "./brain.js";
 import type { Pack } from "./pack.js";
 import { GUIDE, MAX_SCORE, score, SCORED, type Scored } from "./steps.js";
 import { t, type Lang } from "./i18n.js";
-import type { Reply, Session } from "./types.js";
+import type { HomeCard, Reply, Session, Step } from "./types.js";
 
 /** The contest's extra points: "ask an expert" and the department manager view.
  *  Both are facts about the pack and the database, so neither spends a model request. */
@@ -74,6 +74,8 @@ export type AssociateRow = {
   /** On the manager's roster, rather than a number that simply turned up. */
   onRoster: boolean;
   lastSeen?: string;
+  /** Step marks breakdown (0 to 2) averaged across their conversations. */
+  stepMarks?: Record<Scored, number>;
 };
 
 /** One row per associate, which is what a manager is looking at: how many customers they took, how
@@ -87,6 +89,22 @@ export function perAssociate(sessions: Session[], roster: Rostered[] = []): Asso
   const listed = new Map(roster.map((person) => [person.phone, person]));
   const rows = [...byPhone.entries()].map(([phone, all]) => {
     const points = all.map((session) => score(session).points).sort((a, b) => a - b);
+    const stepMarks: Record<Scored, number> = {
+      assess: 0,
+      validate: 0,
+      translate: 0,
+      demonstrate: 0,
+      complete: 0,
+      close: 0,
+      follow_through: 0,
+    };
+    if (all.length) {
+      const scoredList = all.map((session) => score(session));
+      for (const st of SCORED) {
+        const sum = scoredList.reduce((acc, card) => acc + card.marks[st], 0);
+        stepMarks[st] = Number((sum / all.length).toFixed(1));
+      }
+    }
     return {
       phone,
       // The roster is the manager's own spelling, so it wins over a WhatsApp profile name.
@@ -100,6 +118,7 @@ export function perAssociate(sessions: Session[], roster: Rostered[] = []): Asso
       best: points[points.length - 1] ?? 0,
       guide: points.filter((value) => value >= GUIDE).length,
       homeBeforePrice: all.filter((session) => !session.priced_before_home).length,
+      stepMarks,
     };
   });
   // The floor's own order: the strongest associate first, so the manager reads the gap downwards.
@@ -142,4 +161,142 @@ export function managerView(sessions: Session[], open: { reference: string; area
       .join("\n")
       .slice(0, 1000),
   };
+}
+
+export type ObjectionInsight = {
+  claim: string;
+  count: number;
+  confirm?: string | undefined;
+  correct?: string | undefined;
+  associates: string[];
+};
+
+/** Aggregates customer objections / myths raised during conversations today. */
+export function objectionInsights(sessions: Session[], pack?: Pack): ObjectionInsight[] {
+  const counts = new Map<string, { count: number; associates: Set<string> }>();
+  for (const session of sessions) {
+    const name = session.associate ?? session.phone;
+    for (const claim of session.objections ?? []) {
+      const existing = counts.get(claim) ?? { count: 0, associates: new Set<string>() };
+      existing.count++;
+      existing.associates.add(name);
+      counts.set(claim, existing);
+    }
+  }
+  const packMyths = new Map(pack?.myths?.map((m) => [m.claim, m]) ?? []);
+  const results: ObjectionInsight[] = [...counts.entries()].map(([claim, data]) => ({
+    claim,
+    count: data.count,
+    confirm: packMyths.get(claim)?.confirm,
+    correct: packMyths.get(claim)?.correct,
+    associates: [...data.associates],
+  }));
+  for (const myth of pack?.myths ?? []) {
+    if (!counts.has(myth.claim)) {
+      results.push({
+        claim: myth.claim,
+        count: 0,
+        confirm: myth.confirm,
+        correct: myth.correct,
+        associates: [],
+      });
+    }
+  }
+  return results.sort((a, b) => b.count - a.count);
+}
+
+export type ProductInsight = {
+  sku: string;
+  name: string;
+  brand: string;
+  price: number;
+  stock: number;
+  shortlistedCount: number;
+  selectedCount: number;
+};
+
+/** Tracks SKU recommendation and selection distribution across today's sessions. */
+export function productInsights(sessions: Session[], pack?: Pack): ProductInsight[] {
+  if (!pack?.products?.length) return [];
+  const shortlisted = new Map<string, number>();
+  const selected = new Map<string, number>();
+  for (const session of sessions) {
+    for (const sku of session.shortlist ?? []) {
+      shortlisted.set(sku, (shortlisted.get(sku) ?? 0) + 1);
+    }
+    if (session.selection?.sku) {
+      selected.set(session.selection.sku, (selected.get(session.selection.sku) ?? 0) + 1);
+    }
+  }
+  return pack.products
+    .map((p) => ({
+      sku: p.sku,
+      name: p.name,
+      brand: p.brand,
+      price: p.price_rupees,
+      stock: p.stock_units,
+      shortlistedCount: shortlisted.get(p.sku) ?? 0,
+      selectedCount: selected.get(p.sku) ?? 0,
+    }))
+    .sort((a, b) => b.selectedCount - a.selectedCount || b.shortlistedCount - a.shortlistedCount);
+}
+
+export type FeedItem = {
+  interactionId: string;
+  phone: string;
+  associate: string;
+  step: Step;
+  score: number;
+  homeFactsCount: number;
+  room?: string | undefined;
+  distance?: string | undefined;
+  budget?: number | undefined;
+  shortlist: string[];
+  selectionSku?: string | undefined;
+  pricedBeforeHome: boolean;
+  consent: boolean;
+  siteChecked: boolean;
+  startedAt: string;
+  turnsCount: number;
+  lastLine?: string | undefined;
+};
+
+/** Live stream of recent customer interactions on the shop floor. */
+export function floorFeed(sessions: Session[], limit = 25): FeedItem[] {
+  const real = sessions.filter(
+    (session) => session.steps_done.length > 0 || session.shortlist.length > 0 || session.history.length > 0,
+  );
+  const items: FeedItem[] = real.map((session) => {
+    const scored = score(session);
+    const card = session.card;
+    const factsCount = Object.keys(card).filter(
+      (k) => card[k as keyof HomeCard] !== undefined && card[k as keyof HomeCard] !== "",
+    ).length;
+    const distance = card.distance_m
+      ? `${card.distance_m} m`
+      : card.distance_feet
+        ? `${card.distance_feet} ft`
+        : undefined;
+    const lastTurn = session.history[session.history.length - 1];
+    return {
+      interactionId: session.interaction_id,
+      phone: session.phone,
+      associate: session.associate ?? session.phone,
+      step: session.step,
+      score: scored.points,
+      homeFactsCount: factsCount,
+      room: card.room,
+      distance,
+      budget: card.budget_rupees,
+      shortlist: session.shortlist ?? [],
+      selectionSku: session.selection?.sku,
+      pricedBeforeHome: session.priced_before_home === true,
+      consent: session.consent,
+      siteChecked: session.site_checked === true,
+      startedAt: session.interaction_started,
+      turnsCount: session.history.length,
+      lastLine: lastTurn ? `${lastTurn.who}: ${lastTurn.text.slice(0, 100)}` : undefined,
+    };
+  });
+  return items.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)).slice(0, limit);
 }

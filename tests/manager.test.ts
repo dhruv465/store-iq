@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { perAssociate } from "../server/src/extras.js";
+import { floorFeed, objectionInsights, perAssociate, productInsights } from "../server/src/extras.js";
 import { ago, floorRows, notice, phoneOf, recipients } from "../server/src/manager.js";
+import { loadPack } from "../server/src/pack.js";
 import { newSession, type Session } from "../server/src/types.js";
 
 /** The manager's view is one row per associate over many conversations, which is the thing the
@@ -131,4 +132,58 @@ test("before anyone is rostered it falls back, and says it is falling back", () 
   const { to, rosterEmpty } = recipients([], ["919820000001", "919999999999"]);
   assert.deepEqual(to.sort(), ["919820000001", "919999999999"]);
   assert.equal(rosterEmpty, true, "the page warns rather than letting this look deliberate");
+});
+
+test("an associate row carries their 7-step performance breakdown", () => {
+  const priya = conversation("919820000003", "Priya", ["assess", "translate", "recommend"], true);
+  priya.demonstrated = true;
+  const rows = perAssociate([priya]);
+  assert.ok(rows[0]!.stepMarks);
+  assert.equal(rows[0]!.stepMarks.assess, 2);
+  assert.equal(rows[0]!.stepMarks.translate, 2);
+  assert.equal(rows[0]!.stepMarks.demonstrate, 2);
+  assert.equal(rows[0]!.stepMarks.complete, 0);
+});
+
+test("objection insights aggregate customer claims with pack confirmation and coaching", async () => {
+  const pack = await loadPack("data/pack.json");
+  const s1 = conversation("919820000001", "Ramesh", ["validate"], false);
+  s1.objections = ["A larger screen always uses much more electricity"];
+  const s2 = conversation("919820000002", "Asha", ["validate"], false);
+  s2.objections = ["A larger screen always uses much more electricity"];
+
+  const insights = objectionInsights([s1, s2], pack);
+  assert.ok(insights.length >= 1);
+  const electricity = insights.find((o) => o.claim.includes("electricity"))!;
+  assert.equal(electricity.count, 2);
+  assert.deepEqual(electricity.associates.sort(), ["Asha", "Ramesh"]);
+  assert.match(electricity.correct ?? "", /105 W/);
+});
+
+test("product insights count shortlist frequency and selections alongside stock", async () => {
+  const pack = await loadPack("data/pack.json");
+  const s1 = conversation("919820000001", "Ramesh", ["recommend", "complete"], true);
+  s1.shortlist = ["SON-K55S30", "TCL-55C6KS"];
+  s1.selection = { sku: "SON-K55S30", accessories: [], charges: [] };
+  const s2 = conversation("919820000002", "Asha", ["recommend"], true);
+  s2.shortlist = ["SON-K55S30"];
+
+  const insights = productInsights([s1, s2], pack);
+  const sony = insights.find((p) => p.sku === "SON-K55S30")!;
+  assert.equal(sony.shortlistedCount, 2);
+  assert.equal(sony.selectedCount, 1);
+  assert.equal(sony.stock, 6);
+});
+
+test("floor feed returns active customer conversations in order", () => {
+  const s1 = conversation("919820000001", "Ramesh", ["assess"], true);
+  s1.card = { distance_m: 2.5, room: "living room", budget_rupees: 55000 };
+  s1.history = [{ who: "associate", text: "Customer sits 2.5m away" }];
+
+  const feed = floorFeed([s1]);
+  assert.equal(feed.length, 1);
+  assert.equal(feed[0]!.associate, "Ramesh");
+  assert.equal(feed[0]!.room, "living room");
+  assert.equal(feed[0]!.distance, "2.5 m");
+  assert.equal(feed[0]!.budget, 55000);
 });

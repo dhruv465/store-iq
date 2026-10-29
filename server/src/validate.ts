@@ -92,6 +92,8 @@ export function contentWords(text: string): Set<string> {
 }
 
 export type Myth = Pack["myths"][number];
+export type Objection = NonNullable<Pack["objections"]>[number];
+export type Claim = Myth | Objection;
 
 /** The pack myth this claim is about, or null when the pack has nothing to say about it. */
 export function matchMyth(pack: Pack, text: string): Myth | null {
@@ -110,6 +112,30 @@ export function matchMyth(pack: Pack, text: string): Myth | null {
   return best?.myth ?? null;
 }
 
+/** The closing objection the customer raised, or null. The pack's own `when` line does the
+ *  matching where it has one, so a phrase like "thinks about it" never becomes bare "thinks". */
+export function matchObjection(pack: Pack, text: string): Objection | null {
+  for (const objection of pack.objections ?? []) {
+    const when = typeof objection.when === "string" ? objection.when.trim() : "";
+    if (when) {
+      try {
+        if (new RegExp(`\\b(?:${when})`, "i").test(text)) return objection;
+      } catch {
+        console.error(`A 'when' line in the pack is not a valid pattern: ${when}`);
+      }
+      continue;
+    }
+    // No pattern given: match the claim the way myths are matched, by shared words.
+    const said = contentWords(text);
+    const claim = contentWords(objection.claim);
+    if (!claim.size || said.size < 2) continue;
+    let shared = 0;
+    for (const word of claim) if (said.has(word)) shared++;
+    if (shared >= 2 && shared / claim.size >= 0.4) return objection;
+  }
+  return null;
+}
+
 const TRIGGER =
   /\b(customer|he|she|they|grahak)\s+(says?|said|thinks?|believes?|told|bol)|^\s*(validate|correct this)\b/i;
 
@@ -117,12 +143,14 @@ export function looksLikeAClaim(text: string | undefined, action: string | undef
   return action === "validate" || (!!text && TRIGGER.test(text));
 }
 
-/** Confirm what is true, then correct what is not, in words the associate can say out loud. */
+/** Confirm what is true, then correct what is not, in words the associate can say out loud.
+ *  A myth needs a true part confirmed; a closing objection gets the same shape, because the
+ *  honest move is the same one: acknowledge, then hand over one line to say. */
 export function validateReply(pack: Pack, text: string, lang: Lang = "en"): Reply | null {
-  const myth = matchMyth(pack, text);
-  if (!myth) return null;
+  const line = matchMyth(pack, text) ?? matchObjection(pack, text);
+  if (!line) return null;
   return {
-    text: [t(lang, "val.say", { body: `${myth.confirm} ${myth.correct}` }), t(lang, "val.reason")]
+    text: [t(lang, "val.say", { body: `${line.confirm} ${line.correct}` }), t(lang, "val.reason")]
       .join("\n")
       .slice(0, 1000),
   };

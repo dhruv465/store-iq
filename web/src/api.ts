@@ -16,17 +16,69 @@ export type FloorRow = {
   lastSeen?: string;
   lastSeenLabel: string;
   quiet: boolean;
+  stepMarks?: Record<string, number>;
+};
+
+export type OpenQuestion = {
+  reference: string;
+  area: string;
+  owner: string;
+  phone: string;
+  question?: string;
+  asked_at?: string;
+};
+
+export type ObjectionInsight = {
+  claim: string;
+  count: number;
+  confirm?: string;
+  correct?: string;
+  associates: string[];
+};
+
+export type ProductInsight = {
+  sku: string;
+  name: string;
+  brand: string;
+  price: number;
+  stock: number;
+  shortlistedCount: number;
+  selectedCount: number;
+};
+
+export type FeedItem = {
+  interactionId: string;
+  phone: string;
+  associate: string;
+  step: string;
+  score: number;
+  homeFactsCount: number;
+  room?: string;
+  distance?: string;
+  budget?: number;
+  shortlist: string[];
+  selectionSku?: string;
+  pricedBeforeHome: boolean;
+  consent: boolean;
+  siteChecked: boolean;
+  startedAt: string;
+  turnsCount: number;
+  lastLine?: string;
 };
 
 export type Floor = {
   summary: string;
   rows: FloorRow[];
+  openQuestions?: OpenQuestion[];
   reachable: number;
   waiting: number;
   rosterEmpty: boolean;
   maxScore: number;
   guide: number;
   from: string;
+  objections?: ObjectionInsight[];
+  products?: ProductInsight[];
+  feed?: FeedItem[];
 };
 
 export type Preview = {
@@ -63,4 +115,6 @@ export const api = {
     call<Preview>("/broadcast/preview", { method: "POST", body: JSON.stringify({ text }) }),
   broadcast: (text: string) =>
     call<{ queued: number; waiting: number }>("/broadcast", { method: "POST", body: JSON.stringify({ text }) }),
+  resolveQuestion: (reference: string) =>
+    call<{ ok: true; reference: string }>(`/expert/${encodeURIComponent(reference)}/resolve`, { method: "POST" }),
 };
