@@ -1,4 +1,5 @@
 import { basicAuth } from "hono/basic-auth";
+import { csrf } from "hono/csrf";
 import type { Hono } from "hono";
 import type { DB } from "./db.js";
 import { managerView, perAssociate, type AssociateRow } from "./extras.js";
@@ -80,6 +81,10 @@ export function managerRoutes(app: Hono, db: DB): void {
   const user = process.env.ADMIN_USER?.trim() || "manager";
   const password = process.env.ADMIN_PASSWORD!;
   const from = process.env.ADMIN_NAME?.trim() || "Store manager";
+  // A browser attaches Basic credentials to every request to this origin, a form POST from
+  // somebody else's page included, and the route below messages the whole floor. The Origin header
+  // is what separates the manager's own click from that, so it is checked before anything is sent.
+  app.use("/manager/*", csrf());
   app.use("/manager/*", basicAuth({ username: user, password }));
   app.use("/manager", basicAuth({ username: user, password }));
 
