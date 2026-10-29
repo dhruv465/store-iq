@@ -63,6 +63,9 @@ export type Session = {
   selection?: { sku: string; accessories: string[]; charges: string[] };
   /** Section 4H: the customer summary only goes out with consent. */
   consent: boolean;
+  /** The site was checked with the customer before the installer was booked. The store visits found
+   *  an installer who came and left because the wall needed a hole nobody had asked about. */
+  site_checked?: boolean;
   /** Bounded conversation memory; the full log lives in the database. */
   history: Turn[];
   steps_done: Step[];

@@ -169,15 +169,6 @@ export function score(session: Session): {
   };
 }
 
-const ADVICE: Record<Scored, string> = {
-  assess: "Ask about the home before the product: distance, light, what they watch, then read it back.",
-  validate: "When the customer is half right, confirm the true part before correcting.",
-  translate: "Turn one spec on the label into a line about their home.",
-  demonstrate: "Point at one difference they can see on the floor, not a number on a sheet.",
-  complete: "Give the full cost charge by charge: product, accessories, delivery, installation.",
-  close: "Open the offer only after assessing and demonstrating, and state finance in one sentence with its full cost.",
-  follow_through: "With consent, send the customer summary, raise the task with an owner and the installation site needs.",
-};
 
 /** A score for the steps, and one thing to try next time. */
 export function reviewReply(session: Session): Reply {
@@ -190,7 +181,7 @@ export function reviewReply(session: Session): Reply {
       covered.length
         ? t(session.language, "rev.covered", { body: covered.map((step) => `${step.replace(/_/g, " ")} ${marks[step]}`).join(", ") })
         : t(session.language, "rev.none"),
-      next ? t(session.language, "rev.next", { body: ADVICE[next] }) : t(session.language, "rev.perfect"),
+      next ? t(session.language, "rev.next", { body: t(session.language, `adv.${next}`) }) : t(session.language, "rev.perfect"),
     ]
       .join("\n")
       .slice(0, 1000),
@@ -295,7 +286,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   const itemised = itemisedTotal(pack, selection);
   if (!itemised) return { text: "That selection is not in today's data pack, so I cannot total it." };
   const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
-  const siteNeeds = [...new Set(selection.charges.flatMap((id) => pack.install_requirements?.[id] ?? []))];
+  const needs = siteNeeds(pack, selection);
 
   if (!session.consent)
     return {
@@ -309,12 +300,34 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
       ],
     };
 
+  // The store visits watched an install fail because nobody asked about the wall first, and watched
+  // nobody check afterwards that the thing worked. So the site is a question asked now, out loud,
+  // and the last task is the check-back.
+  if (needs.length && !session.site_checked)
+    return {
+      text: [
+        t(session.language, "ft.send", {
+          body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
+        }),
+        t(session.language, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }),
+      ].join("\n"),
+      buttons: [
+        { id: "site:ok", title: t(session.language, "btn.sitefine") },
+        { id: "site:problem", title: t(session.language, "btn.siteproblem") },
+      ],
+    };
+
   return {
     text: [
       // The first itemised line already names the product; do not say it twice.
       t(session.language, "ft.send", { body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.` }),
       t(session.language, "ft.task", { owner: associate }),
-      siteNeeds.length ? t(session.language, "ft.site", { body: siteNeeds.join("; ") }) : t(session.language, "ft.nosite"),
+      t(session.language, "ft.verify", { owner: associate }),
     ].join("\n"),
   };
+}
+
+/** What the installer will need on site, from the charges the customer is actually paying for. */
+export function siteNeeds(pack: Pack, selection: NonNullable<Session["selection"]>): string[] {
+  return [...new Set(selection.charges.flatMap((id) => pack.install_requirements?.[id] ?? []))];
 }

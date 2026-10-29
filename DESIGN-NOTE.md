@@ -36,7 +36,7 @@ All nine stages answer from the pack and the session, in **1–15 ms**, spending
 | One set named | Matched by SKU, by the model code on the tag, or by brand and size, then read out of the pack |
 | Recommend + demonstrate | Scored rules over the pack: distance, light, console, sport, sound, budget |
 | Complete | The itemised total is arithmetic, so it is computed rather than generated |
-| Close / follow through | Consent gate, task owner, site needs from the pack |
+| Close / follow through | Consent gate, the site asked about before the installer is booked, task owner, the check that it works |
 | Review | The store visits' own scorecard: seven steps, 0 to 2 each, Guide at 11 |
 
 A model is needed for exactly two things: reading a **voice note** in phrasing the extractor cannot,

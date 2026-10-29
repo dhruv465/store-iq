@@ -116,3 +116,17 @@ test("a demonstration cue is spoken in the associate's language when the pack ha
   assert.equal(cueFor(withoutHindi, "hi"), tcl.demo_cue);
   assert.doesNotMatch(recommendReply(pack, { distance_feet: 8, light: "bright", content: ["cricket"] }, "hi").text, /Show:/);
 });
+
+test("the review's advice is spoken in the associate's language too", () => {
+  // The seven step names are the contest scorecard's own words and stay as they are; the sentence
+  // telling the associate what to do next is the part that has to be theirs.
+  const english = /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|With consent/;
+  assert.match(reviewReply(Object.assign(filled("en"), { steps_done: [] })).text, english);
+  for (const lang of ["hi", "mr"] as const) {
+    const session = filled(lang);
+    session.steps_done = [];
+    const text = reviewReply(session).text;
+    assert.doesNotMatch(text, english, `the ${lang} review still gives its advice in English: ${text}`);
+    assert.match(text, /[\u0900-\u097F]{4,}/);
+  }
+});

@@ -30,6 +30,7 @@ import {
   wantsNewCustomer,
   wantsRecommend,
   wantsReview,
+  siteNeeds,
 } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
@@ -488,6 +489,10 @@ export function deterministic(
     session.card_confirmed = false;
     return { text: t(session.language, "card.fixwhat") };
   }
+  if (event.action === "site:ok") {
+    session.site_checked = true;
+    return followThrough(session, pack, event.name ?? session.phone);
+  }
   const picked = event.action?.match(/^select:([A-Za-z0-9_-]+)$/);
   if (picked) {
     const sku = picked[1]!;
@@ -671,6 +676,14 @@ export async function decide(
   // Extra points: both read from the pack and the database, so neither spends a request.
   if (store && wantsManagerView(event.text, event.action))
     return managerView(await store.today(), await store.openQuestions());
+  if (store && event.action === "site:problem" && session.selection) {
+    const needs = siteNeeds(pack, session.selection).join("; ");
+    const reference = newReference();
+    const question = `Site needs work before install: ${needs}`;
+    const { reply, area, owner } = expertReply(pack, question, reference, session.language);
+    await store.logQuestion({ reference, phone: session.phone, area, owner, question });
+    return reply;
+  }
   if (store && wantsExpert(event.text, event.action)) {
     const question = (event.text ?? "").slice(0, 400);
     const reference = newReference();

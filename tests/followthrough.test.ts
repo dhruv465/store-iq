@@ -51,16 +51,38 @@ test("the summary is withheld until the customer consents", () => {
   assert.doesNotMatch(draft.text, /Task:/, "no task is raised before consent");
 });
 
-test("consent produces the summary, the task owner and the site needs", () => {
+test("consent asks the site question before anyone books an installer", () => {
   const session = newSession("919820000001");
   tap(session, "select:TCL-55C6KS");
   tap(session, "add:TV-WALL");
   const reply = tap(session, "consent:yes")!;
   assert.match(reply.text, /Total Rs 56,489/);
-  assert.match(reply.text, new RegExp(`owner ${ASSOCIATE}`));
-  assert.match(reply.text, /Install job needs: .*concrete or brick/);
+  // The October install failed because nobody asked about the wall until the installer arrived.
+  assert.match(reply.text, /Before I book the installer — .*concrete or brick/);
+  assert.deepEqual(reply.buttons?.map((button) => button.id), ["site:ok", "site:problem"]);
   assert.ok(session.steps_done.includes("follow_through"));
   assert.ok(session.steps_done.includes("close"));
+});
+
+test("once the site is confirmed, the owner and the check-back are handed over", () => {
+  const session = newSession("919820000001");
+  tap(session, "select:TCL-55C6KS");
+  tap(session, "add:TV-WALL");
+  tap(session, "consent:yes");
+  const reply = tap(session, "site:ok")!;
+  assert.equal(session.site_checked, true);
+  assert.match(reply.text, new RegExp(`Task: follow up this order · owner ${ASSOCIATE}`));
+  // Nobody checked that the October AC worked, so the last task is that check.
+  assert.match(reply.text, /after install, check it switches on and the apps work/);
+});
+
+test("an order with no installation charge goes straight through", () => {
+  const session = newSession("919820000001");
+  tap(session, "select:TCL-55C6KS");
+  tap(session, "add:TV-DELIVERY");
+  const reply = tap(session, "consent:yes")!;
+  assert.doesNotMatch(reply.text, /Before I book the installer/, "delivery alone needs no site survey");
+  assert.match(reply.text, /after install, check it switches on/);
 });
 
 test("declining consent sends nothing", () => {
