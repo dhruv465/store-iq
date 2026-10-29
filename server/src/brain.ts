@@ -285,6 +285,26 @@ export function moneySafe(text: string): string {
 
 /** Three lines and three buttons is the floor limit. The recommend step spends all three lines on
  *  the three options, each carrying its own reason; every other step uses two plus a reason line. */
+/** The contest's floor rule — "not more than 3 lines and 3 buttons" — applied to every reply that
+ *  leaves, not only to the ones a model wrote.
+ *
+ *  `render()` below has always enforced it on model output, but eight of the nine stages now answer
+ *  deterministically and build their own text, so each of those was its own chance to break it. One
+ *  gate at the exit is the only version of this rule that cannot drift. The reason line counts as a
+ *  line, because on a phone it is one. */
+export function floor(reply: Reply): Reply {
+  const lines = reply.text.split("\n").filter((line) => line.trim());
+  // When something has to go, the reason goes last and the words to say survive.
+  const reason = lines.findLast((line) => line.startsWith("↳"));
+  const said = lines.filter((line) => !line.startsWith("↳"));
+  const kept = reason ? [...said.slice(0, 2), reason] : said.slice(0, 3);
+  const buttons = (reply.buttons ?? []).slice(0, 3);
+  return {
+    text: kept.join("\n").slice(0, 1000),
+    ...(buttons.length ? { buttons } : {}),
+  };
+}
+
 export function render(decision: Decision): Reply {
   const options = decision.step === "recommend";
   const lines = decision.lines
@@ -403,7 +423,7 @@ export function startInteraction(session: Session): void {
 export function deterministic(event: Event, session: Session, pack: Pack): Reply | null {
   if (wantsNewCustomer(event.text, event.action)) {
     startInteraction(session);
-    return { text: t(session.language, "newcustomer") };
+    return { text: `${t(session.language, "newcustomer")}\n↳ ${t(session.language, "why.newcustomer")}` };
   }
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
@@ -550,6 +570,16 @@ export type Store = {
 };
 
 export async function decide(
+  event: Event,
+  session: Session,
+  pack: Pack,
+  request: typeof fetch = fetch,
+  store?: Store,
+): Promise<Reply> {
+  return floor(await answer(event, session, pack, request, store));
+}
+
+async function answer(
   event: Event,
   session: Session,
   pack: Pack,

@@ -149,7 +149,7 @@ export function managerView(sessions: Session[], open: { reference: string; area
       `Assess ${average("assess").toFixed(1)} of 2 · home before price in ${
         real.filter((session) => !session.priced_before_home).length
       } of ${real.length} · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
-      `Home read back in ${readBack} of ${real.length}. ${
+      `↳ Home read back in ${readBack} of ${real.length}. ${
         open.length
           ? `Open questions: ${open.length} · ${open
               .slice(0, 2)

@@ -38,6 +38,15 @@ Status is what the code actually does, verified, not what it intends to do.
 | follow through | yes | no |
 | review | yes | no |
 
+## Floor rules (contest §2)
+
+| Rule | State |
+| --- | --- |
+| First reply in under 5 seconds | **Holds.** Deterministic turns answer in 1–15 ms; a model turn measured 1.9–3.1 s. Voice and photo get an acknowledgement immediately while the answer is prepared. |
+| Not more than 3 lines and 3 buttons | **Holds, now enforced for every reply.** It used to be enforced only in `render()`, which handles model output — and eight of the nine stages stopped going through the model, so each deterministic reply was its own chance to break it. The shift brief ran to five lines and the close to four. `floor()` now gates every reply at the exit, dropping the reason before the words to say when something has to go. A test walks a whole conversation, in all three languages, and holds every turn to it. |
+| A reason in each answer (judging, 25 with the steps) | **Holds.** Twelve of fourteen turns carry a `↳` line; the recommend step carries its reasons inside each of the three option lines, which is the one shape where a separate reason line would not fit. Each question now says why it is the one being asked — "the distance decides the size more than the room does". |
+| Voice and photo first | **Wired, not exercised with real media.** The paths exist and a rendered shelf tag was read end to end in 2.9 s; no real voice note or phone photo has been through them. |
+
 ## 7. Guardrails
 
 | Guardrail | Status |

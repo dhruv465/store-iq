@@ -46,6 +46,7 @@ export function cardSummary(session: Session): Reply {
         ? t(session.language, "card.heard", { body: parts.join("; ") })
         : t(session.language, "card.nothing"),
       parts.length ? t(session.language, "card.right") : t(session.language, "card.tellme"),
+      `↳ ${t(session.language, parts.length ? "why.readback" : "why.nocard")}`,
     ].join("\n"),
     ...(parts.length
       ? {
@@ -78,15 +79,20 @@ export function shiftBrief(pack: Pack): Reply {
   const video = brief.video ?? {};
   const question = brief.question ?? {};
   const options: string[] = Array.isArray(question.options) ? question.options.slice(0, 3) : [];
+  // Four things to carry onto the floor, inside the three lines the floor allows: the question is
+  // the reason line because the buttons below it are the answer.
   const lines = [
-    `${pack.store?.name ?? "Your store"} · ${brief.date ?? "today"}`,
-    stock.length ? `Stock: ${stock.join(" · ")}` : "Stock: no changes today.",
-    offers.length ? `Offers: ${offers.join(" · ")}` : "Offers: no changes today.",
-    video.title ? `Watch (${video.minutes ?? "?"} min): ${video.title}` : "",
-    question.text ? `Question: ${question.text}` : "",
-  ].filter(Boolean);
+    `${pack.store?.name ?? "Your store"} · ${stock.length ? `Stock: ${stock.join(" · ")}` : "Stock: no changes"}`,
+    [
+      offers.length ? `Offers: ${offers.join(" · ")}` : "Offers: no changes",
+      video.title ? `Watch ${video.minutes ?? "?"} min: ${video.title}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    question.text ? `↳ ${question.text}` : "",
+  ];
   return {
-    text: lines.join("\n").slice(0, 1000),
+    text: lines.filter(Boolean).join("\n"),
     ...(options.length
       ? { buttons: options.map((option) => ({ id: `brief:answer:${option}`, title: option.slice(0, 20) })) }
       : {}),
@@ -185,8 +191,8 @@ export function reviewReply(session: Session): Reply {
           })
         : t(session.language, "rev.none"),
       next
-        ? t(session.language, "rev.next", { body: t(session.language, `adv.${next}`) })
-        : t(session.language, "rev.perfect"),
+        ? `↳ ${t(session.language, "rev.next", { body: t(session.language, `adv.${next}`) })}`
+        : `↳ ${t(session.language, "rev.perfect")}`,
     ]
       .join("\n")
       .slice(0, 1000),
@@ -194,10 +200,13 @@ export function reviewReply(session: Session): Reply {
 }
 
 /** The floor order of questions, each with its own answers, so a tap never needs the model. */
-export function questionFlow(lang: Session["language"]): { field: string; ask: string; options: [string, string][] }[] {
+export function questionFlow(
+  lang: Session["language"],
+): { field: string; ask: string; why: string; options: [string, string][] }[] {
   return [
     {
       field: "distance_m",
+      why: t(lang, "why.distance_m"),
       ask: t(lang, "ask.distance"),
       options: [
         ["2-3", "2-3 m"],
@@ -207,6 +216,7 @@ export function questionFlow(lang: Session["language"]): { field: string; ask: s
     },
     {
       field: "light",
+      why: t(lang, "why.light"),
       ask: t(lang, "ask.light"),
       options: [
         ["bright afternoon sun", t(lang, "opt.bright")],
@@ -216,6 +226,7 @@ export function questionFlow(lang: Session["language"]): { field: string; ask: s
     },
     {
       field: "mount",
+      why: t(lang, "why.mount"),
       ask: t(lang, "ask.mount"),
       options: [
         ["wall", t(lang, "opt.wall")],
@@ -225,6 +236,7 @@ export function questionFlow(lang: Session["language"]): { field: string; ask: s
     },
     {
       field: "content",
+      why: t(lang, "why.content"),
       ask: t(lang, "ask.content"),
       options: [
         ["cricket", t(lang, "opt.cricket")],
@@ -234,6 +246,7 @@ export function questionFlow(lang: Session["language"]): { field: string; ask: s
     },
     {
       field: "devices",
+      why: t(lang, "why.devices"),
       ask: t(lang, "ask.devices"),
       options: [
         ["set-top box", t(lang, "opt.settop")],
@@ -243,6 +256,7 @@ export function questionFlow(lang: Session["language"]): { field: string; ask: s
     },
     {
       field: "family",
+      why: t(lang, "why.family"),
       ask: t(lang, "ask.family"),
       options: [
         ["two people", t(lang, "opt.two")],
@@ -262,14 +276,15 @@ export function nextQuestionReply(session: Session, prefix?: string): Reply {
   });
   if (!step)
     return {
-      text: [prefix, t(lang, "card.full")].filter(Boolean).join("\n"),
+      text: [prefix, t(lang, "card.full"), `↳ ${t(lang, "why.full")}`].filter(Boolean).join("\n"),
       buttons: [
         { id: "card:show", title: t(lang, "btn.showcard") },
         { id: "recommend", title: t(lang, "btn.three") },
       ],
     };
   return {
-    text: [prefix, step.ask].filter(Boolean).join("\n"),
+    // Every answer carries its reason, which here is why this question and not another one.
+    text: [prefix, step.ask, `↳ ${step.why}`].filter(Boolean).join("\n"),
     buttons: step.options.map(([value, title]) => ({
       id: value ? `card:${step.field}:${value}` : `skip:${step.field}`,
       title,
@@ -367,7 +382,9 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
               }),
             ]
           : []),
-        t(session.language, "ft.tap"),
+        // "Tap once they agree" is what the buttons already say, so the last line carries the
+        // reason instead and the whole close fits the floor's three.
+        `↳ ${t(session.language, "why.consent")}`,
       ].join("\n"),
       buttons: [
         ...(suggested ? [{ id: `add:${suggested.id}`, title: suggested.title.slice(0, 20) }] : []),
@@ -391,6 +408,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
         }),
         ...closing,
         t(session.language, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }),
+        `↳ ${t(session.language, "why.sitecheck")}`,
       ].join("\n"),
       buttons: [
         { id: "site:ok", title: t(session.language, "btn.sitefine") },
@@ -406,7 +424,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
       }),
       ...closing,
       t(session.language, "ft.task", { owner: associate }),
-      t(session.language, "ft.verify", { owner: associate }),
+      `↳ ${t(session.language, "ft.verify", { owner: associate })}`,
     ].join("\n"),
     buttons: [{ id: "finance", title: t(session.language, "btn.emi") }],
   };
