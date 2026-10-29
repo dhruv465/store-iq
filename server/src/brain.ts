@@ -10,16 +10,19 @@ import { expertReply, managerView, newReference, wantsExpert, wantsManagerView }
 import {
   briefAnswer,
   cardSummary,
+  financeReply,
   followThrough,
+  itemisedTotal,
+  nextQuestionReply,
   reviewReply,
   shiftBrief,
+  siteNeeds,
   wantsBrief,
-  nextQuestionReply,
+  wantsFinance,
   wantsFollowThrough,
   wantsNewCustomer,
   wantsRecommend,
   wantsReview,
-  siteNeeds,
 } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
 import { STEPS } from "./types.js";
@@ -475,6 +478,17 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     !Object.keys(extractCard(event.text ?? "")).length
   )
     return nextQuestionReply(session, t(session.language, "rec.first"));
+  // Section 6: finance in one sentence with its full cost. It is arithmetic over the pack's terms,
+  // and it sits behind the same gate as every other money conversation.
+  if (wantsFinance(event.text, event.action)) {
+    if (!(isAssessed(session.card) && session.demonstrated))
+      return nextQuestionReply(session, t(session.language, "fin.gate"));
+    const total = session.selection ? itemisedTotal(pack, session.selection)?.total : undefined;
+    if (!total) return followThrough(session, pack, event.name ?? session.phone);
+    session.step = "complete";
+    if (!session.steps_done.includes("complete")) session.steps_done.push("complete");
+    return financeReply(pack, total, session.language);
+  }
   if (wantsFollowThrough(event.text, event.action)) {
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);

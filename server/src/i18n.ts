@@ -106,6 +106,14 @@ const EN: Record<string, Phrase> = {
   "exp.say": (v) => `Say: "Let me confirm that with our ${v.area} desk and come straight back to you."`,
   "gate.offers": (v) => `Offers come after the home. ${v.body}`,
   "lang.switched": "Theek hai.",
+  "btn.emi": "EMI options",
+  "fin.exact": (v) => `${v.title}: Rs ${v.monthly} a month for ${v.months} months, Rs ${v.full} in all.`,
+  "fin.about": (v) =>
+    `${v.title}: about Rs ${v.monthly} a month for ${v.months} months, about Rs ${v.full} in all — the bank sets the exact instalment.`,
+  "fin.reason": (v) =>
+    `\u21b3 Paying over time costs up to Rs ${v.v} more than today. Say the full cost, not just the monthly.`,
+  "fin.none": "Today's data pack has no finance terms, so I will not quote any.",
+  "fin.gate": "Finance comes after the home and after they have seen the difference.",
   "adv.assess": "Ask about the home before the product: distance, light, what they watch, then read it back.",
   "adv.validate": "When the customer is half right, confirm the true part before correcting.",
   "adv.translate": "Turn one spec on the label into a line about their home.",
@@ -233,6 +241,13 @@ const HI: Record<string, Phrase> = {
   "exp.say": (v) => `कहिए: "मैं यह हमारे ${v.area} डेस्क से पक्का करके तुरंत आपको बताता हूँ।"`,
   "gate.offers": (v) => `ऑफ़र घर समझने के बाद। ${v.body}`,
   "lang.switched": "ठीक है, अब हिंदी में।",
+  "btn.emi": "EMI विकल्प",
+  "fin.exact": (v) => `${v.title}: Rs ${v.monthly} महीना, ${v.months} महीने — कुल Rs ${v.full}।`,
+  "fin.about": (v) =>
+    `${v.title}: करीब Rs ${v.monthly} महीना, ${v.months} महीने — कुल करीब Rs ${v.full}। सही किस्त बैंक तय करता है।`,
+  "fin.reason": (v) => `\u21b3 किस्तों में लेने पर आज से Rs ${v.v} तक ज़्यादा पड़ता है। सिर्फ़ महीना नहीं, कुल बताइए।`,
+  "fin.none": "आज के डेटा पैक में कोई फ़ाइनेंस टर्म नहीं है, तो मैं कुछ नहीं बताऊँगा।",
+  "fin.gate": "फ़ाइनेंस घर समझने और फ़र्क़ दिखाने के बाद।",
   "adv.assess": "प्रोडक्ट से पहले घर के बारे में पूछिए: दूरी, रोशनी, क्या देखते हैं — फिर वापस पढ़कर सुनाइए।",
   "adv.validate": "ग्राहक आधा सही हो तो पहले सही हिस्सा मानिए, फिर सुधारिए।",
   "adv.translate": "लेबल की एक स्पेक को उनके घर की एक लाइन में बदलिए।",
@@ -359,6 +374,14 @@ const MR: Record<string, Phrase> = {
   "exp.say": (v) => `म्हणा: "मी हे आमच्या ${v.area} डेस्ककडून पक्कं करून लगेच सांगतो."`,
   "gate.offers": (v) => `ऑफर घर समजल्यावर. ${v.body}`,
   "lang.switched": "ठीक आहे, आता मराठीत.",
+  "btn.emi": "EMI पर्याय",
+  "fin.exact": (v) => `${v.title}: Rs ${v.monthly} महिना, ${v.months} महिने — एकूण Rs ${v.full}.`,
+  "fin.about": (v) =>
+    `${v.title}: अंदाजे Rs ${v.monthly} महिना, ${v.months} महिने — एकूण अंदाजे Rs ${v.full}. नेमका हप्ता बँक ठरवते.`,
+  "fin.reason": (v) =>
+    `\u21b3 हप्त्यांवर घेतल्यास आजच्यापेक्षा Rs ${v.v} पर्यंत जास्त पडते. फक्त महिना नको, एकूण सांगा.`,
+  "fin.none": "आजच्या डेटा पॅकमध्ये फायनान्स टर्म नाही, म्हणून मी काही सांगणार नाही.",
+  "fin.gate": "फायनान्स घर समजल्यावर आणि फरक दाखवल्यावर.",
   "adv.assess": "प्रॉडक्टच्या आधी घराबद्दल विचारा: अंतर, उजेड, काय बघतात — मग वाचून दाखवा.",
   "adv.validate": "ग्राहक अर्धा बरोबर असेल तर आधी खरा भाग मान्य करा, मग दुरुस्त करा.",
   "adv.translate": "लेबलवरची एक स्पेक त्यांच्या घराविषयीच्या एका ओळीत बदला.",

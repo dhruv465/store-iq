@@ -1,7 +1,7 @@
 import type { Pack } from "./pack.js";
 import { isAssessed, stated } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
-import { t, v } from "./i18n.js";
+import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
 
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
@@ -376,7 +376,76 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
       t(session.language, "ft.task", { owner: associate }),
       t(session.language, "ft.verify", { owner: associate }),
     ].join("\n"),
+    buttons: [{ id: "finance", title: t(session.language, "btn.emi") }],
   };
+}
+
+export type FinanceOption = {
+  id: string;
+  title: string;
+  months: number;
+  monthly: number;
+  fullCost: number;
+  exact: boolean;
+  note?: string;
+};
+
+/** Section 6 asks for finance in one sentence with its full cost, which is arithmetic over the
+ *  pack's own terms, so it is computed here and never generated.
+ *
+ *  A no-cost term is exact: the instalments add up to the price and the only extra is the
+ *  processing fee. An interest-bearing term is the bank's calculation, not ours — the standard
+ *  reducing-balance instalment is what every bank quotes, but the exact figure is theirs, so it is
+ *  given as "about" rather than stated as fact. */
+export function financeOptions(pack: Pack, total: number): FinanceOption[] {
+  return (pack.finance ?? [])
+    .filter((term) => Number(term.months) > 0)
+    .map((term) => {
+      const months = Number(term.months);
+      const rate = Number(term.interest_percent ?? 0) / 100 / 12;
+      const fee = Number(term.processing_fee_rupees ?? 0);
+      const monthly = rate
+        ? Math.round((total * rate * (1 + rate) ** months) / ((1 + rate) ** months - 1))
+        : Math.round(total / months);
+      return {
+        id: String(term.id),
+        title: String(term.title),
+        months,
+        monthly,
+        fullCost: monthly * months + fee,
+        exact: !rate,
+        ...(term.note ? { note: String(term.note) } : {}),
+      };
+    });
+}
+
+/** One line per term: what they pay a month, and what it costs in all. */
+export function financeReply(pack: Pack, total: number, lang: Lang): Reply {
+  const options = financeOptions(pack, total);
+  if (!options.length) return { text: t(lang, "fin.none") };
+  const money = (value: number): string => value.toLocaleString("en-IN");
+  return {
+    text: [
+      ...options.map((option) =>
+        t(lang, option.exact ? "fin.exact" : "fin.about", {
+          title: option.title,
+          monthly: money(option.monthly),
+          months: option.months,
+          full: money(option.fullCost),
+        }),
+      ),
+      // The point of saying the full cost is the term that costs the most, not the cheapest one.
+      t(lang, "fin.reason", { v: money(Math.max(...options.map((option) => option.fullCost)) - total) }),
+    ]
+      .join("\n")
+      .slice(0, 1000),
+  };
+}
+
+const FINANCE_WORDS = /\b(emi|finance|instal?ments?|monthly|per month|kist|kitna mahina|mahine)\b/i;
+
+export function wantsFinance(text: string | undefined, action: string | undefined): boolean {
+  return action === "finance" || (!!text && FINANCE_WORDS.test(text));
 }
 
 /** What the installer will need on site, from the charges the customer is actually paying for. */
