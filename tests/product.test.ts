@@ -75,6 +75,25 @@ test("a photo whose label cannot be read asks for the model number instead of fa
   assert.match(reply.text, /could not read a model/);
 });
 
+test("a tag's own figures do not hijack the answer: a photo asks about the set", async () => {
+  const session = newSession("919000000000");
+  const event: Event = {
+    id: "m4", phone: "919000000000", modality: "image",
+    // What the label reader returns for a shelf tag: the set AND its printed figures.
+    text: "TCL, TCL-55C6KS, 55 inch, 800 nits, 144 Hz, 2 x HDMI 2.1",
+    image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
+  };
+  const reply = await decide(event, session, pack, dead);
+  assert.match(reply.text, /Rs 54,990/, "the set, not a lecture about nits");
+  assert.doesNotMatch(reply.text, /2 PM sunlight/);
+});
+
+test("the same figures typed by hand are a question about the figure", async () => {
+  const session = newSession("919000000000");
+  const reply = await decide(said("what do I say about 800 nits"), session, pack, dead);
+  assert.match(reply.text, /2 PM sunlight/);
+});
+
 test("a photo whose caption names the set is answered from the pack", async () => {
   const session = newSession("919000000000");
   const event: Event = {
