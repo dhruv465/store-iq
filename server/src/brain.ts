@@ -410,7 +410,11 @@ export function render(decision: Decision): Reply {
     .filter(Boolean)
     .slice(0, options ? 3 : 2);
   const reason = moneySafe(decision.reason).trim();
-  const text = [...lines, options || !reason ? "" : `↳ ${reason}`].filter(Boolean).join("\n").slice(0, 1000);
+  // A reason on its own is not an answer. The model sometimes returns only its justification —
+  // "the viewing distance is the most important factor" — and an associate reading that alone has
+  // been told nothing to do, so the fallback supplies the missing instruction instead.
+  const said = lines.length ? lines : ["Tell me what the customer said and I will give you the next question."];
+  const text = [...said, options || !reason ? "" : `↳ ${reason}`].filter(Boolean).join("\n").slice(0, 1000);
   const buttons = decision.buttons
     .filter((button) => button?.id?.trim() && button?.title?.trim())
     .slice(0, 3)
@@ -424,7 +428,7 @@ export function render(decision: Decision): Reply {
       buttons.findIndex((other) => other.title === button.title) === index,
   );
   return {
-    text: text || "Tell me about the customer's room and I will give you the next question.",
+    text,
     ...(unique.length ? { buttons: unique } : {}),
   };
 }

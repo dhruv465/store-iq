@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { decide, floor } from "../server/src/brain.js";
+import { decide, floor, render } from "../server/src/brain.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
 
 /** The contest's own floor rules: "not more than 3 lines and 3 buttons", and, in the judging, a
@@ -74,4 +74,22 @@ test("the gate keeps the words to say and drops the reason when something has to
 
 test("a blank line is not a line", () => {
   assert.equal(floor({ text: "one\n\n\ntwo" }).text, "one\ntwo");
+});
+
+test("a reason with nothing to do is not an answer", () => {
+  // The model sometimes returns only its justification. An associate reading "↳ the viewing
+  // distance is the most important factor" has been told nothing to do.
+  const reply = render({
+    step: "assess",
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: [],
+    buttons: [],
+    reason: "the viewing distance is the most important factor",
+  });
+  const lines = reply.text.split("\n");
+  assert.equal(lines.length, 2);
+  assert.doesNotMatch(lines[0]!, /^↳/, "something to do comes first");
+  assert.match(lines[1]!, /^↳/);
 });
