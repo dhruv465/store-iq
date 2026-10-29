@@ -43,6 +43,11 @@ create table if not exists expert_questions (
   asked_at timestamptz not null default now(),
   answered_at timestamptz
 );
+create table if not exists associates (
+  phone text primary key,
+  name text not null,
+  added_at timestamptz not null default now()
+);
 create table if not exists conversations (
   interaction_id text primary key,
   phone text not null,
@@ -225,6 +230,32 @@ export class DB {
       `select state from conversations where updated_at > now() - interval '12 hours' order by updated_at`,
     );
     return rows.rows.map((row) => row.state);
+  }
+
+  /** The manager's roster, with when each person last wrote to the number. An associate who has
+   *  done nothing today has to be visible, or "who has been quiet" cannot be answered. */
+  async roster(): Promise<{ phone: string; name: string; lastSeen?: string }[]> {
+    const rows = await this.pg.query<{ phone: string; name: string; last_seen: string | null }>(
+      `select a.phone, a.name, (select max(received_at) from inbox i where i.phone = a.phone) as last_seen
+       from associates a order by a.name`,
+    );
+    return rows.rows.map((row) => ({
+      phone: row.phone,
+      name: row.name,
+      ...(row.last_seen ? { lastSeen: row.last_seen } : {}),
+    }));
+  }
+
+  /** Re-adding an associate corrects the spelling of their name rather than failing. */
+  async addAssociate(phone: string, name: string): Promise<void> {
+    await this.pg.query(
+      `insert into associates (phone, name) values ($1, $2) on conflict (phone) do update set name = $2`,
+      [phone, name],
+    );
+  }
+
+  async removeAssociate(phone: string): Promise<void> {
+    await this.pg.query(`delete from associates where phone = $1`, [phone]);
   }
 
   /** Associates who may be sent a message right now: they wrote to us inside Meta's 24 hour window. */

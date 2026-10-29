@@ -20,7 +20,12 @@ function harness(): { app: Hono; sent: { phone: string; reply: Reply }[] } {
   const db = {
     today: async (): Promise<Session[]> => [session],
     openQuestions: async () => [],
-    reachable: async (): Promise<string[]> => ["919820000001", "919820000002"],
+    roster: async () => [
+      { phone: "919820000001", name: "Ramesh" },
+      { phone: "919820000002", name: "Asha" },
+    ],
+    // A number that wrote to the agent without being anybody's associate: it must never be sent to.
+    reachable: async (): Promise<string[]> => ["919820000001", "919820000002", "919999999999"],
     send: async (phone: string, reply: Reply): Promise<void> => void sent.push({ phone, reply }),
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
@@ -66,6 +71,7 @@ test("the manager's own click reaches every associate inside the window", async 
   assert.deepEqual(
     sent.map((entry) => entry.phone),
     ["919820000001", "919820000002"],
+    "the stranger who messaged the number is not on the floor and is not sent to",
   );
   assert.match(sent[0]!.reply.text, /^📢 .*:\nTCL 55 inch is Rs 54,990 today only$/s);
 });

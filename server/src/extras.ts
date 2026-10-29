@@ -58,6 +58,8 @@ export function expertReply(
   };
 }
 
+export type Rostered = { phone: string; name: string; lastSeen?: string };
+
 export type AssociateRow = {
   phone: string;
   name: string;
@@ -69,18 +71,28 @@ export type AssociateRow = {
   best: number;
   guide: number;
   homeBeforePrice: number;
+  /** On the manager's roster, rather than a number that simply turned up. */
+  onRoster: boolean;
+  lastSeen?: string;
 };
 
 /** One row per associate, which is what a manager is looking at: how many customers they took, how
  *  many of those they actually learned the home for, and the number out of 14 that follows from it. */
-export function perAssociate(sessions: Session[]): AssociateRow[] {
+export function perAssociate(sessions: Session[], roster: Rostered[] = []): AssociateRow[] {
   const byPhone = new Map<string, Session[]>();
+  // Every rostered associate starts with no conversations, so the one who did nothing today is in
+  // the table rather than missing from it. That absence is the thing a manager is looking for.
+  for (const person of roster) byPhone.set(person.phone, []);
   for (const session of sessions) byPhone.set(session.phone, [...(byPhone.get(session.phone) ?? []), session]);
+  const listed = new Map(roster.map((person) => [person.phone, person]));
   const rows = [...byPhone.entries()].map(([phone, all]) => {
     const points = all.map((session) => score(session).points).sort((a, b) => a - b);
     return {
       phone,
-      name: all.find((session) => session.associate)?.associate ?? phone,
+      // The roster is the manager's own spelling, so it wins over a WhatsApp profile name.
+      name: listed.get(phone)?.name ?? all.find((session) => session.associate)?.associate ?? phone,
+      onRoster: listed.has(phone),
+      ...(listed.get(phone)?.lastSeen ? { lastSeen: listed.get(phone)!.lastSeen } : {}),
       conversations: all.length,
       homeCards: all.filter((session) => isAssessed(session.card)).length,
       readBack: all.filter((session) => session.card_confirmed).length,
