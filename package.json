@@ -15,7 +15,9 @@
     "check": "npm run typecheck && npm test",
     "tunnel": "node --env-file-if-exists=.env -e \"const d=process.env.NGROK_DOMAIN;if(!d){console.error('Set NGROK_DOMAIN in .env. Claim the free static domain at dashboard.ngrok.com -> Domains.');process.exit(1)}require('node:child_process').spawn('ngrok',['http','3000','--url='+d],{stdio:'inherit'})\"",
     "pack:check": "node --env-file-if-exists=.env --import tsx scripts/pack-check.ts",
-    "format": "prettier --write \"server/src/*.ts\" \"tests/*.ts\" \"scripts/*.ts\""
+    "format": "prettier --write \"server/src/*.ts\" \"tests/*.ts\" \"scripts/*.ts\"",
+    "build:web": "npm --prefix web run build",
+    "dev:web": "npm --prefix web run dev"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.10",

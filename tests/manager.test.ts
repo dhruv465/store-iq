@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { perAssociate } from "../server/src/extras.js";
-import { ago, escape, notice, phoneOf, recipients } from "../server/src/manager.js";
+import { ago, floorRows, notice, phoneOf, recipients } from "../server/src/manager.js";
 import { newSession, type Session } from "../server/src/types.js";
 
 /** The manager's view is one row per associate over many conversations, which is the thing the
@@ -46,9 +46,22 @@ test("an associate who never gave a name is shown by number rather than dropped"
   assert.equal(perAssociate([anonymous])[0]!.name, "919820000005");
 });
 
-test("a WhatsApp profile name cannot put markup into the manager's page", () => {
-  assert.equal(escape(`<script>alert("x")</script>`), "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
-  assert.equal(escape("Ramesh & Co's"), "Ramesh &amp; Co&#39;s");
+test("the row the portal renders says who is quiet and when they were last seen", () => {
+  const now = Date.parse("2026-10-29T12:00:00.000Z");
+  const [busy, quiet] = floorRows(
+    perAssociate(
+      [conversation("919820000001", "Ramesh", ["assess"], true)],
+      [
+        { phone: "919820000001", name: "Ramesh", lastSeen: "2026-10-29T11:30:00.000Z" },
+        { phone: "919820000009", name: "Sunil", lastSeen: "2026-10-28T12:00:00.000Z" },
+      ],
+    ),
+    now,
+  );
+  assert.equal(busy!.quiet, false);
+  assert.equal(busy!.lastSeenLabel, "30 min ago");
+  assert.equal(quiet!.quiet, true, "on the roster, no customers today");
+  assert.equal(quiet!.lastSeenLabel, "yesterday");
 });
 
 test("a floor notice says who it is from, so it is not read as the agent talking", () => {

@@ -2,11 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
 import type { DB } from "../server/src/db.js";
-import { managerRoutes } from "../server/src/manager.js";
+import { managerRoutes, sessionToken } from "../server/src/manager.js";
 import { newSession, type Reply, type Session } from "../server/src/types.js";
 
-/** The confirm route messages every associate on the floor, so it is worth proving in process who
- *  can reach it. Nothing here touches WhatsApp: the stub records what would have been sent. */
+/** The broadcast route messages every associate on the floor, so it is worth proving in process
+ *  who can reach it. Nothing here touches WhatsApp: the stub records what would have been sent. */
 
 const PASSWORD = "test-password";
 const AUTH = `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}`;
@@ -14,8 +14,9 @@ const AUTH = `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}`;
 // whole point of the check.
 const ORIGIN = "http://localhost";
 
-function harness(): { app: Hono; sent: { phone: string; reply: Reply }[] } {
+function harness(): { app: Hono; sent: { phone: string; reply: Reply }[]; removed: string[] } {
   const sent: { phone: string; reply: Reply }[] = [];
+  const removed: string[] = [];
   const session: Session = Object.assign(newSession("919820000001"), { associate: "Ramesh" });
   const db = {
     today: async (): Promise<Session[]> => [session],
@@ -27,47 +28,128 @@ function harness(): { app: Hono; sent: { phone: string; reply: Reply }[] } {
     // A number that wrote to the agent without being anybody's associate: it must never be sent to.
     reachable: async (): Promise<string[]> => ["919820000001", "919820000002", "919999999999"],
     send: async (phone: string, reply: Reply): Promise<void> => void sent.push({ phone, reply }),
+    addAssociate: async (): Promise<void> => {},
+    removeAssociate: async (phone: string): Promise<void> => void removed.push(phone),
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
   managerRoutes(app, db);
-  return { app, sent };
+  return { app, sent, removed };
 }
 
-function form(text: string): BodyInit {
-  return new URLSearchParams({ text });
+function post(path: string, body: unknown, headers: Record<string, string> = {}): [string, RequestInit] {
+  return [
+    path,
+    {
+      method: "POST",
+      headers: {
+        authorization: AUTH,
+        origin: ORIGIN,
+        "content-type": "application/json",
+        "x-store-iq": "portal",
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    },
+  ];
 }
 
-test("the dashboard asks for a password rather than opening", async () => {
+test("the floor cannot be read without signing in", async () => {
   const { app } = harness();
-  const response = await app.request("/manager");
-  assert.equal(response.status, 401);
-  assert.match(response.headers.get("www-authenticate") ?? "", /^Basic/);
+  // The portal's own files are public: they hold no data, and the page's job when signed out is to
+  // show the sign-in card. Everything it then asks for needs the session.
+  for (const path of ["/api/manager/floor", "/api/manager/roster"]) {
+    const response = await app.request(path);
+    assert.equal(response.status, 401, path);
+  }
+});
+
+test("a signed cookie is accepted, and a forged or expired one is not", async () => {
+  const { app } = harness();
+  const good = sessionToken(PASSWORD, Date.now() + 60_000);
+  const signedIn = await app.request("/api/manager/floor", { headers: { cookie: `storeiq_manager=${good}` } });
+  assert.equal(signedIn.status, 200);
+
+  for (const bad of [
+    sessionToken("the wrong password", Date.now() + 60_000),
+    sessionToken(PASSWORD, Date.now() - 1),
+    `${Date.now() + 60_000}.not-a-signature`,
+    "rubbish",
+  ]) {
+    const response = await app.request("/api/manager/floor", { headers: { cookie: `storeiq_manager=${bad}` } });
+    assert.equal(response.status, 401, bad);
+  }
+});
+
+test("signing in needs the password, and hands back a cookie that is not readable by script", async () => {
+  const { app } = harness();
+  const refused = await app.request(...post("/api/manager/login", { password: "nearly-the-password" }));
+  assert.equal(refused.status, 401);
+
+  const response = await app.request(...post("/api/manager/login", { password: PASSWORD }));
+  assert.equal(response.status, 200);
+  const cookie = response.headers.get("set-cookie") ?? "";
+  assert.match(cookie, /^storeiq_manager=/);
+  assert.match(cookie, /HttpOnly/i);
+  assert.match(cookie, /SameSite=Strict/i, "so it is never attached to somebody else's request");
 });
 
 test("somebody else's page cannot send to the floor with the manager's cached credentials", async () => {
+  // Two shapes a cross-site request can take: a form post, which an HTML form can make from any
+  // page, and a plain fetch. Neither can set a header of its own, so neither gets through.
+  for (const headers of [
+    { origin: "https://evil.example.com", "content-type": "application/x-www-form-urlencoded" },
+    { origin: "https://evil.example.com", "x-store-iq": "" },
+  ]) {
+    const { app, sent } = harness();
+    const response = await app.request(...post("/api/manager/broadcast", { text: "free TVs, come now" }, headers));
+    assert.equal(response.status, 403, `refused before anything is queued: ${JSON.stringify(headers)}`);
+    assert.deepEqual(sent, [], "and nothing was queued");
+  }
+});
+
+test("even same-origin, a request that did not come from the portal is refused", async () => {
   const { app, sent } = harness();
-  const response = await app.request("/manager/broadcast/confirm", {
-    method: "POST",
-    headers: {
-      authorization: AUTH,
-      origin: "https://evil.example.com",
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: form("free TVs for everyone, come now"),
-  });
-  assert.equal(response.status, 403, "a cross-origin post is refused before anything is queued");
-  assert.deepEqual(sent, [], "and nothing was queued");
+  const response = await app.request(...post("/api/manager/broadcast", { text: "hello" }, { "x-store-iq": "" }));
+  assert.equal(response.status, 403);
+  assert.deepEqual(sent, []);
+});
+
+test("the floor data carries the rows, the summary and who can be reached", async () => {
+  const { app } = harness();
+  const response = await app.request("/api/manager/floor", { headers: { authorization: AUTH } });
+  const body = (await response.json()) as Record<string, any>;
+  assert.equal(response.status, 200);
+  assert.equal(body.maxScore, 14);
+  assert.equal(body.guide, 11);
+  assert.equal(body.reachable, 2, "the stranger is not one of the manager's associates");
+  assert.deepEqual(
+    body.rows.map((row: any) => row.name),
+    ["Ramesh", "Asha"],
+  );
+  assert.equal(body.rows[1].quiet, true, "Asha is on the roster and has taken nobody today");
+});
+
+test("the preview says who it reaches and queues nothing", async () => {
+  const { app, sent } = harness();
+  const response = await app.request(...post("/api/manager/broadcast/preview", { text: "two LG 65 inch left" }));
+  const body = (await response.json()) as Record<string, any>;
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    body.to.map((person: any) => person.name),
+    ["Ramesh", "Asha"],
+  );
+  assert.match(body.message, /^📢 .*:\ntwo LG 65 inch left$/s);
+  assert.deepEqual(sent, [], "a preview sends nothing");
 });
 
 test("the manager's own click reaches every associate inside the window", async () => {
   const { app, sent } = harness();
-  const response = await app.request("/manager/broadcast/confirm", {
-    method: "POST",
-    headers: { authorization: AUTH, origin: ORIGIN, "content-type": "application/x-www-form-urlencoded" },
-    body: form("TCL 55 inch is Rs 54,990 today only"),
-  });
+  const response = await app.request(
+    ...post("/api/manager/broadcast", { text: "TCL 55 inch is Rs 54,990 today only" }),
+  );
   assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()) as unknown, { queued: 2 });
   assert.deepEqual(
     sent.map((entry) => entry.phone),
     ["919820000001", "919820000002"],
@@ -76,27 +158,28 @@ test("the manager's own click reaches every associate inside the window", async 
   assert.match(sent[0]!.reply.text, /^📢 .*:\nTCL 55 inch is Rs 54,990 today only$/s);
 });
 
-test("the preview step shows who it reaches and queues nothing", async () => {
-  const { app, sent } = harness();
-  const response = await app.request("/manager/broadcast", {
-    method: "POST",
-    headers: { authorization: AUTH, origin: ORIGIN, "content-type": "application/x-www-form-urlencoded" },
-    body: form("two LG 65 inch left"),
-  });
-  const body = await response.text();
-  assert.equal(response.status, 200);
-  assert.match(body, /Send this to 2 associates\?/);
-  assert.match(body, /Ramesh/, "the associate is named, not numbered");
-  assert.deepEqual(sent, [], "a preview sends nothing");
-});
-
 test("an empty notice is not sent to anyone", async () => {
   const { app, sent } = harness();
-  const response = await app.request("/manager/broadcast/confirm", {
-    method: "POST",
-    headers: { authorization: AUTH, origin: ORIGIN, "content-type": "application/x-www-form-urlencoded" },
-    body: form("   "),
-  });
-  assert.equal(response.status, 303);
+  const response = await app.request(...post("/api/manager/broadcast", { text: "   " }));
+  assert.equal(response.status, 400);
   assert.deepEqual(sent, []);
+});
+
+test("a roster entry that is not a phone number is refused with a line the manager can act on", async () => {
+  const { app } = harness();
+  const response = await app.request(...post("/api/manager/roster", { name: "Ramesh", phone: "not a phone" }));
+  assert.equal(response.status, 400);
+  assert.match(((await response.json()) as any).error, /country code/);
+});
+
+test("an associate is added as typed and removed by number", async () => {
+  const { app, removed } = harness();
+  const added = await app.request(...post("/api/manager/roster", { name: "  Sunil  ", phone: "+91 98200 00099" }));
+  assert.deepEqual((await added.json()) as unknown, { ok: true, phone: "919820000099", name: "Sunil" });
+  const gone = await app.request("/api/manager/roster/919820000099", {
+    method: "DELETE",
+    headers: { authorization: AUTH, origin: ORIGIN, "x-store-iq": "portal" },
+  });
+  assert.equal(gone.status, 200);
+  assert.deepEqual(removed, ["919820000099"]);
 });

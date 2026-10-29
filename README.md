@@ -95,6 +95,23 @@ PACK_TOKEN=...                            # only if the feed needs a bearer toke
 and restart. A field they name differently is one entry in `FIELDS` or `SPECS`; a field they do not
 have at all is reported as defaulted, which tells you which ranking rule can no longer fire.
 
+## The manager portal
+
+`web/` is a React app (Vite, Tailwind, shadcn/ui components) served by the same server at
+`/manager`. The manager signs in with `ADMIN_PASSWORD` and sees one row per associate — customers
+taken, home cards actually made, median and best out of 14, conversations at Guide, how often the
+home came before the price, and when they were last seen — plus a box to tell the floor what is on.
+
+```bash
+npm run build:web     # build it; the server serves web/dist at /manager
+npm run dev:web       # or run it on :5173 with the API proxied, for working on the portal
+```
+
+The portal is off unless `ADMIN_PASSWORD` is set, because it rides the same tunnel as the webhook
+and it can message the whole floor. Its own files are public and hold no data; everything they ask
+for needs the session cookie, which is `HttpOnly` and `SameSite=Strict`. Writes also need the
+portal's own request header, which a page on another site cannot set.
+
 ## Hosting
 
 Meta needs a public HTTPS callback URL. Two options, and the laptop one is currently the better demo:
