@@ -11,8 +11,10 @@ import type { HomeCard, Reply } from "./types.js";
 
 export type Intent = "greeting" | "question" | "customer";
 
+// No \b: in JavaScript a word boundary only knows ASCII, so "नमस्ते\b" never matched and a Hindi
+// hello fell through to the model — which then answered in Hindi with an English reason line.
 const GREETING =
-  /^\s*(hi|hey|hello|yo|hii+|namaste|namaskar|salaam|good (morning|afternoon|evening)|नमस्ते|नमस्कार)\b[\s!.]*$/i;
+  /^\s*(hi|hey|hello|yo|hii+|namaste|namaskar|salaam|good (morning|afternoon|evening)|नमस्ते|नमस्कार|नमस्कारम्|हाय|हॅलो)[\s!.।]*$/i;
 
 /** A question asks for something we hold; a description tells us something about this customer. */
 const ASKING =
@@ -62,10 +64,12 @@ export function inStockReply(pack: Pack, card: HomeCard, lang: Lang, assessed: b
   };
 }
 
-/** An opening message is not an answer to a question nobody asked. */
+/** Hello is answered the way a manager answers it in the aisle: by asking what is going on. Not a
+ *  menu of what this thing can do, and not the first question of a questionnaire. It stays written
+ *  rather than generated because a greeting is not worth one of the day's model requests. */
 export function greetingReply(lang: Lang): Reply {
   return {
-    text: [t(lang, "greet.back"), t(lang, "greet.how"), `↳ ${t(lang, "greet.reason")}`].join("\n"),
+    text: [t(lang, "greet.back"), `↳ ${t(lang, "greet.reason")}`].filter(Boolean).join("\n"),
     buttons: [
       { id: "brief", title: t(lang, "btn.brief") },
       { id: "new_customer", title: t(lang, "btn.new") },

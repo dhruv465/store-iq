@@ -68,7 +68,9 @@ test("saying hello is answered, not turned into a questionnaire", async () => {
   const session = newSession("919820000001");
   const reply = await decide(said("hi"), session, pack, dead);
   assert.doesNotMatch(reply.text, /How far will you sit/, "it used to open with the distance question");
-  assert.match(reply.text, /Ready/);
+  // A manager asks what is going on. It used to answer hello with a menu of its own features.
+  assert.match(reply.text, /what's happening/i);
+  assert.doesNotMatch(reply.text, /say brief|ask me about any set/i);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
     ["brief", "new_customer"],
@@ -88,4 +90,13 @@ test("asking what we have is not confused with asking about one set", () => {
   assert.equal(asksWhatWeHave("what do we have in stock"), true);
   assert.equal(asksWhatWeHave("which models are available"), true);
   assert.equal(asksWhatWeHave("is the Sony any good"), false);
+});
+
+test("a hello in Devanagari is a hello", () => {
+  // \b in JavaScript only knows ASCII, so "नमस्ते\b" never matched and this reached the model,
+  // which answered in Hindi with an English reason line.
+  for (const hello of ["नमस्ते", "नमस्कार", "हाय", "नमस्ते।", "हॅलो"]) assert.equal(intentOf(hello), "greeting", hello);
+  // And a sentence that merely starts with one is not a greeting.
+  assert.notEqual(intentOf("नमस्ते, ग्राहक हॉल के लिए टीवी चाहता है"), "greeting");
+  assert.notEqual(intentOf("hit the 65 inch target"), "greeting");
 });
