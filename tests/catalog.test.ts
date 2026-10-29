@@ -56,13 +56,13 @@ test("a parameter cannot steer the path or the host", async () => {
   assert.equal(called.searchParams.get("q"), "../../../service/platform/products", "it is only ever a search term");
 });
 
-test("the token is sent as a header and never put in the URL", async () => {
+test("the application pair is the credential, sent the way the FDK client sends it", async () => {
   const { fetch: fake, calls } = spy();
   await getProducts(config, { q: "tv" }, fake);
   assert.doesNotMatch(calls[0]!.url, /app-token/, "a URL ends up in logs and proxies");
   const headers = calls[0]!.init.headers as Record<string, string>;
-  assert.equal(headers["x-application-token"], "app-token");
-  assert.equal(headers["x-application-id"], "app-id");
+  // Authorization: Bearer base64(applicationID:applicationToken), as the public client does it.
+  assert.equal(headers.authorization, `Bearer ${Buffer.from("app-id:app-token").toString("base64")}`);
 });
 
 test("a refusal never names the token", async () => {

@@ -30,6 +30,7 @@ export type CatalogConfig = {
 };
 
 export function catalogConfig(env = process.env): CatalogConfig | null {
+  // The FDK client defaults to https://api.fynd.com; a Jio Commerce application has its own.
   const host = env.CATALOG_HOST?.trim();
   const applicationId = env.CATALOG_APPLICATION_ID?.trim();
   const applicationToken = env.CATALOG_APPLICATION_TOKEN?.trim();
@@ -57,17 +58,14 @@ export async function read(
   const configured = new URL(config.host.startsWith("http") ? config.host : `https://${config.host}`);
   if (url.host !== configured.host) throw Error(`Refusing to call ${url.host}: not the configured catalogue host`);
 
+  // The application pair is the whole credential: there is no separate API key for these two
+  // endpoints. Taken from the public FDK client's own application layer, which sends
+  // `Authorization: Bearer base64(applicationID + ":" + applicationToken)` on every call.
+  const pair = Buffer.from(`${config.applicationId}:${config.applicationToken}`).toString("base64");
   const response = await providerRequest(
     request,
     url.toString(),
-    {
-      method: "GET",
-      headers: {
-        "x-application-id": config.applicationId,
-        "x-application-token": config.applicationToken,
-        accept: "application/json",
-      },
-    },
+    { method: "GET", headers: { authorization: `Bearer ${pair}`, accept: "application/json" } },
     "Catalogue",
     15_000,
   );
