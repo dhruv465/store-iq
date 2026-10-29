@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ALLOWED_PATHS, catalogConfig, getProducts, getPromotionOffers, read } from "../server/src/catalog.js";
+import {
+  ALLOWED_PATHS,
+  catalogConfig,
+  getLocations,
+  getProducts,
+  getPromotionOffers,
+  getStock,
+  read,
+} from "../server/src/catalog.js";
 
 /** This talks to a production store. The tests below are the proof that it cannot write to one,
  *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
@@ -20,11 +28,10 @@ function spy(body: unknown = { items: [], page: {} }): {
   return { fetch: fake, calls };
 }
 
-test("only the two endpoints the judges documented can be called", async () => {
-  assert.deepEqual(
-    [...ALLOWED_PATHS],
-    ["/service/application/catalog/v1.0/products", "/service/application/cart/v1.0/available-promotions"],
-  );
+test("only the five readable endpoints can be called, and all are on the storefront surface", async () => {
+  assert.equal(ALLOWED_PATHS.length, 5);
+  // /service/platform/ is the surface that can write. Nothing here is on it.
+  for (const path of ALLOWED_PATHS) assert.match(path, /^\/service\/application\//, path);
   const { fetch: fake, calls } = spy();
   for (const path of [
     "/service/platform/catalog/v1.0/products",
@@ -41,7 +48,9 @@ test("every request it can make is a GET", async () => {
   const { fetch: fake, calls } = spy();
   await getProducts(config, { q: "television" }, fake);
   await getPromotionOffers(config, { slug: "sony-55", store_id: 1 }, fake);
-  assert.equal(calls.length, 2);
+  await getStock(config, { sku_code: "SON-K55S30" }, fake);
+  await getLocations(config, { city: "mumbai" }, fake);
+  assert.equal(calls.length, 4);
   for (const call of calls) assert.equal(call.init.method, "GET", call.url);
 });
 

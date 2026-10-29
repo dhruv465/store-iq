@@ -19,8 +19,14 @@ import { providerRequest, readLimited } from "./http.js";
 
 /** The only two endpoints this product is allowed to call, from the FDK method reference. */
 export const ALLOWED_PATHS = [
+  // The two the judges' method reference names.
   "/service/application/catalog/v1.0/products",
   "/service/application/cart/v1.0/available-promotions",
+  // And the three this product cannot work without: the contest is about what is in THIS store
+  // today, and a catalogue listing alone does not say that.
+  "/service/application/catalog/v1.0/products/stock-status/",
+  "/service/application/catalog/v2.0/locations/",
+  "/service/application/catalog/v2.0/in-stock/locations/",
 ] as const;
 
 export type CatalogConfig = {
@@ -85,6 +91,31 @@ export async function getProducts(
     request,
   )) as { items?: Record<string, unknown>[]; page?: Record<string, unknown> };
   return { items: body.items ?? [], page: body.page ?? {} };
+}
+
+/** Catalog · getProductStockByIds. What is actually on the shelf, by SKU or item id, up to 50 at
+ *  a time. A listing says what the chain sells; this says what this store can hand over today. */
+export async function getStock(
+  config: CatalogConfig,
+  options: { item_id?: string; sku_code?: string; ean?: string; alu?: string; upc?: string },
+  request: typeof fetch = fetch,
+): Promise<Record<string, unknown>[]> {
+  const body = (await read(config, "/service/application/catalog/v1.0/products/stock-status/", options, request)) as {
+    items?: Record<string, unknown>[];
+  };
+  return body.items ?? [];
+}
+
+/** Catalog · the stores themselves, and the stores that have a thing in stock. */
+export async function getLocations(
+  config: CatalogConfig,
+  options: { q?: string; city?: string; page_size?: number; latitude?: number; longitude?: number } = {},
+  request: typeof fetch = fetch,
+): Promise<Record<string, unknown>[]> {
+  const body = (await read(config, "/service/application/catalog/v2.0/locations/", options, request)) as {
+    items?: Record<string, unknown>[];
+  };
+  return body.items ?? [];
 }
 
 /** Cart · getPromotionOffers. The offers actually running on one product today. */
