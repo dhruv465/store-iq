@@ -17,13 +17,18 @@ test("the brief's own example sentence is read without a model", () => {
 test("distance is read in either unit, but only when it is a distance", () => {
   assert.equal(extractCard("they sit about 8 feet from the wall").distance_feet, 8);
   assert.equal(extractCard("sits 3 m away from the screen").distance_m, 3);
-  assert.equal(extractCard("customer wants a 12 by 14 foot room done up").distance_feet, undefined,
-    "room dimensions are not a viewing distance");
+  assert.equal(
+    extractCard("customer wants a 12 by 14 foot room done up").distance_feet,
+    undefined,
+    "room dimensions are not a viewing distance",
+  );
   assert.equal(extractCard("customer wants a 12 by 14 foot room done up").space, "12 by 14 feet");
 });
 
 test("light, mount, devices and budget are read from ordinary phrasing", () => {
-  const card = extractCard("strong afternoon sun on that wall, wall mounted, they have a PS5 and a set-top box, budget around 60k");
+  const card = extractCard(
+    "strong afternoon sun on that wall, wall mounted, they have a PS5 and a set-top box, budget around 60k",
+  );
   assert.equal(card.light, "bright afternoon sun");
   assert.equal(card.mount, "wall");
   assert.deepEqual(card.devices, ["PS5", "set-top box"]);

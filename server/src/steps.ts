@@ -32,13 +32,16 @@ export function cardSummary(session: Session): Reply {
   }
   if (card.devices?.length) parts.push(t(lang, "has", { v: card.devices.map((entry) => v(lang, entry)).join(", ") }));
   if (card.replacing) parts.push(String(card.replacing));
-  if (card.priorities?.length) parts.push(t(lang, "cares", { v: card.priorities.map((entry) => v(lang, entry)).join(", ") }));
+  if (card.priorities?.length)
+    parts.push(t(lang, "cares", { v: card.priorities.map((entry) => v(lang, entry)).join(", ") }));
   if (card.site_constraints?.length) parts.push(card.site_constraints.join(", "));
   if (card.internet) parts.push(String(card.internet));
   if (card.budget_rupees) parts.push(t(lang, "budget.of", { v: card.budget_rupees }));
   return {
     text: [
-      parts.length ? t(session.language, "card.heard", { body: parts.join("; ") }) : t(session.language, "card.nothing"),
+      parts.length
+        ? t(session.language, "card.heard", { body: parts.join("; ") })
+        : t(session.language, "card.nothing"),
       parts.length ? t(session.language, "card.right") : t(session.language, "card.tellme"),
     ].join("\n"),
     ...(parts.length
@@ -144,11 +147,7 @@ function mark(session: Session, step: Scored): 0 | 1 | 2 {
       return session.demonstrated ? 2 : 0;
     // The findings' "Complete" is the full cost, charge by charge, not just a product picked.
     case "complete":
-      return session.selection
-        ? session.selection.charges.length || session.selection.accessories.length
-          ? 2
-          : 1
-        : 0;
+      return session.selection ? (session.selection.charges.length || session.selection.accessories.length ? 2 : 1) : 0;
     case "close":
       return session.consent ? 2 : done("close") ? 1 : 0;
     case "follow_through":
@@ -169,7 +168,6 @@ export function score(session: Session): {
   };
 }
 
-
 /** A score for the steps, and one thing to try next time. */
 export function reviewReply(session: Session): Reply {
   const { points, missing, marks } = score(session);
@@ -179,9 +177,13 @@ export function reviewReply(session: Session): Reply {
     text: [
       `${t(session.language, "rev.score", { points, max: MAX_SCORE })} ${points >= GUIDE ? t(session.language, "rev.guide") : t(session.language, "rev.toguide", { n: GUIDE })}`,
       covered.length
-        ? t(session.language, "rev.covered", { body: covered.map((step) => `${step.replace(/_/g, " ")} ${marks[step]}`).join(", ") })
+        ? t(session.language, "rev.covered", {
+            body: covered.map((step) => `${step.replace(/_/g, " ")} ${marks[step]}`).join(", "),
+          })
         : t(session.language, "rev.none"),
-      next ? t(session.language, "rev.next", { body: t(session.language, `adv.${next}`) }) : t(session.language, "rev.perfect"),
+      next
+        ? t(session.language, "rev.next", { body: t(session.language, `adv.${next}`) })
+        : t(session.language, "rev.perfect"),
     ]
       .join("\n")
       .slice(0, 1000),
@@ -191,18 +193,60 @@ export function reviewReply(session: Session): Reply {
 /** The floor order of questions, each with its own answers, so a tap never needs the model. */
 export function questionFlow(lang: Session["language"]): { field: string; ask: string; options: [string, string][] }[] {
   return [
-    { field: "distance_m", ask: t(lang, "ask.distance"),
-      options: [["2-3", "2-3 m"], ["3-4", "3-4 m"], ["", t(lang, "opt.notsure")]] },
-    { field: "light", ask: t(lang, "ask.light"),
-      options: [["bright afternoon sun", t(lang, "opt.bright")], ["some light", t(lang, "opt.some")], ["dim", t(lang, "opt.dim")]] },
-    { field: "mount", ask: t(lang, "ask.mount"),
-      options: [["wall", t(lang, "opt.wall")], ["table", t(lang, "opt.table")], ["", t(lang, "opt.notsure")]] },
-    { field: "content", ask: t(lang, "ask.content"),
-      options: [["cricket", t(lang, "opt.cricket")], ["OTT", t(lang, "opt.ott")], ["news", t(lang, "opt.news")]] },
-    { field: "devices", ask: t(lang, "ask.devices"),
-      options: [["set-top box", t(lang, "opt.settop")], ["PS5", t(lang, "opt.console")], ["none", t(lang, "opt.nothing")]] },
-    { field: "family", ask: t(lang, "ask.family"),
-      options: [["two people", t(lang, "opt.two")], ["four people", t(lang, "opt.four")], ["more than four", t(lang, "opt.more")]] },
+    {
+      field: "distance_m",
+      ask: t(lang, "ask.distance"),
+      options: [
+        ["2-3", "2-3 m"],
+        ["3-4", "3-4 m"],
+        ["", t(lang, "opt.notsure")],
+      ],
+    },
+    {
+      field: "light",
+      ask: t(lang, "ask.light"),
+      options: [
+        ["bright afternoon sun", t(lang, "opt.bright")],
+        ["some light", t(lang, "opt.some")],
+        ["dim", t(lang, "opt.dim")],
+      ],
+    },
+    {
+      field: "mount",
+      ask: t(lang, "ask.mount"),
+      options: [
+        ["wall", t(lang, "opt.wall")],
+        ["table", t(lang, "opt.table")],
+        ["", t(lang, "opt.notsure")],
+      ],
+    },
+    {
+      field: "content",
+      ask: t(lang, "ask.content"),
+      options: [
+        ["cricket", t(lang, "opt.cricket")],
+        ["OTT", t(lang, "opt.ott")],
+        ["news", t(lang, "opt.news")],
+      ],
+    },
+    {
+      field: "devices",
+      ask: t(lang, "ask.devices"),
+      options: [
+        ["set-top box", t(lang, "opt.settop")],
+        ["PS5", t(lang, "opt.console")],
+        ["none", t(lang, "opt.nothing")],
+      ],
+    },
+    {
+      field: "family",
+      ask: t(lang, "ask.family"),
+      options: [
+        ["two people", t(lang, "opt.two")],
+        ["four people", t(lang, "opt.four")],
+        ["more than four", t(lang, "opt.more")],
+      ],
+    },
   ];
 }
 
@@ -216,7 +260,10 @@ export function nextQuestionReply(session: Session, prefix?: string): Reply {
   if (!step)
     return {
       text: [prefix, t(lang, "card.full")].filter(Boolean).join("\n"),
-      buttons: [{ id: "card:show", title: t(lang, "btn.showcard") }, { id: "recommend", title: t(lang, "btn.three") }],
+      buttons: [
+        { id: "card:show", title: t(lang, "btn.showcard") },
+        { id: "recommend", title: t(lang, "btn.three") },
+      ],
     };
   return {
     text: [prefix, step.ask].filter(Boolean).join("\n"),
@@ -320,7 +367,9 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   return {
     text: [
       // The first itemised line already names the product; do not say it twice.
-      t(session.language, "ft.send", { body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.` }),
+      t(session.language, "ft.send", {
+        body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
+      }),
       t(session.language, "ft.task", { owner: associate }),
       t(session.language, "ft.verify", { owner: associate }),
     ].join("\n"),

@@ -75,15 +75,21 @@ test("a card answered in metres counts as assessed, same as feet", async () => {
   const inFeet = { distance_feet: 10, light: "bright", mount: "wall", content: ["cricket"] };
   assert.equal(isAssessed(inMetres), true, "the brief's own example asks in metres");
   assert.equal(isAssessed(inFeet), true);
-  assert.equal(isAssessed({ light: "bright", mount: "wall", content: ["cricket"], family: "four" }), false,
-    "no distance in either unit is not assessed");
+  assert.equal(
+    isAssessed({ light: "bright", mount: "wall", content: ["cricket"], family: "four" }),
+    false,
+    "no distance in either unit is not assessed",
+  );
 });
 
 test("a size that is not the fit is not described as the fit", () => {
   // 3 m suggests about 74 inch; nothing in the pack is that big.
   const reply = recommendReply(pack, { distance_m: 3, content: ["news"] });
-  assert.doesNotMatch(reply.text, /\d+ inch is the fit/,
-    "no product is within 3 inches of 74, so none may claim to be the fit");
+  assert.doesNotMatch(
+    reply.text,
+    /\d+ inch is the fit/,
+    "no product is within 3 inches of 74, so none may claim to be the fit",
+  );
   assert.match(reply.text, /closest we stock to the 74 inch/);
 });
 
@@ -103,7 +109,9 @@ test("three options never argue the same point twice", () => {
     const after = distinguish(rank(pack, card)).map((o) => o.key);
     assert.equal(new Set(after).size, after.length, `duplicate reason kind for ${JSON.stringify(card)}, from ${keys}`);
     // "800 nits holds the picture" and "600 nits holds the picture" are the same point, not two.
-    const reasons = recommendReply(pack, card).text.split("\n").map((line) => line.split(" — ")[1]);
+    const reasons = recommendReply(pack, card)
+      .text.split("\n")
+      .map((line) => line.split(" — ")[1]);
     assert.equal(new Set(reasons).size, reasons.length);
   }
 });
@@ -114,7 +122,9 @@ test("a distinguishing reason is still a fact from the pack", () => {
 });
 
 test("a bright room does not let two options both argue brightness", () => {
-  const options = distinguish(rank(pack, { distance_m: 3, light: "strong afternoon sun", content: ["OTT"], priorities: ["sound"] }));
+  const options = distinguish(
+    rank(pack, { distance_m: 3, light: "strong afternoon sun", content: ["OTT"], priorities: ["sound"] }),
+  );
   const brightness = options.filter((o) => /nits holds the picture/.test(o.reason));
   assert.ok(brightness.length <= 1, `two options argued brightness: ${options.map((o) => o.reason)}`);
 });

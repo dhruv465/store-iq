@@ -10,11 +10,75 @@ import type { Reply } from "./types.js";
  *  the whole job and no model request is needed. */
 
 const STOP = new Set([
-  "a", "an", "the", "is", "are", "was", "were", "it", "its", "this", "that", "they", "them", "he", "she",
-  "and", "or", "but", "of", "to", "in", "on", "for", "with", "as", "at", "by", "from", "says", "say",
-  "said", "thinks", "think", "customer", "grahak", "wants", "want", "much", "very", "so", "too", "my",
-  "his", "her", "their", "you", "your", "i", "we", "me", "also", "will", "would", "can", "could", "has",
-  "have", "had", "do", "does", "did", "be", "been", "being", "not", "no", "yes", "always", "never",
+  "a",
+  "an",
+  "the",
+  "is",
+  "are",
+  "was",
+  "were",
+  "it",
+  "its",
+  "this",
+  "that",
+  "they",
+  "them",
+  "he",
+  "she",
+  "and",
+  "or",
+  "but",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "as",
+  "at",
+  "by",
+  "from",
+  "says",
+  "say",
+  "said",
+  "thinks",
+  "think",
+  "customer",
+  "grahak",
+  "wants",
+  "want",
+  "much",
+  "very",
+  "so",
+  "too",
+  "my",
+  "his",
+  "her",
+  "their",
+  "you",
+  "your",
+  "i",
+  "we",
+  "me",
+  "also",
+  "will",
+  "would",
+  "can",
+  "could",
+  "has",
+  "have",
+  "had",
+  "do",
+  "does",
+  "did",
+  "be",
+  "been",
+  "being",
+  "not",
+  "no",
+  "yes",
+  "always",
+  "never",
 ]);
 
 export function contentWords(text: string): Set<string> {
@@ -46,7 +110,8 @@ export function matchMyth(pack: Pack, text: string): Myth | null {
   return best?.myth ?? null;
 }
 
-const TRIGGER = /\b(customer|he|she|they|grahak)\s+(says?|said|thinks?|believes?|told|bol)|^\s*(validate|correct this)\b/i;
+const TRIGGER =
+  /\b(customer|he|she|they|grahak)\s+(says?|said|thinks?|believes?|told|bol)|^\s*(validate|correct this)\b/i;
 
 export function looksLikeAClaim(text: string | undefined, action: string | undefined): boolean {
   return action === "validate" || (!!text && TRIGGER.test(text));
@@ -57,6 +122,8 @@ export function validateReply(pack: Pack, text: string, lang: Lang = "en"): Repl
   const myth = matchMyth(pack, text);
   if (!myth) return null;
   return {
-    text: [t(lang, "val.say", { body: `${myth.confirm} ${myth.correct}` }), t(lang, "val.reason")].join("\n").slice(0, 1000),
+    text: [t(lang, "val.say", { body: `${myth.confirm} ${myth.correct}` }), t(lang, "val.reason")]
+      .join("\n")
+      .slice(0, 1000),
   };
 }

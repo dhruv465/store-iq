@@ -10,12 +10,22 @@ const pack = await loadPack("data/pack.json");
 const ASSOCIATE = "Ramesh";
 
 function tap(session: Session, action: string) {
-  const event: Event = { id: `e${Math.random()}`, phone: session.phone, modality: "interactive", action, name: ASSOCIATE };
+  const event: Event = {
+    id: `e${Math.random()}`,
+    phone: session.phone,
+    modality: "interactive",
+    action,
+    name: ASSOCIATE,
+  };
   return deterministic(event, session, pack);
 }
 
 test("the total is computed from the pack, itemised line by line", () => {
-  const result = itemisedTotal(pack, { sku: "TCL-55C6KS", accessories: ["ACC-SOUNDBAR"], charges: ["TV-WALL", "TV-DELIVERY"] });
+  const result = itemisedTotal(pack, {
+    sku: "TCL-55C6KS",
+    accessories: ["ACC-SOUNDBAR"],
+    charges: ["TV-WALL", "TV-DELIVERY"],
+  });
   // 54990 + 11990 + 1499 + 499
   assert.equal(result!.total, 68978);
   assert.equal(result!.lines.length, 4);
@@ -39,7 +49,10 @@ test("without a selection it asks which product rather than guessing", () => {
   session.shortlist = ["TCL-55C6KS", "SAM-55QE1D"];
   const reply = followThrough(session, pack, ASSOCIATE);
   assert.match(reply.text, /Which one did they pick/);
-  assert.deepEqual(reply.buttons?.map((b) => b.id), ["select:TCL-55C6KS", "select:SAM-55QE1D"]);
+  assert.deepEqual(
+    reply.buttons?.map((b) => b.id),
+    ["select:TCL-55C6KS", "select:SAM-55QE1D"],
+  );
 });
 
 test("the summary is withheld until the customer consents", () => {
@@ -48,7 +61,10 @@ test("the summary is withheld until the customer consents", () => {
   tap(session, "add:TV-WALL");
   const draft = followThrough(session, pack, ASSOCIATE);
   assert.match(draft.text, /May I send you a summary/);
-  assert.deepEqual(draft.buttons?.map((b) => b.id), ["consent:yes", "consent:no"]);
+  assert.deepEqual(
+    draft.buttons?.map((b) => b.id),
+    ["consent:yes", "consent:no"],
+  );
   assert.doesNotMatch(draft.text, /Task:/, "no task is raised before consent");
 });
 
@@ -60,7 +76,10 @@ test("consent asks the site question before anyone books an installer", () => {
   assert.match(reply.text, /Total Rs 56,489/);
   // The October install failed because nobody asked about the wall until the installer arrived.
   assert.match(reply.text, /Before I book the installer — .*concrete or brick/);
-  assert.deepEqual(reply.buttons?.map((button) => button.id), ["site:ok", "site:problem"]);
+  assert.deepEqual(
+    reply.buttons?.map((button) => button.id),
+    ["site:ok", "site:problem"],
+  );
   assert.ok(session.steps_done.includes("follow_through"));
   assert.ok(session.steps_done.includes("close"));
 });

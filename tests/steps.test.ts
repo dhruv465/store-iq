@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { GUIDE, MAX_SCORE, SCORED, briefAnswer, reviewReply, score, shiftBrief, wantsBrief, wantsReview } from "../server/src/steps.js";
+import {
+  GUIDE,
+  MAX_SCORE,
+  SCORED,
+  briefAnswer,
+  reviewReply,
+  score,
+  shiftBrief,
+  wantsBrief,
+  wantsReview,
+} from "../server/src/steps.js";
 import { deterministic } from "../server/src/brain.js";
 import { newSession, type Event } from "../server/src/types.js";
 
@@ -13,7 +23,10 @@ test("the brief carries stock, offers, the video and one question with its optio
   assert.match(reply.text, /HDFC card instant discount/);
   assert.match(reply.text, /Why the room decides the size/);
   assert.match(reply.text, /8 feet/);
-  assert.deepEqual(reply.buttons?.map((b) => b.title), ["43 inch", "55 inch", "75 inch"]);
+  assert.deepEqual(
+    reply.buttons?.map((b) => b.title),
+    ["43 inch", "55 inch", "75 inch"],
+  );
   assert.ok(reply.buttons!.every((b) => b.id.startsWith("brief:answer:")));
 });
 
@@ -34,7 +47,13 @@ test("the scorecard is the judges' seven steps, 0 to 2 each", () => {
   session.demonstrated = true;
   // Assessed but never read back is half of that step; translate and demonstrate are whole.
   assert.deepEqual(score(session).marks, {
-    assess: 1, validate: 0, translate: 2, demonstrate: 2, complete: 0, close: 0, follow_through: 0,
+    assess: 1,
+    validate: 0,
+    translate: 2,
+    demonstrate: 2,
+    complete: 0,
+    close: 0,
+    follow_through: 0,
   });
   assert.equal(score(session).points, 5);
 

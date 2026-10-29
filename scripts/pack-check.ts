@@ -14,7 +14,9 @@ const { pack, problems } = adaptPack(raw);
 const say = (line: string): void => console.log(line);
 
 say(`\nSource: ${source}`);
-say(`Products: ${pack.products.length} · offers ${pack.offers?.length ?? 0} · finance ${pack.finance?.length ?? 0} · charges ${pack.charges?.length ?? 0} · myths ${pack.myths?.length ?? 0}`);
+say(
+  `Products: ${pack.products.length} · offers ${pack.offers?.length ?? 0} · finance ${pack.finance?.length ?? 0} · charges ${pack.charges?.length ?? 0} · myths ${pack.myths?.length ?? 0}`,
+);
 
 const defaulted = new Map<string, string[]>();
 for (const product of pack.products) {
@@ -27,7 +29,8 @@ for (const product of pack.products) {
 }
 if (defaulted.size) {
   say(`\nDefaulted, which means a rule can never fire on it:`);
-  for (const [field, skus] of defaulted) say(`  ${field} — ${skus.slice(0, 6).join(", ")}${skus.length > 6 ? ` +${skus.length - 6}` : ""}`);
+  for (const [field, skus] of defaulted)
+    say(`  ${field} — ${skus.slice(0, 6).join(", ")}${skus.length > 6 ? ` +${skus.length - 6}` : ""}`);
 } else say(`\nNothing defaulted.`);
 
 if (problems.length) {
@@ -36,7 +39,12 @@ if (problems.length) {
   process.exitCode = 1;
 } else {
   say(`\nServable. ${allowedNumbers(pack as Pack).size} figures are quotable from it.`);
-  const options = rank(pack as Pack, { distance_m: 3, light: "bright afternoon sun", content: ["cricket"], devices: ["PS5"] });
+  const options = rank(pack as Pack, {
+    distance_m: 3,
+    light: "bright afternoon sun",
+    content: ["cricket"],
+    devices: ["PS5"],
+  });
   say(`\nA bright hall at 3 m with a console would be offered:`);
   for (const option of options) say(`  ${option.product.brand} ${option.product.size_inch}" — ${option.reason}`);
   if (!options.length) say(`  nothing, which means no product is in stock or none fits that distance`);

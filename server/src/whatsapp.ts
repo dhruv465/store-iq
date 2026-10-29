@@ -51,8 +51,13 @@ export async function sendWhatsApp(phone: string, reply: Reply, request: typeof 
     buttons.some(
       (b) =>
         !b ||
-        typeof b.id !== "string" || !b.id.trim() || b.id !== b.id.trim() || b.id.length > 256 ||
-        typeof b.title !== "string" || !b.title.trim() || b.title.length > 20,
+        typeof b.id !== "string" ||
+        !b.id.trim() ||
+        b.id !== b.id.trim() ||
+        b.id.length > 256 ||
+        typeof b.title !== "string" ||
+        !b.title.trim() ||
+        b.title.length > 20,
     ) ||
     new Set(buttons.map((b) => b.id)).size !== buttons.length ||
     new Set(buttons.map((b) => b.title.trim())).size !== buttons.length
@@ -107,7 +112,14 @@ export async function downloadWhatsAppMedia(id: unknown, request: typeof fetch =
     throw Error("Invalid WhatsApp media URL");
   }
   // shortcut: only Meta's known download host is allowed; verify any new official host before widening.
-  if (url.protocol !== "https:" || url.hostname !== "lookaside.fbsbx.com" || url.port || url.username || url.password || url.hash)
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== "lookaside.fbsbx.com" ||
+    url.port ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
     throw Error("Untrusted WhatsApp media URL");
   const mimeType = typeof metadata.mime_type === "string" ? metadata.mime_type.split(";")[0]!.trim().toLowerCase() : "";
   const format = mediaTypes[mimeType];

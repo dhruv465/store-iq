@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { allowedNumbers, loadPack, recommendedInches } from "../server/src/pack.js";
-import { applyAction, isAssessed, languageOf, moneySafe, nextQuestion, numbersIn, offerLeaked, render, unsupportedNumbers } from "../server/src/brain.js";
+import {
+  applyAction,
+  isAssessed,
+  languageOf,
+  moneySafe,
+  nextQuestion,
+  numbersIn,
+  offerLeaked,
+  render,
+  unsupportedNumbers,
+} from "../server/src/brain.js";
 import { newSession } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
@@ -51,8 +61,16 @@ test("the reply is capped at two lines plus a reason and three buttons", () => {
 
 test("duplicate buttons are dropped", () => {
   const reply = render({
-    step: "assess", card: {}, shortlist: [], demonstrated: false,
-    lines: ["ask"], buttons: [{ id: "a", title: "A" }, { id: "a", title: "B" }], reason: "r",
+    step: "assess",
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: ["ask"],
+    buttons: [
+      { id: "a", title: "A" },
+      { id: "a", title: "B" },
+    ],
+    reason: "r",
   });
   assert.equal(reply.buttons?.length, 1);
 });
@@ -66,7 +84,16 @@ test("assessed needs four home facts including the viewing distance", () => {
 test("the next question follows the floor order and runs out cleanly", () => {
   const session = newSession("919999999999");
   assert.match(nextQuestion(session), /feet/);
-  session.card = { distance_feet: 8, light: "bright", mount: "wall", content: ["ott"], devices: ["set-top box"], room: "hall", internet: "yes", family: "four" };
+  session.card = {
+    distance_feet: 8,
+    light: "bright",
+    mount: "wall",
+    content: ["ott"],
+    devices: ["set-top box"],
+    room: "hall",
+    internet: "yes",
+    family: "four",
+  };
   assert.doesNotMatch(nextQuestion(session), /feet/);
 });
 
@@ -114,7 +141,10 @@ test("declining to talk about offers is not a leak", () => {
 
 test("the rupee artifact Gemini emits is repaired", () => {
   assert.equal(moneySafe('The TCL is ","54,990.'), "The TCL is Rs 54,990.");
-  assert.equal(moneySafe('discount of ","4,124 brings it to ","50,866.'), "discount of Rs 4,124 brings it to Rs 50,866.");
+  assert.equal(
+    moneySafe('discount of ","4,124 brings it to ","50,866.'),
+    "discount of Rs 4,124 brings it to Rs 50,866.",
+  );
   assert.equal(moneySafe("Ask: how far do they sit?"), "Ask: how far do they sit?");
 });
 
@@ -140,9 +170,17 @@ test("numbersIn reads thousands separators", () => {
 
 test("the recommend step keeps all three options", () => {
   const reply = render({
-    step: "recommend", card: {}, shortlist: [], demonstrated: true,
-    lines: ["TCL at Rs 54,990 — brightest for your sun", "Samsung at Rs 71,990 — brand plus brightness", "Sony at Rs 62,990 — best for OTT"],
-    buttons: [], reason: "three sized for 8 feet",
+    step: "recommend",
+    card: {},
+    shortlist: [],
+    demonstrated: true,
+    lines: [
+      "TCL at Rs 54,990 — brightest for your sun",
+      "Samsung at Rs 71,990 — brand plus brightness",
+      "Sony at Rs 62,990 — best for OTT",
+    ],
+    buttons: [],
+    reason: "three sized for 8 feet",
   });
   assert.equal(reply.text.split("\n").length, 3);
   assert.ok(reply.text.includes("Sony"));
@@ -151,8 +189,13 @@ test("the recommend step keeps all three options", () => {
 
 test("every other step still shows the reason line", () => {
   const reply = render({
-    step: "assess", card: {}, shortlist: [], demonstrated: false,
-    lines: ["Ask how far they sit.", "Then ask about the light."], buttons: [], reason: "the room decides the size",
+    step: "assess",
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: ["Ask how far they sit.", "Then ask about the light."],
+    buttons: [],
+    reason: "the room decides the size",
   });
   assert.equal(reply.text.split("\n").length, 3);
   assert.ok(reply.text.endsWith("↳ the room decides the size"));
@@ -167,12 +210,19 @@ test("every product carries a demonstration cue, as section 6.5 requires", () =>
 
 test("an itemised total with an accessory and delivery is sayable", () => {
   // TCL 54990 + soundbar 11990 + delivery 499
-  assert.deepEqual(unsupportedNumbers("TCL Rs 54990 plus soundbar Rs 11990 plus delivery Rs 499 is Rs 67479.", allowed, ""), []);
+  assert.deepEqual(
+    unsupportedNumbers("TCL Rs 54990 plus soundbar Rs 11990 plus delivery Rs 499 is Rs 67479.", allowed, ""),
+    [],
+  );
 });
 
 test("the running-cost answer to the electricity objection is sayable from facts", () => {
   assert.deepEqual(
-    unsupportedNumbers("The 55 inch draws 105 W against 125 W, so 153 units a year against 183, about Rs 240 apart.", allowed, ""),
+    unsupportedNumbers(
+      "The 55 inch draws 105 W against 125 W, so 153 units a year against 183, about Rs 240 apart.",
+      allowed,
+      "",
+    ),
     [],
   );
 });

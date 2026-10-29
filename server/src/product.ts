@@ -84,7 +84,9 @@ export function translateSpec(pack: Pack, text: string | undefined, product: Pro
     // The matched set's own figure beats one read off a photo, which may have been misread.
     const value = product?.specs?.[label.spec] ?? found[1]!;
     return {
-      text: [t(lang, "val.say", { body: label.say.replace("{value}", String(value)) }), t(lang, "tr.reason")].join("\n"),
+      text: [t(lang, "val.say", { body: label.say.replace("{value}", String(value)) }), t(lang, "tr.reason")].join(
+        "\n",
+      ),
     };
   }
   return null;

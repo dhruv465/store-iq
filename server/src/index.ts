@@ -63,10 +63,19 @@ try {
       // would otherwise be the one thing the harness could not reproduce.
       if (pricedEarly(session, reply)) session.priced_before_home = true;
       await db.commit(session, []);
-      return c.json({ reply, ms: Date.now() - started, step: session.step, card: session.card, assessed: session.assessed, demonstrated: session.demonstrated });
+      return c.json({
+        reply,
+        ms: Date.now() - started,
+        step: session.step,
+        card: session.card,
+        assessed: session.assessed,
+        demonstrated: session.demonstrated,
+      });
     });
   const server = serve({ fetch: app.fetch, port, hostname: host }, () =>
-    console.log(`Store IQ http://${host}:${port} · pack ${pack.version} · ${model} · whatsapp ${whatsapp ? "on" : "off"}`),
+    console.log(
+      `Store IQ http://${host}:${port} · pack ${pack.version} · ${model} · whatsapp ${whatsapp ? "on" : "off"}`,
+    ),
   );
   let closing = false;
   async function shutdown(code = 0) {

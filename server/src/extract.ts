@@ -8,8 +8,21 @@ import type { HomeCard } from "./types.js";
  *  not clearly match leaves the field empty rather than guessing. */
 
 const WORD_NUMBERS: Record<string, number> = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  ek: 1, do: 2, teen: 3, char: 4, paanch: 5,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  ek: 1,
+  do: 2,
+  teen: 3,
+  char: 4,
+  paanch: 5,
 };
 
 function number(raw: string): number | null {
@@ -23,7 +36,16 @@ const NUM = "(\\d+(?:\\.\\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|
 
 /** Devanagari spellings of the same facts, so a Hindi or Marathi associate is read too. */
 const DEVANAGARI_NUMBERS: Record<string, number> = {
-  "एक": 1, "दोन": 2, "दो": 2, "तीन": 3, "चार": 4, "पाच": 5, "पांच": 5, "पाँच": 5, "सहा": 6, "छह": 6,
+  एक: 1,
+  दोन: 2,
+  दो: 2,
+  तीन: 3,
+  चार: 4,
+  पाच: 5,
+  पांच: 5,
+  पाँच: 5,
+  सहा: 6,
+  छह: 6,
 };
 
 function devanagari(text: string, card: Partial<HomeCard>): void {
@@ -115,7 +137,9 @@ export function extractCard(text: string): Partial<HomeCard> {
   }
 
   // "budget 60000", "under 60k", "around Rs 60,000"
-  const budget = lower.match(/(?:budget|under|below|around|upto|up to|max|within)\s*(?:rs\.?|₹|inr)?\s*([\d,]+)\s*(k|thousand|lakh)?/);
+  const budget = lower.match(
+    /(?:budget|under|below|around|upto|up to|max|within)\s*(?:rs\.?|₹|inr)?\s*([\d,]+)\s*(k|thousand|lakh)?/,
+  );
   if (budget) {
     let value = Number(budget[1]!.replace(/,/g, ""));
     if (budget[2] === "k" || budget[2] === "thousand") value *= 1000;

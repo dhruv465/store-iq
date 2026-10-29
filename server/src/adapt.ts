@@ -57,7 +57,9 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
     return value;
   };
 
-  const specs: Record<string, number | string> = { ...(typeof row.specs === "object" && row.specs ? (row.specs as object) : {}) };
+  const specs: Record<string, number | string> = {
+    ...(typeof row.specs === "object" && row.specs ? (row.specs as object) : {}),
+  };
   for (const [spec, names] of Object.entries(SPECS)) {
     const found = pick({ ...row, ...specs }, names);
     if (found === undefined) continue;
@@ -67,7 +69,9 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
 
   const price = figure(need("price_rupees"));
   const mrp = figure(pick(row, FIELDS.mrp_rupees!)) ?? price;
-  const watts = figure(pick(row, ["typical_watts", "power_consumption_watts", "power_watts"])) ?? figure((row.energy as any)?.typical_watts);
+  const watts =
+    figure(pick(row, ["typical_watts", "power_consumption_watts", "power_watts"])) ??
+    figure((row.energy as any)?.typical_watts);
   const product: Product = {
     sku: text(need("sku")) ?? "",
     brand: text(need("brand")) ?? "",
@@ -81,7 +85,8 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
     good_for: list(row, ["good_for", "best_for", "strengths"]),
     weak_for: list(row, ["weak_for", "not_for", "limitations"]),
     // Without a cue the demonstrate step has nothing to show, and it is 2 of the judges' 14.
-    demo_cue: text(pick(row, ["demo_cue", "demo", "demonstration"])) ?? "Show it beside the set next to it, on the same scene.",
+    demo_cue:
+      text(pick(row, ["demo_cue", "demo", "demonstration"])) ?? "Show it beside the set next to it, on the same scene.",
     energy: {
       typical_watts: watts ?? 0,
       standby_watts: figure((row.energy as any)?.standby_watts) ?? 0,
@@ -100,7 +105,11 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
 function list(row: Record<string, unknown>, names: string[]): string[] {
   const value = pick(row, names);
   if (Array.isArray(value)) return value.map(String);
-  if (typeof value === "string") return value.split(/[;,|]/).map((entry) => entry.trim()).filter(Boolean);
+  if (typeof value === "string")
+    return value
+      .split(/[;,|]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -110,7 +119,8 @@ export function problems(products: { product: Product; missing: string[] }[]): s
   const seen = new Set<string>();
   products.forEach(({ product, missing }, index) => {
     const where = `row ${index + 1}${product.sku ? ` (${product.sku})` : ""}`;
-    for (const field of missing) found.push(`${where}: no ${field}. Add its name to FIELDS.${field} in server/src/adapt.ts`);
+    for (const field of missing)
+      found.push(`${where}: no ${field}. Add its name to FIELDS.${field} in server/src/adapt.ts`);
     if (product.price_rupees <= 0) found.push(`${where}: price is ${product.price_rupees}`);
     if (product.sku && seen.has(product.sku)) found.push(`${where}: duplicate sku`);
     if (product.sku) seen.add(product.sku);

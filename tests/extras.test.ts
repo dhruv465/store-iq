@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { expertReply, managerView, newReference, routeTo, wantsExpert, wantsManagerView } from "../server/src/extras.js";
+import {
+  expertReply,
+  managerView,
+  newReference,
+  routeTo,
+  wantsExpert,
+  wantsManagerView,
+} from "../server/src/extras.js";
 import { newSession, type Session } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
@@ -39,7 +46,11 @@ test("references are unique enough to quote to a customer", () => {
 
 test("the manager view reports the measures the store visits used", () => {
   const reply = managerView(
-    [conversation(["assess", "recommend"]), conversation(["assess", "recommend", "complete"]), conversation(["assess"])],
+    [
+      conversation(["assess", "recommend"]),
+      conversation(["assess", "recommend", "complete"]),
+      conversation(["assess"]),
+    ],
     [{ reference: "SIQ-1111", area: "finance and EMI", owner: "Priya (billing)" }],
   );
   assert.match(reply.text, /Today: 3 conversations · median \d+ of 14 · \d+ at Guide \(11\+\)/);

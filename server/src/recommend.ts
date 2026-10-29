@@ -8,7 +8,13 @@ import type { HomeCard, Reply } from "./types.js";
  *  it is done here rather than by the model: the result is reproducible, instant, costs no request,
  *  and every number in the reason is read straight off the product it describes. */
 
-export type Option = { product: Product; score: number; reason: string; cue: string; /** Which kind of reason this is, so two options never argue the same point. */ key: string };
+export type Option = {
+  product: Product;
+  score: number;
+  reason: string;
+  cue: string;
+  /** Which kind of reason this is, so two options never argue the same point. */ key: string;
+};
 
 type Rule = {
   /** Identifies the kind of argument, so "800 nits" and "600 nits" count as the same point. */
@@ -20,9 +26,7 @@ type Rule = {
 };
 
 function wants(card: HomeCard, ...needles: string[]): boolean {
-  const hay = [...(card.content ?? []), ...(card.devices ?? []), ...(card.priorities ?? [])]
-    .join(" ")
-    .toLowerCase();
+  const hay = [...(card.content ?? []), ...(card.devices ?? []), ...(card.priorities ?? [])].join(" ").toLowerCase();
   return needles.some((needle) => hay.includes(needle));
 }
 
@@ -32,8 +36,7 @@ function bright(card: HomeCard): boolean {
 
 /** The viewing distance in inches of screen, from whichever unit the associate gave. */
 export function targetInches(card: HomeCard): number | null {
-  if (typeof card.distance_m === "number" && card.distance_m > 0)
-    return recommendedInches(card.distance_m * 3.28084);
+  if (typeof card.distance_m === "number" && card.distance_m > 0) return recommendedInches(card.distance_m * 3.28084);
   if (typeof card.distance_feet === "number" && card.distance_feet > 0) return recommendedInches(card.distance_feet);
   return null;
 }
@@ -42,9 +45,12 @@ const RULES: Rule[] = [
   {
     id: "console",
     weight: 30,
-    applies: (product, card) => wants(card, "ps5", "console", "gaming", "xbox") &&
-      Number(product.specs.hdmi_21_ports) >= 1 && Number(product.specs.refresh_hz) >= 120,
-    reason: (product, lang) => t(lang, "r.console", { hz: String(product.specs.refresh_hz), ports: String(product.specs.hdmi_21_ports) }),
+    applies: (product, card) =>
+      wants(card, "ps5", "console", "gaming", "xbox") &&
+      Number(product.specs.hdmi_21_ports) >= 1 &&
+      Number(product.specs.refresh_hz) >= 120,
+    reason: (product, lang) =>
+      t(lang, "r.console", { hz: String(product.specs.refresh_hz), ports: String(product.specs.hdmi_21_ports) }),
   },
   {
     id: "brightness",
@@ -83,7 +89,8 @@ export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
       for (const rule of RULES)
         if (rule.applies(product, card)) {
           score += rule.weight;
-          if (!best || rule.weight > best.weight) best = { weight: rule.weight, reason: rule.reason(product, lang), key: rule.id };
+          if (!best || rule.weight > best.weight)
+            best = { weight: rule.weight, reason: rule.reason(product, lang), key: rule.id };
         }
       // Size is the thing the brief leads with, so it always contributes and can always explain itself.
       if (target !== null) {
@@ -114,8 +121,12 @@ export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
       };
     });
   // Stable order: score, then the cheaper one, then the sku, so the same card always ranks the same way.
-  scored.sort((a, b) => b.score - a.score || a.product.price_rupees - b.product.price_rupees ||
-    a.product.sku.localeCompare(b.product.sku));
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.product.price_rupees - b.product.price_rupees ||
+      a.product.sku.localeCompare(b.product.sku),
+  );
   return scored.slice(0, 3);
 }
 
@@ -134,8 +145,10 @@ export function distinguish(options: Option[], lang: Lang = "en"): Option[] {
     const product = option.product;
     const separators = [
       product.price_rupees === cheapest && t(lang, "s.cheapest"),
-      Number(product.specs.peak_nits) === brightest && t(lang, "s.brightest", { nits: String(product.specs.peak_nits) }),
-      Number(product.specs.speaker_watts) === loudest && t(lang, "s.loudest", { w: String(product.specs.speaker_watts) }),
+      Number(product.specs.peak_nits) === brightest &&
+        t(lang, "s.brightest", { nits: String(product.specs.peak_nits) }),
+      Number(product.specs.speaker_watts) === loudest &&
+        t(lang, "s.loudest", { w: String(product.specs.speaker_watts) }),
       product.panel !== options[0]!.product.panel && t(lang, "s.panel", { panel: product.panel }),
       t(lang, "s.os", { os: String(product.specs.os) }),
     ].filter((entry): entry is string => typeof entry === "string" && !seen.has(entry));
@@ -167,6 +180,9 @@ export function recommendReply(pack: Pack, card: HomeCard, lang: Lang = "en"): R
       )
       .join("\n")
       .slice(0, 1000),
-    buttons: options.map((option) => ({ id: `select:${option.product.sku}`, title: short(option.product).slice(0, 20) })),
+    buttons: options.map((option) => ({
+      id: `select:${option.product.sku}`,
+      title: short(option.product).slice(0, 20),
+    })),
   };
 }

@@ -75,16 +75,30 @@ export function allowedNumbers(pack: Pack): Set<number> {
     else if (Array.isArray(value)) value.forEach(walk);
     else if (value && typeof value === "object") Object.values(value).forEach(walk);
   };
-  walk({ p: pack.products, o: pack.offers, f: pack.finance, c: pack.charges, b: pack.shift_brief,
-    l: pack.labels, m: pack.myths, i: pack.install_requirements, s: pack.store,
-    a: pack.accessories, e: pack.electricity });
+  walk({
+    p: pack.products,
+    o: pack.offers,
+    f: pack.finance,
+    c: pack.charges,
+    b: pack.shift_brief,
+    l: pack.labels,
+    m: pack.myths,
+    i: pack.install_requirements,
+    s: pack.store,
+    a: pack.accessories,
+    e: pack.electricity,
+  });
   // Derived totals an answer may legitimately state.
   for (const product of pack.products) {
     for (const offer of pack.offers) {
-      const percent = typeof offer.percent === "number"
-        ? Math.min(Math.round((product.price_rupees * offer.percent) / 100), Number(offer.cap_rupees ?? Infinity))
-        : Number(offer.flat_rupees ?? 0);
-      if (percent > 0) { allowed.add(percent); allowed.add(product.price_rupees - percent); }
+      const percent =
+        typeof offer.percent === "number"
+          ? Math.min(Math.round((product.price_rupees * offer.percent) / 100), Number(offer.cap_rupees ?? Infinity))
+          : Number(offer.flat_rupees ?? 0);
+      if (percent > 0) {
+        allowed.add(percent);
+        allowed.add(product.price_rupees - percent);
+      }
     }
     allowed.add(product.mrp_rupees - product.price_rupees);
     // An itemised total may name the product with any accessory, and the yearly running cost.
@@ -109,9 +123,7 @@ export function allowedNumbers(pack: Pack): Set<number> {
 
 /** Facts for this home only, so the model never sees the whole catalogue as fair game. */
 export function factsFor(pack: Pack, card: HomeCard, shortlist: string[]): string {
-  const picked = shortlist.length
-    ? pack.products.filter((product) => shortlist.includes(product.sku))
-    : pack.products;
+  const picked = shortlist.length ? pack.products.filter((product) => shortlist.includes(product.sku)) : pack.products;
   const sized = card.distance_feet
     ? picked.filter((product) => Math.abs(product.size_inch - recommendedInches(card.distance_feet!)) <= 12)
     : picked;

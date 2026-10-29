@@ -22,11 +22,13 @@ export function wantsManagerView(text: string | undefined, action: string | unde
 /** Route by what the question is about, so it reaches someone who can actually answer it. */
 export function routeTo(pack: Pack, question: string): { area: string; name: string } {
   const lower = question.toLowerCase();
-  const area =
-    /\b(install|wall|mount|site|bracket|socket)\b/.test(lower) ? "installation and site survey"
-    : /\b(emi|finance|loan|instal?ment|card|interest)\b/.test(lower) ? "finance and EMI"
-    : /\b(stock|deliver|when|date|available)\b/.test(lower) ? "stock and delivery dates"
-    : "product and specifications";
+  const area = /\b(install|wall|mount|site|bracket|socket)\b/.test(lower)
+    ? "installation and site survey"
+    : /\b(emi|finance|loan|instal?ment|card|interest)\b/.test(lower)
+      ? "finance and EMI"
+      : /\b(stock|deliver|when|date|available)\b/.test(lower)
+        ? "stock and delivery dates"
+        : "product and specifications";
   const expert = pack.experts?.find((candidate) => candidate.area === area) ?? pack.experts?.[0];
   return expert ?? { area, name: "the department manager" };
 }
@@ -36,7 +38,12 @@ export function newReference(): string {
 }
 
 /** Logs the question against a named owner and gives the associate a line to hold the customer with. */
-export function expertReply(pack: Pack, question: string, reference: string, lang: Lang = "en"): { reply: Reply; area: string; owner: string } {
+export function expertReply(
+  pack: Pack,
+  question: string,
+  reference: string,
+  lang: Lang = "en",
+): { reply: Reply; area: string; owner: string } {
   const { area, name } = routeTo(pack, question);
   return {
     area,
@@ -54,21 +61,16 @@ export function expertReply(pack: Pack, question: string, reference: string, lan
 /** What the department manager sees, in the shape of the store-visit findings' own table: the
  *  median against the judges' 14, how many reached Guide, how the floor scores on Assess — the
  *  measure the visits called our largest gap — and the step it is weakest on today. */
-export function managerView(
-  sessions: Session[],
-  open: { reference: string; area: string; owner?: string }[],
-): Reply {
+export function managerView(sessions: Session[], open: { reference: string; area: string; owner?: string }[]): Reply {
   // A conversation that only ever looked at one set is still a conversation, and it is exactly the
   // one where the price comes first, so it must not be invisible here.
   const real = sessions.filter((session) => session.steps_done.length > 0 || session.shortlist.length > 0);
-  if (!real.length)
-    return { text: "No conversations yet today.\n\u21b3 The view fills as associates use the number." };
+  if (!real.length) return { text: "No conversations yet today.\n\u21b3 The view fills as associates use the number." };
   const scored = real.map((session) => score(session));
   const points = scored.map((card) => card.points).sort((a, b) => a - b);
   const median = points[Math.floor(points.length / 2)]!;
   const guides = points.filter((value) => value >= GUIDE).length;
-  const average = (step: Scored): number =>
-    scored.reduce((total, card) => total + card.marks[step], 0) / real.length;
+  const average = (step: Scored): number => scored.reduce((total, card) => total + card.marks[step], 0) / real.length;
   // Assess is reported whatever it scores, because it is the gap the visits named.
   const weakest = SCORED.filter((step) => step !== "assess")
     .map((step) => [step, average(step)] as const)
@@ -82,7 +84,10 @@ export function managerView(
       } of ${real.length} · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
       `Home read back in ${readBack} of ${real.length}. ${
         open.length
-          ? `Open questions: ${open.length} · ${open.slice(0, 2).map((question) => question.reference).join(", ")}`
+          ? `Open questions: ${open.length} · ${open
+              .slice(0, 2)
+              .map((question) => question.reference)
+              .join(", ")}`
           : "No open expert questions."
       }`,
     ]

@@ -107,7 +107,12 @@ export class DB {
     const idleMs = Date.now() - Date.parse(String(row.updated_at));
     if (Number.isFinite(idleMs) && idleMs > INTERACTION_IDLE_MS) {
       const fresh = newSession(phone);
-      return { ...fresh, version: row.version, language: session.language, steps_done: session.steps_done.filter((step) => step === "brief") };
+      return {
+        ...fresh,
+        version: row.version,
+        language: session.language,
+        steps_done: session.steps_done.filter((step) => step === "brief"),
+      };
     }
     return session;
   }
@@ -126,7 +131,10 @@ export class DB {
     );
     if (!updated.rows.length) return false;
     for (const reply of replies)
-      await this.pg.query(`insert into outbox (phone, payload) values ($1, $2)`, [session.phone, JSON.stringify(reply)]);
+      await this.pg.query(`insert into outbox (phone, payload) values ($1, $2)`, [
+        session.phone,
+        JSON.stringify(reply),
+      ]);
     session.version = next;
     return true;
   }
@@ -175,7 +183,13 @@ export class DB {
   }
 
   /** Extra points: a question the floor could not answer, routed to a named owner. */
-  async logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void> {
+  async logQuestion(row: {
+    reference: string;
+    phone: string;
+    area: string;
+    owner: string;
+    question: string;
+  }): Promise<void> {
     await this.pg.query(
       `insert into expert_questions (reference, phone, area, owner, question) values ($1,$2,$3,$4,$5)
        on conflict (reference) do nothing`,
@@ -234,7 +248,9 @@ async function claimLock(lock: string, waitMs: number): Promise<void> {
   const deadline = Date.now() + waitMs;
   for (let first = true; ; first = false) {
     if (!first && Date.now() >= deadline)
-      throw Error(`Database already open by pid ${await readFile(`${lock}/pid`, "utf8").catch(() => "?")}. Run one server only.`);
+      throw Error(
+        `Database already open by pid ${await readFile(`${lock}/pid`, "utf8").catch(() => "?")}. Run one server only.`,
+      );
     try {
       await mkdir(lock, { mode: 0o700 });
       return;

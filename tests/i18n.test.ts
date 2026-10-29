@@ -31,7 +31,10 @@ test("the floor questions and their buttons are translated, not just the text", 
   session.language = "hi";
   const asked = nextQuestionReply(session);
   assert.match(asked.text, /पूछिए/);
-  assert.ok(asked.buttons!.some((b) => b.title === "पता नहीं"), "the Not sure button is translated too");
+  assert.ok(
+    asked.buttons!.some((b) => b.title === "पता नहीं"),
+    "the Not sure button is translated too",
+  );
   assert.match(hi.text, /Ask:/, "English is unaffected");
 });
 
@@ -84,9 +87,20 @@ test("Devanagari with nothing in it still yields nothing", async () => {
 
 test("card values are spoken in the associate's language, not just the frame", async () => {
   const { cardSummary } = await import("../server/src/steps.js");
-  const card = { room: "hall", distance_m: 3, light: "bright afternoon sun", mount: "wall", content: ["cricket"], family: "4 people" };
-  const hi = newSession("91982"); hi.language = "hi"; hi.card = card;
-  const mr = newSession("91982"); mr.language = "mr"; mr.card = card;
+  const card = {
+    room: "hall",
+    distance_m: 3,
+    light: "bright afternoon sun",
+    mount: "wall",
+    content: ["cricket"],
+    family: "4 people",
+  };
+  const hi = newSession("91982");
+  hi.language = "hi";
+  hi.card = card;
+  const mr = newSession("91982");
+  mr.language = "mr";
+  mr.card = card;
   const hindi = cardSummary(hi).text;
   const marathi = cardSummary(mr).text;
   for (const english of ["hall", "sits", "wall mount", "people"])
@@ -114,13 +128,17 @@ test("a demonstration cue is spoken in the associate's language when the pack ha
   // A pack without a translated cue falls back rather than dropping it.
   const { demo_cue_hi: _dropped, ...withoutHindi } = tcl;
   assert.equal(cueFor(withoutHindi, "hi"), tcl.demo_cue);
-  assert.doesNotMatch(recommendReply(pack, { distance_feet: 8, light: "bright", content: ["cricket"] }, "hi").text, /Show:/);
+  assert.doesNotMatch(
+    recommendReply(pack, { distance_feet: 8, light: "bright", content: ["cricket"] }, "hi").text,
+    /Show:/,
+  );
 });
 
 test("the review's advice is spoken in the associate's language too", () => {
   // The seven step names are the contest scorecard's own words and stay as they are; the sentence
   // telling the associate what to do next is the part that has to be theirs.
-  const english = /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|With consent/;
+  const english =
+    /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|With consent/;
   assert.match(reviewReply(Object.assign(filled("en"), { steps_done: [] })).text, english);
   for (const lang of ["hi", "mr"] as const) {
     const session = filled(lang);

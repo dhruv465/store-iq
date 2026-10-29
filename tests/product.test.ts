@@ -15,7 +15,11 @@ test("the set is found by sku, by the code on the tag, and by brand with size", 
   assert.equal(findProduct(pack, "customer is standing at the 65UT8050")?.sku, "LG-65UT8050");
   assert.equal(findProduct(pack, "the C6K one")?.sku, "TCL-55C6KS");
   assert.equal(findProduct(pack, "tell me about the Samsung 55")?.sku, "SAM-55QE1D");
-  assert.equal(findProduct(pack, "the Sony"), pack.products.find((p) => p.brand === "Sony"), "one Sony in the pack is unambiguous");
+  assert.equal(
+    findProduct(pack, "the Sony"),
+    pack.products.find((p) => p.brand === "Sony"),
+    "one Sony in the pack is unambiguous",
+  );
 });
 
 test("a bare size or an unknown brand names no set", () => {
@@ -70,7 +74,12 @@ test("asking which ones are good before the home is known returns a question, no
 
 test("a photo whose label cannot be read asks for the model number instead of failing", async () => {
   const session = newSession("919000000000");
-  const event: Event = { id: "m2", phone: "919000000000", modality: "image", image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" } };
+  const event: Event = {
+    id: "m2",
+    phone: "919000000000",
+    modality: "image",
+    image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
+  };
   const reply = await decide(event, session, pack, dead);
   assert.match(reply.text, /could not read a model/);
 });
@@ -78,7 +87,9 @@ test("a photo whose label cannot be read asks for the model number instead of fa
 test("a tag's own figures do not hijack the answer: a photo asks about the set", async () => {
   const session = newSession("919000000000");
   const event: Event = {
-    id: "m4", phone: "919000000000", modality: "image",
+    id: "m4",
+    phone: "919000000000",
+    modality: "image",
     // What the label reader returns for a shelf tag: the set AND its printed figures.
     text: "TCL, TCL-55C6KS, 55 inch, 800 nits, 144 Hz, 2 x HDMI 2.1",
     image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
@@ -97,7 +108,10 @@ test("the same figures typed by hand are a question about the figure", async () 
 test("a photo whose caption names the set is answered from the pack", async () => {
   const session = newSession("919000000000");
   const event: Event = {
-    id: "m3", phone: "919000000000", modality: "image", text: "LG 65UT8050",
+    id: "m3",
+    phone: "919000000000",
+    modality: "image",
+    text: "LG 65UT8050",
     image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
   };
   const reply = await decide(event, session, pack, dead);

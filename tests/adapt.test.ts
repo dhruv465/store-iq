@@ -56,7 +56,18 @@ test("the ranking reasons about a vendor row exactly as it does about ours", () 
 });
 
 test("a row that cannot be served says which row, which field, and where to fix it", () => {
-  const { problems } = adaptPack({ products: [vendorRow, { "Article Code": "RD-BROKEN", "Brand Name": "Haier", "Article Description": "Haier 43", "Screen Size": 43, "Available Qty": 3 }] } as never);
+  const { problems } = adaptPack({
+    products: [
+      vendorRow,
+      {
+        "Article Code": "RD-BROKEN",
+        "Brand Name": "Haier",
+        "Article Description": "Haier 43",
+        "Screen Size": 43,
+        "Available Qty": 3,
+      },
+    ],
+  } as never);
   assert.equal(problems.length, 2);
   assert.match(problems[0]!, /row 2 \(RD-BROKEN\): no price_rupees\. Add its name to FIELDS\.price_rupees/);
   assert.match(problems[1]!, /price is 0/);

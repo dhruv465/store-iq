@@ -66,9 +66,12 @@ test("a 404 is retried now that the model name is checked at boot", async () => 
 
 test("a model name the key cannot serve fails at boot, with the real options listed", async () => {
   const request = (async () =>
-    new Response(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }, { name: "models/gemini-3.8-flash" }] }), {
-      status: 200,
-    })) as unknown as typeof fetch;
+    new Response(
+      JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }, { name: "models/gemini-3.8-flash" }] }),
+      {
+        status: 200,
+      },
+    )) as unknown as typeof fetch;
   const saved = process.env.GEMINI_MODEL;
   process.env.GEMINI_API_KEY ||= "test-key";
   process.env.GEMINI_MODEL = "gemini-does-not-exist";
