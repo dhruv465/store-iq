@@ -221,6 +221,27 @@ export class DB {
     return rows.rows;
   }
 
+  /** Forget one number completely: its conversations, its session, its place on the roster and
+   *  anything held for it. Build-time test numbers have to be clearable before a demo without
+   *  taking the real floor with them, so it is one number at a time and never a pattern. */
+  async forget(phone: string): Promise<Record<string, number>> {
+    if (!/^[1-9]\d{6,14}$/.test(phone)) throw Error("Not a phone number");
+    const counts: Record<string, number> = {};
+    for (const table of [
+      "conversations",
+      "sessions",
+      "associates",
+      "notice_deliveries",
+      "inbox",
+      "outbox",
+      "expert_questions",
+    ]) {
+      const result = await this.pg.query(`delete from ${table} where phone = $1`, [phone]);
+      counts[table] = result.affectedRows ?? 0;
+    }
+    return counts;
+  }
+
   /** Extra points: a question the floor could not answer, routed to a named owner. */
   async logQuestion(row: {
     reference: string;
@@ -236,9 +257,11 @@ export class DB {
     );
   }
 
-  async openQuestions(): Promise<{ reference: string; area: string; owner: string }[]> {
-    const rows = await this.pg.query<{ reference: string; area: string; owner: string }>(
-      `select reference, area, owner from expert_questions where answered_at is null order by id desc limit 20`,
+  /** The phone comes back too: a manager looking at an open question wants to know which associate
+   *  is waiting on the answer, and it is the only handle for clearing a test one. */
+  async openQuestions(): Promise<{ reference: string; area: string; owner: string; phone: string }[]> {
+    const rows = await this.pg.query<{ reference: string; area: string; owner: string; phone: string }>(
+      `select reference, area, owner, phone from expert_questions where answered_at is null order by id desc limit 20`,
     );
     return rows.rows;
   }

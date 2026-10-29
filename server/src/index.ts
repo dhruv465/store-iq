@@ -45,6 +45,17 @@ try {
     }
   });
   if (local) app.get("/health/recent", async (c) => c.json(await db.recentSends()));
+  // Clearing build-time test numbers before a demo, one number at a time so the real floor cannot
+  // be swept away with them. Never exposed off localhost.
+  if (local)
+    app.post("/health/forget", async (c) => {
+      const { phone } = await c.req.json<{ phone?: string }>();
+      try {
+        return c.json({ phone, deleted: await db.forget(String(phone ?? "")) });
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "unknown" }, 400);
+      }
+    });
   // The manager's dashboard is off unless a password is set, because it is reachable through the
   // same tunnel as the webhook and it can message the whole floor.
   if (process.env.ADMIN_PASSWORD) managerRoutes(app, db);

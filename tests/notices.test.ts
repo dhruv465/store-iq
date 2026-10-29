@@ -73,3 +73,35 @@ test("writing to the number releases what was held, before the answer to what wa
   assert.equal(await deliverHeldNotices(db, "919820000001"), 0, "nothing held, nothing sent");
   assert.equal(sent.length, 1);
 });
+
+test("forgetting one number takes everything of theirs and nothing of anybody else's", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    await db.addAssociate("919820000001", "Ramesh");
+    await db.addAssociate("919820000002", "Asha");
+    await db.queueNotice("📢 Store manager:\nTCL 55 inch today", ["919820000001", "919820000002"]);
+    await db.logQuestion({
+      reference: "SIQ-1234",
+      phone: "919820000001",
+      area: "installation and site survey",
+      owner: "Suresh",
+      question: "wall type?",
+    });
+
+    const deleted = await db.forget("919820000001");
+    assert.equal(deleted.associates, 1);
+    assert.equal(deleted.expert_questions, 1);
+    assert.equal(deleted.notice_deliveries, 1);
+
+    assert.deepEqual(
+      (await db.roster()).map((person) => person.name),
+      ["Asha"],
+      "the other associate is untouched",
+    );
+    assert.equal((await db.waitingNotices("919820000002")).length, 1, "and still owed her notice");
+    assert.deepEqual(await db.openQuestions(), []);
+    await assert.rejects(db.forget("not-a-phone"), /Not a phone number/, "and it is never a pattern");
+  } finally {
+    await db.close();
+  }
+});

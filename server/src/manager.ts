@@ -137,8 +137,11 @@ export function managerRoutes(app: Hono, db: DB): void {
     const sessions = await db.today();
     const roster = await db.roster();
     const reachable = await db.reachable();
+    const open = await db.openQuestions();
     return c.json({
-      summary: managerView(sessions, await db.openQuestions()).text,
+      summary: managerView(sessions, open).text,
+      // Who is waiting on an answer, and which associate is holding the customer meanwhile.
+      openQuestions: open,
       rows: floorRows(perAssociate(sessions, roster)),
       reachable: recipients(roster, reachable).to.length,
       waiting: await db.noticesWaiting(),
