@@ -230,3 +230,17 @@ test("the running-cost answer to the electricity objection is sayable from facts
 test("a running cost that is not in the data is still refused", () => {
   assert.deepEqual(unsupportedNumbers("It will cost you Rs 4321 a year to run.", allowed, ""), ["4321"]);
 });
+
+test("a number spelled out is still a claim, and years is a unit", () => {
+  // A model answered "the standard warranty is one year" when the pack says only that the extended
+  // warranty is two years. Spelled-out numbers were read as prose and skipped entirely.
+  assert.deepEqual(unsupportedNumbers("the warranty is 3 years", allowed, ""), ["3"]);
+  assert.deepEqual(unsupportedNumbers("delivery takes 7 days", allowed, ""), ["7"]);
+  // And the limit, written down in the code and true here: 9 is the TCL's stock count, so it
+  // passes as a port count too. The allowlist holds values without their units.
+  assert.deepEqual(unsupportedNumbers("it has 9 HDMI ports", allowed, ""), []);
+  // The brief's own example of a good line must survive: no unit, no claim.
+  assert.deepEqual(unsupportedNumbers("two pairs of jeans and two bedsheets in one wash", allowed, ""), []);
+  // And the pack's real figures still pass.
+  assert.deepEqual(unsupportedNumbers("TCL 55 inch, 144 Hz, Rs 54,990", allowed, ""), []);
+});

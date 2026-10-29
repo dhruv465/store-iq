@@ -4,7 +4,7 @@ import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.j
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
-import { asksWhatWeHave, greetingReply, inStockReply, intentOf } from "./ask.js";
+import { asksSomethingSpecific, asksWhatWeHave, greetingReply, inStockReply, intentOf } from "./ask.js";
 import {
   endVisitLog,
   newVisitReference,
@@ -351,12 +351,45 @@ export function numbersIn(text: string): Set<number> {
 }
 
 /** Money, percentages and large figures must exist in the data pack or in what the associate said.
- *  Matching is on exact values: 999 is not supported by 79990 merely containing it. */
+ *  Matching is on exact values: 999 is not supported by 79990 merely containing it.
+ *
+ *  shortcut: the allowlist is numbers without their units, so a small number that appears anywhere
+ *  in the pack passes with any unit — "one year warranty" is allowed because some product has 1
+ *  HDMI 2.1 port. A model did invent exactly that. Upgrade to value-and-unit pairs (the specs
+ *  already carry their unit in the key name: peak_nits, refresh_hz, speaker_watts) when the real
+ *  pack lands and the figures start mattering for money. */
+/** The units a figure can carry. A number with one of these after it is a claim about a product,
+ *  however small it is: "3 years" is as much an invention as "Rs 3,000" when the pack says neither. */
+const UNITS =
+  "%|percent|inch|inches|nits|hz|w\\b|watt|watts|months?|years?|yrs?|days?|weeks?|units?|rupees|ports?|hdmi|kg|litres?|liters?|stars?|metres?|meters?|feet|foot";
+
+/** Spelled out, a number slips past a digit scan entirely. "The warranty is one year" was invented
+ *  by the model and read as prose. */
+const SPELLED: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
 export function unsupportedNumbers(text: string, allowed: Set<number>, said: string): string[] {
   const quoted = numbersIn(said);
   const bad: string[] = [];
-  for (const match of text.matchAll(
-    /(₹\s?|\bRs\.?\s?)?(\d[\d,]*(?:\.\d+)?)\s?(%|percent|inch|nits|hz|w\b|watt|months?|units?|rupees)?/gi,
+  // Rewrite "one year" as "1 year" first, so one scan covers both ways of writing it.
+  const scanned = text.replace(
+    new RegExp(`\\b(${Object.keys(SPELLED).join("|")})\\s+(?=(?:${UNITS}))`, "gi"),
+    (_whole, word: string) => `${SPELLED[word.toLowerCase()]} `,
+  );
+  for (const match of scanned.matchAll(
+    new RegExp(`(₹\\s?|\\bRs\\.?\\s?)?(\\d[\\d,]*(?:\\.\\d+)?)\\s?(${UNITS})?`, "gi"),
   )) {
     const raw = match[2]!.replace(/,/g, "");
     const value = Number(raw);
@@ -769,8 +802,12 @@ async function answer(
   if (intent === "greeting" && !deterministic(event, session, pack)) return greetingReply(session.language);
   if (intent === "question" && event.text && !deterministic(event, session, pack)) {
     // Asked about one set, or about a figure on a label: both are already answered from the pack.
-    const named = packAnswer(pack, event.text, session, "set");
-    if (named) return named;
+    // But a summary of the set is the wrong answer to "what warranty comes with it", so a question
+    // about something specific goes on to the model, which has the charges and terms in front of it.
+    if (!asksSomethingSpecific(event.text)) {
+      const named = packAnswer(pack, event.text, session, "set");
+      if (named) return named;
+    }
     if (asksWhatWeHave(event.text)) return inStockReply(pack, session.card, session.language, isAssessed(session.card));
     // Anything else falls through to the model, which answers from the facts and is still held to
     // the floor's shape and to the figures in the pack.

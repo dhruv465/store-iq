@@ -23,14 +23,32 @@ const ASKING =
 /** Said about the customer, not asked about the shop: "they sit", "customer wants", "he watches". */
 const DESCRIBING = /\b(they|them|their|customer|grahak|he |she |his |her |family|wants|watches|sits|budget)\b/i;
 
+/** The associate relaying a question, or asking for words to say. "Customer is asking what warranty
+ *  comes with the TCL" is a question about the TCL, however much it mentions the customer — and it
+ *  is the most natural way an associate on the floor phrases one. */
+const RELAYING =
+  /\b(asking|asks|asked|wants to know|wants to understand|poochh?|puchh?|pooch raha|what do i (say|tell|do)|how do i (say|tell|explain)|kya bolun|kya bataun|क्या बताऊँ|पूछ रहा)\b/i;
+
 export function intentOf(text: string | undefined): Intent {
   if (!text?.trim()) return "customer";
   if (GREETING.test(text)) return "greeting";
+  if (RELAYING.test(text)) return "question";
   const asks = ASKING.test(text) || /\?\s*$/.test(text);
   if (!asks) return "customer";
   // "Do they have WiFi?" is the associate reporting the home, not asking the shop about itself.
   // A question that is mostly about the customer is still a description.
   return DESCRIBING.test(text) ? "customer" : "question";
+}
+
+/** Asked something specific about a set that its summary does not answer: the warranty, the
+ *  delivery, what the installation costs, the exchange. The sheet is the right answer to "is the
+ *  TCL any good" and the wrong one to "what warranty comes with it", so these go to the model,
+ *  which has the charges, the finance terms and the offers in front of it. */
+const TOPIC =
+  /\b(warrant\w*|guarantee|deliver\w*|install\w*|exchange|emi|finance|instal?ment|service|return|replace\w*|setup|set up|mount\w*|bracket|insurance|garanti|वारंटी|डिलीवरी)\b/i;
+
+export function asksSomethingSpecific(text: string): boolean {
+  return TOPIC.test(text);
 }
 
 /** Asked what the shop has, rather than about one set. */

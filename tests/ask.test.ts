@@ -100,3 +100,23 @@ test("a hello in Devanagari is a hello", () => {
   assert.notEqual(intentOf("नमस्ते, ग्राहक हॉल के लिए टीवी चाहता है"), "greeting");
   assert.notEqual(intentOf("hit the 65 inch target"), "greeting");
 });
+
+test("an associate relaying a customer's question is asking, not describing", async () => {
+  // The most natural phrasing on a floor, and the one that still filed itself as a fact:
+  // "customer is asking what warranty comes with the TCL" became priorities = warranty.
+  for (const relayed of [
+    "customer is asking what warranty comes with the TCL",
+    "he wants to know if the Sony has HDMI 2.1",
+    "customer asked about the exchange offer",
+    "what do I tell him about delivery",
+    "grahak pooch raha hai ki kitne din lagenge",
+  ])
+    assert.equal(intentOf(relayed), "question", relayed);
+
+  // And describing the same customer is still describing.
+  assert.equal(intentOf("customer wants a TV for the hall"), "customer");
+
+  const session = newSession("919820000001");
+  await decide(said("customer is asking what warranty comes with the TCL"), session, pack, dead).catch(() => null);
+  assert.deepEqual(session.card, {}, "it used to file priorities = warranty");
+});
