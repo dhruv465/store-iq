@@ -211,7 +211,11 @@ export class DB {
   /** Last outbound attempts, for diagnosing what the provider actually accepted. */
   async recentSends(limit = 5): Promise<Record<string, unknown>[]> {
     const rows = await this.pg.query<Record<string, unknown>>(
-      `select id, phone, status, provider_id, error, created_at from outbox order by id desc limit $1`,
+      // The first line of the reply, so a local watcher can see what the floor was actually told
+      // rather than only that something left. Localhost only, like the endpoint that serves it.
+      `select id, phone, status, provider_id, error, created_at,
+              split_part(payload ->> 'text', chr(10), 1) as said
+       from outbox order by id desc limit $1`,
       [limit],
     );
     return rows.rows;

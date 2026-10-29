@@ -224,6 +224,15 @@ export function offerLeaked(text: string, assessed: boolean, demonstrated: boole
 }
 
 /** Four home facts, including how far they sit, is enough to stop talking about price first. */
+/** "Not sure" is an answer, and it is recorded, but it is not a fact about the home: a field the
+ *  customer could not answer must not count towards having assessed it. */
+export const NOT_STATED = "not stated";
+
+export function stated(value: unknown): boolean {
+  if (value === NOT_STATED) return false;
+  return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
+}
+
 export function isAssessed(card: Session["card"]): boolean {
   const filled = [
     "room",
@@ -236,11 +245,9 @@ export function isAssessed(card: Session["card"]): boolean {
     "family",
     "internet",
     "budget_rupees",
-  ].filter((key) => {
-    const value = (card as Record<string, unknown>)[key];
-    return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
-  });
-  const hasDistance = card.distance_m !== undefined || card.distance_feet !== undefined;
+  ].filter((key) => stated((card as Record<string, unknown>)[key]));
+  // How far they sit is what sizes the screen, so "not sure" there leaves the home unassessed.
+  const hasDistance = typeof card.distance_m === "number" || typeof card.distance_feet === "number";
   return filled.length >= 4 && hasDistance;
 }
 
@@ -551,7 +558,7 @@ export async function decide(
   // "Not sure" is a real answer: it fills nothing and moves on.
   const skipped = event.action?.match(/^skip:([a-z_]+)$/);
   if (skipped) {
-    (session.card as Record<string, unknown>)[skipped[1]!] = "not stated";
+    (session.card as Record<string, unknown>)[skipped[1]!] = NOT_STATED;
     return nextQuestionReply(session, t(session.language, "noted.notsure"));
   }
   // A request to switch language is a whole turn on its own.

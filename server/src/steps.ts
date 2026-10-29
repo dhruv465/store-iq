@@ -1,5 +1,5 @@
 import type { Pack } from "./pack.js";
-import { isAssessed } from "./brain.js";
+import { isAssessed, stated } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
 import { t, v } from "./i18n.js";
 import { STEPS } from "./types.js";
@@ -19,24 +19,27 @@ export function cardSummary(session: Session): Reply {
   const card = session.card;
   const lang = session.language;
   const parts: string[] = [];
-  if (card.room) parts.push(v(lang, String(card.room)));
-  if (card.space) parts.push(String(card.space));
-  if (card.distance_m) parts.push(t(lang, "sits.m", { n: card.distance_m }));
-  else if (card.distance_feet) parts.push(t(lang, "sits.ft", { n: card.distance_feet }));
-  if (card.light) parts.push(v(lang, String(card.light)));
-  if (card.mount) parts.push(t(lang, "mount.of", { v: v(lang, String(card.mount)) }));
+  // A field the customer could not answer is not read back as if it were one: "sits not stated m
+  // away" is what printing it anyway looks like.
+  const has = <K extends keyof typeof card>(key: K): boolean => stated(card[key]);
+  if (has("room")) parts.push(v(lang, String(card.room)));
+  if (has("space")) parts.push(String(card.space));
+  if (typeof card.distance_m === "number") parts.push(t(lang, "sits.m", { n: card.distance_m }));
+  else if (typeof card.distance_feet === "number") parts.push(t(lang, "sits.ft", { n: card.distance_feet }));
+  if (has("light")) parts.push(v(lang, String(card.light)));
+  if (has("mount")) parts.push(t(lang, "mount.of", { v: v(lang, String(card.mount)) }));
   if (card.content?.length) parts.push(card.content.map((entry) => v(lang, entry)).join(", "));
-  if (card.family) {
+  if (has("family")) {
     const people = String(card.family).match(/(\d+)/);
     parts.push(people ? t(lang, "people.n", { n: people[1]! }) : String(card.family));
   }
   if (card.devices?.length) parts.push(t(lang, "has", { v: card.devices.map((entry) => v(lang, entry)).join(", ") }));
-  if (card.replacing) parts.push(String(card.replacing));
+  if (has("replacing")) parts.push(String(card.replacing));
   if (card.priorities?.length)
     parts.push(t(lang, "cares", { v: card.priorities.map((entry) => v(lang, entry)).join(", ") }));
   if (card.site_constraints?.length) parts.push(card.site_constraints.join(", "));
-  if (card.internet) parts.push(String(card.internet));
-  if (card.budget_rupees) parts.push(t(lang, "budget.of", { v: card.budget_rupees }));
+  if (has("internet")) parts.push(String(card.internet));
+  if (typeof card.budget_rupees === "number") parts.push(t(lang, "budget.of", { v: card.budget_rupees }));
   return {
     text: [
       parts.length

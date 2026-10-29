@@ -6,13 +6,14 @@ import {
   MAX_SCORE,
   SCORED,
   briefAnswer,
+  cardSummary,
   reviewReply,
   score,
   shiftBrief,
   wantsBrief,
   wantsReview,
 } from "../server/src/steps.js";
-import { deterministic } from "../server/src/brain.js";
+import { NOT_STATED, deterministic, isAssessed } from "../server/src/brain.js";
 import { newSession, type Event } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
@@ -120,4 +121,22 @@ test("a deterministic turn never reaches the model and records its step", () => 
   assert.deepEqual(session.steps_done, ["brief"]);
   const shopping: Event = { id: "y", phone: "919999999999", modality: "text", text: "customer wants a 55 inch" };
   assert.equal(deterministic(shopping, session, pack), null);
+});
+
+test('"Not sure" is recorded but never read back as a fact about the home', () => {
+  const session = newSession("919999999999");
+  session.card = {
+    distance_m: NOT_STATED as never,
+    light: "bright afternoon sun",
+    mount: "wall",
+    content: ["cricket"],
+    family: "4 people",
+  };
+  const text = cardSummary(session).text;
+  assert.doesNotMatch(text, /not stated/, "the floor saw: sits not stated m away");
+  assert.match(text, /bright afternoon sun/, "what they did answer is still read back");
+  // How far they sit is what sizes the screen, so without it the home is not assessed.
+  assert.equal(isAssessed(session.card), false);
+  session.card.distance_m = 3;
+  assert.equal(isAssessed(session.card), true);
 });
