@@ -63,6 +63,9 @@ export type Session = {
   selection?: { sku: string; accessories: string[]; charges: string[] };
   /** Section 4H: the customer summary only goes out with consent. */
   consent: boolean;
+  /** A figure left Store IQ before the home was assessed. The store visits' headline measure was
+   *  who spoke about the price first, and they found it was us in 6 of 6 conversations. */
+  priced_before_home?: boolean;
   /** The site was checked with the customer before the installer was booked. The store visits found
    *  an installer who came and left because the wall needed a hole nobody had asked about. */
   site_checked?: boolean;

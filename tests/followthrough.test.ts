@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
 import { followThrough, itemisedTotal } from "../server/src/steps.js";
 import { deterministic } from "../server/src/brain.js";
+import { pricedEarly } from "../server/src/db.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
@@ -107,4 +108,13 @@ test("a product or accessory outside the pack is refused", () => {
   assert.match(tap(session, "select:MADE-UP")!.text, /not in today's data pack/);
   tap(session, "select:TCL-55C6KS");
   assert.match(tap(session, "add:ACC-MADE-UP")!.text, /not in today's data pack/);
+});
+
+test("a price quoted before the home is known is recorded against the conversation", () => {
+  const session = newSession("919820000001");
+  // The store visits' headline measure, so it is counted the same way they counted it.
+  assert.equal(pricedEarly(session, { text: "TCL 55 inch · Rs 54,990 · 9 in stock" }), true);
+  assert.equal(pricedEarly(session, { text: 'Ask: "How far will you sit from the TV?"' }), false);
+  session.assessed = true;
+  assert.equal(pricedEarly(session, { text: "Total Rs 56,489." }), false, "after the home, a price is the job");
 });

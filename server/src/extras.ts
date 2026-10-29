@@ -58,7 +58,9 @@ export function managerView(
   sessions: Session[],
   open: { reference: string; area: string; owner?: string }[],
 ): Reply {
-  const real = sessions.filter((session) => session.steps_done.length > 0);
+  // A conversation that only ever looked at one set is still a conversation, and it is exactly the
+  // one where the price comes first, so it must not be invisible here.
+  const real = sessions.filter((session) => session.steps_done.length > 0 || session.shortlist.length > 0);
   if (!real.length)
     return { text: "No conversations yet today.\n\u21b3 The view fills as associates use the number." };
   const scored = real.map((session) => score(session));
@@ -75,7 +77,9 @@ export function managerView(
   return {
     text: [
       `Today: ${real.length} conversations · median ${median} of ${MAX_SCORE} · ${guides} at Guide (${GUIDE}+)`,
-      `Assess ${average("assess").toFixed(1)} of 2 · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
+      `Assess ${average("assess").toFixed(1)} of 2 · home before price in ${
+        real.filter((session) => !session.priced_before_home).length
+      } of ${real.length} · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
       `Home read back in ${readBack} of ${real.length}. ${
         open.length
           ? `Open questions: ${open.length} · ${open.slice(0, 2).map((question) => question.reference).join(", ")}`

@@ -51,6 +51,13 @@ create table if not exists sessions (
 );
 `;
 
+/** The measure the store visits led with: who spoke about the price first. A figure leaving before
+ *  the home is assessed is Store IQ doing the thing the visits caught the floor doing, whatever the
+ *  reason — including a customer who walked up to one set and pointed at it. */
+export function pricedEarly(session: Session, reply: Reply): boolean {
+  return !session.assessed && /\bRs ?[\d,]{4,}/.test(reply.text);
+}
+
 export class DB {
   constructor(
     private readonly pg: PGlite,
@@ -107,6 +114,7 @@ export class DB {
 
   /** Compare-and-set on version: a replayed message never overwrites a newer card. */
   async commit(session: Session, replies: Reply[]): Promise<boolean> {
+    for (const reply of replies) if (pricedEarly(session, reply)) session.priced_before_home = true;
     const next = session.version + 1;
     const state = JSON.stringify({ ...session, version: next });
     const updated = await this.pg.query(

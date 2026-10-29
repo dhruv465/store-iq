@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
-import { openDatabase } from "./db.js";
+import { openDatabase, pricedEarly } from "./db.js";
 import { loadPack } from "./pack.js";
 import { startWorker } from "./worker.js";
 import { assertModelAvailable, decide } from "./brain.js";
@@ -59,6 +59,9 @@ try {
       const session = await db.session(phone);
       const started = Date.now();
       const reply = await decide(event, session, pack, fetch, db);
+      // Nothing is queued here on purpose, so /try never messages a real phone; the price measure
+      // would otherwise be the one thing the harness could not reproduce.
+      if (pricedEarly(session, reply)) session.priced_before_home = true;
       await db.commit(session, []);
       return c.json({ reply, ms: Date.now() - started, step: session.step, card: session.card, assessed: session.assessed, demonstrated: session.demonstrated });
     });

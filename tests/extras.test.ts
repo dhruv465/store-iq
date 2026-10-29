@@ -43,7 +43,7 @@ test("the manager view reports the measures the store visits used", () => {
     [{ reference: "SIQ-1111", area: "finance and EMI", owner: "Priya (billing)" }],
   );
   assert.match(reply.text, /Today: 3 conversations · median \d+ of 14 · \d+ at Guide \(11\+\)/);
-  assert.match(reply.text, /Assess \d\.\d of 2 · weakest \w+/);
+  assert.match(reply.text, /Assess \d\.\d of 2 · home before price in \d of 3 · weakest \w+/);
   assert.match(reply.text, /Home read back in \d of 3/);
   assert.match(reply.text, /Open questions: 1 · SIQ-1111/);
 });
