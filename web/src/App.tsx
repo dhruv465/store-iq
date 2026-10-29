@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2, RefreshCw, Send, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, Clock, Loader2, RefreshCw, Send, Trash2, UserPlus } from "lucide-react";
 import { api, NeedsSignIn, type Floor, type FloorRow, type Preview } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -225,7 +225,7 @@ function AddAssociate({ onAdded }: { onAdded: () => void }) {
 function TellTheFloor({ floor }: { floor: Floor }) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [sent, setSent] = useState<number | null>(null);
+  const [sent, setSent] = useState<{ queued: number; waiting: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -245,10 +245,14 @@ function TellTheFloor({ floor }: { floor: Floor }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Queued for {sent === 1 ? "1 associate" : `${sent} associates`}</CardTitle>
+          <CardTitle>
+            Sent to {sent.queued === 1 ? "1 associate" : `${sent.queued} associates`}
+            {sent.waiting ? `, waiting for ${sent.waiting} more` : ""}
+          </CardTitle>
           <CardDescription>
-            Each one is checked against the 24 hour window again as it leaves, so a window that closed a moment ago
-            means that associate is skipped rather than failed.
+            {sent.waiting
+              ? `The ${sent.waiting === 1 ? "one who has" : `${sent.waiting} who have`} not written today will get it the moment they next message the number, which is what lets WhatsApp carry it. Nobody is dropped.`
+              : "Each one is checked against the 24 hour window again as it leaves, so a window that closed a moment ago means that associate is skipped rather than failed."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -271,9 +275,10 @@ function TellTheFloor({ floor }: { floor: Floor }) {
       <CardHeader>
         <CardTitle>Tell the floor</CardTitle>
         <CardDescription>
-          Today's offers, a stock change, anything everyone needs. It reaches the {floor.reachable}{" "}
-          {floor.reachable === 1 ? "associate" : "associates"} who messaged the number in the last 24 hours — WhatsApp
-          does not allow a free-form message to anyone else. You see exactly who before anything is sent.
+          Today's offers, a stock change, anything everyone needs. It goes straight to the {floor.reachable}{" "}
+          {floor.reachable === 1 ? "associate" : "associates"} who messaged the number in the last 24 hours; anyone
+          else on the roster gets it the moment they next write. You see exactly who before anything is sent.
+          {floor.waiting ? ` ${floor.waiting} still waiting to be picked up.` : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -308,25 +313,26 @@ function TellTheFloor({ floor }: { floor: Floor }) {
             ) : null}
             {preview.unreachable.length ? (
               <Alert>
-                <AlertTriangle />
-                <AlertTitle>Will not get it</AlertTitle>
+                <Clock />
+                <AlertTitle>Held until they next write</AlertTitle>
                 <AlertDescription>
                   {preview.unreachable.map((person) => person.name).join(", ")} — WhatsApp only carries a message to
-                  someone who wrote in the last 24 hours.
+                  someone who wrote in the last 24 hours, so theirs waits and goes out the moment they message the
+                  number. It expires at the end of the shift rather than arriving tomorrow.
                 </AlertDescription>
               </Alert>
             ) : null}
             <div className="flex gap-2">
               <Button
-                disabled={busy || !preview.to.length}
+                disabled={busy || !(preview.to.length + preview.unreachable.length)}
                 onClick={() =>
                   run(async () => {
-                    const { queued } = await api.broadcast(text);
-                    setSent(queued);
+                    setSent(await api.broadcast(text));
                   })
                 }
               >
-                {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to {preview.to.length}
+                {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to{" "}
+                {preview.to.length + preview.unreachable.length}
               </Button>
               <Button variant="outline" onClick={() => setPreview(null)} disabled={busy}>
                 Change it

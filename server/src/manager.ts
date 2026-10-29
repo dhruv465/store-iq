@@ -141,6 +141,7 @@ export function managerRoutes(app: Hono, db: DB): void {
       summary: managerView(sessions, await db.openQuestions()).text,
       rows: floorRows(perAssociate(sessions, roster)),
       reachable: recipients(roster, reachable).to.length,
+      waiting: await db.noticesWaiting(),
       rosterEmpty: !roster.length,
       maxScore: MAX_SCORE,
       guide: GUIDE,
@@ -194,11 +195,18 @@ export function managerRoutes(app: Hono, db: DB): void {
     const body = await c.req.json<{ text?: unknown }>().catch(() => ({}) as Record<string, unknown>);
     const text = String(body.text ?? "").trim();
     if (!text) return c.json({ error: "Nothing to send." }, 400);
-    const { to } = recipients(await db.roster(), await db.reachable());
-    for (const phone of to) await db.send(phone, { text: notice(text, from) });
-    // Each one is checked against the 24 hour window again as it leaves, so a window that closed a
-    // moment ago means that associate is skipped rather than failed.
-    return c.json({ queued: to.length });
+    const roster = await db.roster();
+    const { to, unreachable } = recipients(roster, await db.reachable());
+    const line = notice(text, from);
+    for (const phone of to) await db.send(phone, { text: line });
+    // Nobody is dropped for being outside the window. The notice is held against them and goes out
+    // the moment they next write to the number, which is what opens the window again. No template,
+    // no approval, and the associate who has been quiet all morning still gets told.
+    const held = unreachable.map((person) => person.phone);
+    if (held.length) await db.queueNotice(line, held);
+    // Each message is checked against the window again as it leaves, so one that closed a moment
+    // ago means that associate is skipped rather than failed.
+    return c.json({ queued: to.length, waiting: held.length });
   });
 
   // The portal itself is a build output, so say so plainly when it is missing rather than

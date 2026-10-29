@@ -22,6 +22,7 @@ export type Floor = {
   summary: string;
   rows: FloorRow[];
   reachable: number;
+  waiting: number;
   rosterEmpty: boolean;
   maxScore: number;
   guide: number;
@@ -61,5 +62,5 @@ export const api = {
   preview: (text: string) =>
     call<Preview>("/broadcast/preview", { method: "POST", body: JSON.stringify({ text }) }),
   broadcast: (text: string) =>
-    call<{ queued: number }>("/broadcast", { method: "POST", body: JSON.stringify({ text }) }),
+    call<{ queued: number; waiting: number }>("/broadcast", { method: "POST", body: JSON.stringify({ text }) }),
 };

@@ -14,9 +14,15 @@ const AUTH = `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}`;
 // whole point of the check.
 const ORIGIN = "http://localhost";
 
-function harness(): { app: Hono; sent: { phone: string; reply: Reply }[]; removed: string[] } {
+function harness(options: { reachable?: string[] } = {}): {
+  app: Hono;
+  sent: { phone: string; reply: Reply }[];
+  removed: string[];
+  held: { body: string; phones: string[] }[];
+} {
   const sent: { phone: string; reply: Reply }[] = [];
   const removed: string[] = [];
+  const held: { body: string; phones: string[] }[] = [];
   const session: Session = Object.assign(newSession("919820000001"), { associate: "Ramesh" });
   const db = {
     today: async (): Promise<Session[]> => [session],
@@ -26,15 +32,20 @@ function harness(): { app: Hono; sent: { phone: string; reply: Reply }[]; remove
       { phone: "919820000002", name: "Asha" },
     ],
     // A number that wrote to the agent without being anybody's associate: it must never be sent to.
-    reachable: async (): Promise<string[]> => ["919820000001", "919820000002", "919999999999"],
+    reachable: async (): Promise<string[]> => options.reachable ?? ["919820000001", "919820000002", "919999999999"],
     send: async (phone: string, reply: Reply): Promise<void> => void sent.push({ phone, reply }),
     addAssociate: async (): Promise<void> => {},
     removeAssociate: async (phone: string): Promise<void> => void removed.push(phone),
+    noticesWaiting: async (): Promise<number> => 0,
+    queueNotice: async (body: string, phones: string[]): Promise<number> => {
+      held.push({ body, phones });
+      return 1;
+    },
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
   managerRoutes(app, db);
-  return { app, sent, removed };
+  return { app, sent, removed, held };
 }
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}): [string, RequestInit] {
@@ -149,7 +160,7 @@ test("the manager's own click reaches every associate inside the window", async 
     ...post("/api/manager/broadcast", { text: "TCL 55 inch is Rs 54,990 today only" }),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()) as unknown, { queued: 2 });
+  assert.deepEqual((await response.json()) as unknown, { queued: 2, waiting: 0 });
   assert.deepEqual(
     sent.map((entry) => entry.phone),
     ["919820000001", "919820000002"],
@@ -182,4 +193,20 @@ test("an associate is added as typed and removed by number", async () => {
   });
   assert.equal(gone.status, 200);
   assert.deepEqual(removed, ["919820000099"]);
+});
+
+test("an associate outside the window is held rather than dropped", async () => {
+  const { app, sent, held } = harness({ reachable: ["919820000001"] });
+  const response = await app.request(...post("/api/manager/broadcast", { text: "TCL 55 inch is Rs 54,990 today" }));
+  assert.deepEqual((await response.json()) as unknown, { queued: 1, waiting: 1 });
+  assert.deepEqual(
+    sent.map((entry) => entry.phone),
+    ["919820000001"],
+    "Ramesh wrote today, so his goes now",
+  );
+  assert.deepEqual(
+    held,
+    [{ body: sent[0]!.reply.text, phones: ["919820000002"] }],
+    "Asha's waits for her, word for word",
+  );
 });

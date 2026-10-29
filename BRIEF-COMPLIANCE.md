@@ -61,8 +61,8 @@ figure. That is most of the §8 acceptance sequence running without the model at
 
 | Item | State |
 | --- | --- |
-| Hindi and one more Indian language | **Done for every deterministic reply.** Hindi and Marathi, including the questions, the buttons, the card read-back, the recommendation reasons and the demonstration cues. Devanagari input fills the card too. Figures, product names and prices are never translated. |
-| Department manager view | **Done.** "team" returns today's volume, median score, how often the home was assessed, the most skipped step and open expert questions. |
+| Hindi and one more Indian language | **Done, two Indian languages: Hindi and Marathi, plus English.** Every deterministic reply. Hindi and Marathi, including the questions, the buttons, the card read-back, the recommendation reasons and the demonstration cues. Devanagari input fills the card too. Figures, product names and prices are never translated. |
+| Department manager view | **Done, two ways.** On the number, "team" returns the store visits' own table. In a browser, `/manager` is a React portal: the manager adds associates by name and number, then sees one row each — customers taken, home cards actually made, median and best of 14, conversations at Guide, how often the home came before the price, and when they were last seen. A rostered associate with no customers is marked quiet. The manager can also tell the whole floor today's offers, previewing exactly who it reaches first; anyone outside Meta's 24 hour window is held and told the moment they next write, so no approved template is needed and nobody is dropped. |
 | Ask an expert | **Done.** Routed by subject to a named owner with a quotable reference and a line to hold the customer. |
 | Store visit log by voice note | **Not built** — needs voice, which needs a model. |
 

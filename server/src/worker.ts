@@ -79,6 +79,22 @@ export function sendableTo(phone: string, allowed: Set<string>): boolean {
   return allowed.size === 0 || allowed.has(phone);
 }
 
+/** Writing to the number is what opens Meta's 24 hour window, so this is the moment anything the
+ *  manager held for this associate can go out — before the answer to whatever they just asked, so
+ *  they read the floor first. It is why a floor notice needs no approved template: nobody is
+ *  dropped for having been quiet, they are simply told as soon as it is allowed. */
+export async function deliverHeldNotices(
+  db: Pick<DB, "waitingNotices" | "send" | "markNoticeDelivered">,
+  phone: string,
+): Promise<number> {
+  const held = await db.waitingNotices(phone);
+  for (const notice of held) {
+    await db.send(phone, { text: notice.body });
+    await db.markNoticeDelivered(notice.id, phone);
+  }
+  return held.length;
+}
+
 /** The floor rule is a first reply inside 5 seconds; voice and photo work cannot meet that, so they get an instant line. */
 const ACK: Record<string, string> = {
   audio: "👂 Sun raha hoon…",
@@ -95,6 +111,7 @@ export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) 
     const ack = ACK[row.message_type];
     if (ack) await db.send(row.phone, { text: ack }).catch(() => {});
     const event = await incomingEvent(row);
+    await deliverHeldNotices(db, row.phone);
     const session = await db.session(row.phone);
     let reply: Reply;
     try {

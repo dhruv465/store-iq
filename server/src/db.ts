@@ -4,6 +4,10 @@ import { resolve } from "node:path";
 import type { IncomingMessage } from "./webhook.js";
 import { newSession, type Reply, type Session } from "./types.js";
 
+/** A notice about today's offers is not worth delivering tomorrow, so one waits out a shift and
+ *  then stops. */
+export const NOTICE_LIFE_HOURS = 12;
+
 /** A gap this long on the floor means the next customer walked up. */
 export const INTERACTION_IDLE_MS = 30 * 60 * 1000;
 
@@ -43,6 +47,18 @@ create table if not exists expert_questions (
   asked_at timestamptz not null default now(),
   answered_at timestamptz
 );
+create table if not exists notices (
+  id serial primary key,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create table if not exists notice_deliveries (
+  notice_id integer not null references notices (id) on delete cascade,
+  phone text not null,
+  delivered_at timestamptz,
+  primary key (notice_id, phone)
+);
+create index if not exists notice_waiting on notice_deliveries (phone) where delivered_at is null;
 create table if not exists associates (
   phone text primary key,
   name text not null,
@@ -256,6 +272,49 @@ export class DB {
 
   async removeAssociate(phone: string): Promise<void> {
     await this.pg.query(`delete from associates where phone = $1`, [phone]);
+  }
+
+  /** A floor notice, and who it is meant for. WhatsApp will not carry a free-form message to
+   *  somebody who has not written in 24 hours, so the ones who cannot be reached now are held and
+   *  go out the moment they next write. A notice about today stops being worth delivering after
+   *  the shift, so it expires rather than arriving tomorrow morning. */
+  async queueNotice(body: string, phones: string[]): Promise<number> {
+    const created = await this.pg.query<{ id: number }>(`insert into notices (body) values ($1) returning id`, [body]);
+    const id = created.rows[0]!.id;
+    for (const phone of phones)
+      await this.pg.query(`insert into notice_deliveries (notice_id, phone) values ($1, $2) on conflict do nothing`, [
+        id,
+        phone,
+      ]);
+    return id;
+  }
+
+  /** Notices this associate has not been given yet, oldest first, that are still worth giving. */
+  async waitingNotices(phone: string, lifeHours = NOTICE_LIFE_HOURS): Promise<{ id: number; body: string }[]> {
+    const rows = await this.pg.query<{ id: number; body: string }>(
+      `select n.id, n.body from notice_deliveries d join notices n on n.id = d.notice_id
+       where d.phone = $1 and d.delivered_at is null and n.created_at > now() - make_interval(hours => $2)
+       order by n.created_at`,
+      [phone, lifeHours],
+    );
+    return rows.rows;
+  }
+
+  async markNoticeDelivered(id: number, phone: string): Promise<void> {
+    await this.pg.query(`update notice_deliveries set delivered_at = now() where notice_id = $1 and phone = $2`, [
+      id,
+      phone,
+    ]);
+  }
+
+  /** How many notices are still waiting on somebody, so the manager is not left wondering. */
+  async noticesWaiting(lifeHours = NOTICE_LIFE_HOURS): Promise<number> {
+    const rows = await this.pg.query<{ waiting: number }>(
+      `select count(*)::int as waiting from notice_deliveries d join notices n on n.id = d.notice_id
+       where d.delivered_at is null and n.created_at > now() - make_interval(hours => $1)`,
+      [lifeHours],
+    );
+    return rows.rows[0]?.waiting ?? 0;
   }
 
   /** Associates who may be sent a message right now: they wrote to us inside Meta's 24 hour window. */
