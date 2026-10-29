@@ -149,7 +149,9 @@ export function managerView(sessions: Session[], open: { reference: string; area
       `Assess ${average("assess").toFixed(1)} of 2 · home before price in ${
         real.filter((session) => !session.priced_before_home).length
       } of ${real.length} · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
-      `↳ Home read back in ${readBack} of ${real.length}. ${
+      // Not a reason line: the manager view is a report, and all three of its lines are figures.
+      // Dressing the last one as a reason to satisfy a rule about answers would be a costume.
+      `Home read back in ${readBack} of ${real.length}. ${
         open.length
           ? `Open questions: ${open.length} · ${open
               .slice(0, 2)
