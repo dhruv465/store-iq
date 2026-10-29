@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adaptProduct, adaptPack, figure } from "../server/src/adapt.js";
+import { adaptPack, adaptProduct, figure, fromFdk } from "../server/src/adapt.js";
 import { rank } from "../server/src/recommend.js";
 import type { Pack } from "../server/src/pack.js";
 
@@ -86,4 +86,59 @@ test("our own pack passes through the adapter unchanged", async () => {
   assert.equal(tcl.specs.refresh_hz, 144);
   assert.match(tcl.demo_cue, /Cricket clip/);
   assert.equal(tcl.demo_cue_hi !== undefined, true, "the Hindi cue survives the adapter");
+});
+
+/** One ProductListingDetail as getProducts returns it, with the fields the reference documents. */
+const fdkRow = {
+  uid: 7501234,
+  name: "Sony Bravia 2 55 inch 4K LED Google TV",
+  slug: "sony-bravia-2-55-inch-4k-led-google-tv",
+  item_code: "SON-K55S30",
+  short_description: "4K LED with Google TV",
+  brand: { uid: 12, name: "Sony", logo: { url: "https://x/logo.png" } },
+  categories: [{ uid: 3, name: "Televisions" }],
+  price: {
+    marked: { min: 79900, max: 79900, currency_code: "INR", currency_symbol: "₹" },
+    effective: { min: 62990, max: 62990, currency_code: "INR", currency_symbol: "₹" },
+  },
+  highlights: ["bright living room", "OTT", "news"],
+  attributes: { display_type: "LED", peak_nits: 400, refresh_rate: "60Hz", speaker_watts: "20 W" },
+  sellable: true,
+  rating: 4.3,
+};
+
+test("a product from the live catalogue becomes one we can serve", () => {
+  const { product, missing } = adaptProduct(fromFdk(fdkRow));
+  assert.deepEqual(missing, []);
+  assert.equal(product.sku, "SON-K55S30");
+  assert.equal(product.brand, "Sony");
+  assert.equal(product.price_rupees, 62990, "effective, not marked");
+  assert.equal(product.mrp_rupees, 79900);
+  // "55 inch" is in the name far more reliably than in a named attribute.
+  assert.equal(product.size_inch, 55);
+  assert.equal(product.panel, "LED");
+  assert.deepEqual(product.good_for, ["bright living room", "OTT", "news"]);
+  assert.equal(product.specs.peak_nits, 400);
+  assert.equal(product.specs.refresh_hz, 60, '"60Hz" is read as a number');
+});
+
+test("the ranking reasons about a live catalogue row exactly as it does about ours", () => {
+  const { pack } = adaptPack({ products: [fromFdk(fdkRow)] } as never);
+  const options = rank(pack as Pack, { distance_m: 2.5, light: "bright afternoon sun", content: ["news"] });
+  assert.equal(options[0]?.product.sku, "SON-K55S30");
+  assert.ok(options[0]!.reason.length > 0, "and gives a reason from its own figures");
+});
+
+test("a product the shop cannot sell today is out of stock, not absent", () => {
+  const { product } = adaptProduct(fromFdk({ ...fdkRow, sellable: false }));
+  assert.equal(product.stock_units, 0);
+  // Units come from the stock-status endpoint; sellable is only a yes or no.
+  assert.equal(adaptProduct(fromFdk(fdkRow)).product.stock_units, 1);
+});
+
+test("the screen size is the number before inch, not the first number in the name", () => {
+  // "Sony Bravia 2 55 inch" — the first number is the model line, not the screen.
+  assert.equal(adaptProduct(fromFdk({ ...fdkRow, attributes: {} })).product.size_inch, 55);
+  assert.equal(adaptProduct(fromFdk({ name: 'LG 4 Series 65" UHD', price: {} })).product.size_inch, 65);
+  assert.equal(adaptProduct(fromFdk({ name: "Samsung Series 7 Washing Machine", price: {} })).product.size_inch, 0);
 });

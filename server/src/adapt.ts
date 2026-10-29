@@ -113,6 +113,40 @@ function list(row: Record<string, unknown>, names: string[]): string[] {
   return [];
 }
 
+/** The live catalogue nests what our rows keep flat: the brand is an object, the price is three
+ *  blocks of min and max, the features are a highlights array. This flattens one ProductListingDetail
+ *  into the shape adaptProduct already reads, so the live catalogue and a spreadsheet take the
+ *  same path.
+ *
+ *  shortcut: getProducts says `sellable`, a yes or no, not how many are on the shelf. Units come
+ *  from the stock-status endpoint, so a product is 1 or 0 here until that enrichment runs. */
+function inches(name: unknown): number | undefined {
+  const match = String(name ?? "").match(/(\d+(?:\.\d+)?)\s*(?:inch|inches|")/i);
+  return match ? Number(match[1]) : undefined;
+}
+
+export function fromFdk(row: Record<string, any>): Record<string, unknown> {
+  const price = row.price ?? {};
+  const attributes = (row.attributes ?? {}) as Record<string, unknown>;
+  return {
+    // item_code is the shop's own code; the slug is the only thing guaranteed unique.
+    sku: row.item_code || row.slug || (row.uid !== undefined ? String(row.uid) : undefined),
+    brand: row.brand?.name,
+    name: row.name,
+    // "55 inch" lives in the name far more reliably than in a named attribute — but the first
+    // number in "Sony Bravia 2 55 inch" is the 2, so it is the one before "inch" that counts.
+    size_inch: figure(attributes.screen_size ?? attributes.display_size) ?? inches(row.name),
+    panel: attributes.display_type ?? attributes.panel_type ?? attributes.technology,
+    mrp_rupees: price.marked?.min ?? price.marked?.max,
+    price_rupees: price.effective?.min ?? price.selling?.min ?? price.effective?.max,
+    stock_units: row.sellable === false ? 0 : 1,
+    good_for: Array.isArray(row.highlights) ? row.highlights : undefined,
+    specs: attributes,
+    categories: (row.categories ?? []).map((category: any) => category?.name).filter(Boolean),
+    slug: row.slug,
+  };
+}
+
 /** Every reason a catalogue cannot be served, named by row, rather than the first one only. */
 export function problems(products: { product: Product; missing: string[] }[]): string[] {
   const found: string[] = [];
