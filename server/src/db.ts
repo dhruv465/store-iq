@@ -43,6 +43,13 @@ create table if not exists expert_questions (
   asked_at timestamptz not null default now(),
   answered_at timestamptz
 );
+create table if not exists conversations (
+  interaction_id text primary key,
+  phone text not null,
+  state jsonb not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists conversations_day on conversations (updated_at);
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -130,6 +137,13 @@ export class DB {
       [session.phone, next, state, session.version],
     );
     if (!updated.rows.length) return false;
+    // The session row is one per associate and the next customer overwrites it, so the day is kept
+    // here instead: one row per interaction, which is what a manager is actually counting.
+    await this.pg.query(
+      `insert into conversations (interaction_id, phone, state) values ($1, $2, $3)
+       on conflict (interaction_id) do update set state = $3, updated_at = now()`,
+      [session.interaction_id, session.phone, state],
+    );
     for (const reply of replies)
       await this.pg.query(`insert into outbox (phone, payload) values ($1, $2)`, [
         session.phone,
@@ -205,11 +219,20 @@ export class DB {
   }
 
   /** Every conversation touched today, for the department manager view. */
+  /** Every conversation of the shift, not every associate: one associate serves many customers. */
   async today(): Promise<Session[]> {
     const rows = await this.pg.query<{ state: Session }>(
-      `select state from sessions where updated_at > now() - interval '12 hours'`,
+      `select state from conversations where updated_at > now() - interval '12 hours' order by updated_at`,
     );
     return rows.rows.map((row) => row.state);
+  }
+
+  /** Associates who may be sent a message right now: they wrote to us inside Meta's 24 hour window. */
+  async reachable(): Promise<string[]> {
+    const rows = await this.pg.query<{ phone: string }>(
+      `select distinct phone from inbox where received_at > now() - interval '24 hours'`,
+    );
+    return rows.rows.map((row) => row.phone);
   }
 
   async health(): Promise<Record<string, number>> {

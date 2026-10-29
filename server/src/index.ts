@@ -3,6 +3,7 @@ import { createApp } from "./webhook.js";
 import { openDatabase, pricedEarly } from "./db.js";
 import { loadPack } from "./pack.js";
 import { startWorker } from "./worker.js";
+import { managerRoutes } from "./manager.js";
 import { assertModelAvailable, decide } from "./brain.js";
 import type { Event } from "./types.js";
 
@@ -44,6 +45,10 @@ try {
     }
   });
   if (local) app.get("/health/recent", async (c) => c.json(await db.recentSends()));
+  // The manager's dashboard is off unless a password is set, because it is reachable through the
+  // same tunnel as the webhook and it can message the whole floor.
+  if (process.env.ADMIN_PASSWORD) managerRoutes(app, db);
+  else console.error("Manager dashboard off: set ADMIN_PASSWORD in .env to turn it on");
   // Local text harness: iterate on the seven steps without WhatsApp. Never exposed off localhost.
   if (local)
     app.post("/try", async (c) => {

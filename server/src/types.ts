@@ -63,6 +63,8 @@ export type Session = {
   selection?: { sku: string; accessories: string[]; charges: string[] };
   /** Section 4H: the customer summary only goes out with consent. */
   consent: boolean;
+  /** The associate's own name, as WhatsApp gives it, so the manager's view is people not numbers. */
+  associate?: string;
   /** A figure left Store IQ before the home was assessed. The store visits' headline measure was
    *  who spoke about the price first, and they found it was us in 6 of 6 conversations. */
   priced_before_home?: boolean;

@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 
 export type IncomingMessage = {
@@ -71,6 +72,9 @@ function messagesFrom(payload: unknown, phoneNumberId: string): IncomingMessage[
 export function createApp(config: Config, enqueue?: InboxWriter) {
   const app = new Hono();
   app.onError((error, c) => {
+    // A middleware that means to answer 401 or 413 has already said so; turning that into a 500
+    // would, among other things, stop a browser ever offering the manager a password box.
+    if (error instanceof HTTPException) return error.getResponse();
     console.error("Request failed", error instanceof Error ? error.message : "unknown");
     return c.text("Internal error", 500);
   });

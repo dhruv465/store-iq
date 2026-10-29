@@ -530,6 +530,7 @@ export async function decide(
   request: typeof fetch = fetch,
   store?: Store,
 ): Promise<Reply> {
+  if (event.name) session.associate = event.name;
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);

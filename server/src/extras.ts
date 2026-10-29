@@ -58,6 +58,42 @@ export function expertReply(
   };
 }
 
+export type AssociateRow = {
+  phone: string;
+  name: string;
+  conversations: number;
+  /** The gap the store visits named: how often this associate actually learned the home. */
+  homeCards: number;
+  readBack: number;
+  median: number;
+  best: number;
+  guide: number;
+  homeBeforePrice: number;
+};
+
+/** One row per associate, which is what a manager is looking at: how many customers they took, how
+ *  many of those they actually learned the home for, and the number out of 14 that follows from it. */
+export function perAssociate(sessions: Session[]): AssociateRow[] {
+  const byPhone = new Map<string, Session[]>();
+  for (const session of sessions) byPhone.set(session.phone, [...(byPhone.get(session.phone) ?? []), session]);
+  const rows = [...byPhone.entries()].map(([phone, all]) => {
+    const points = all.map((session) => score(session).points).sort((a, b) => a - b);
+    return {
+      phone,
+      name: all.find((session) => session.associate)?.associate ?? phone,
+      conversations: all.length,
+      homeCards: all.filter((session) => isAssessed(session.card)).length,
+      readBack: all.filter((session) => session.card_confirmed).length,
+      median: points[Math.floor(points.length / 2)] ?? 0,
+      best: points[points.length - 1] ?? 0,
+      guide: points.filter((value) => value >= GUIDE).length,
+      homeBeforePrice: all.filter((session) => !session.priced_before_home).length,
+    };
+  });
+  // The floor's own order: the strongest associate first, so the manager reads the gap downwards.
+  return rows.sort((a, b) => b.median - a.median || b.conversations - a.conversations);
+}
+
 /** What the department manager sees, in the shape of the store-visit findings' own table: the
  *  median against the judges' 14, how many reached Guide, how the floor scores on Assess — the
  *  measure the visits called our largest gap — and the step it is weakest on today. */
