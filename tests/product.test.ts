@@ -117,3 +117,13 @@ test("a photo whose caption names the set is answered from the pack", async () =
   const reply = await decide(event, session, pack, dead);
   assert.match(reply.text, /Rs 79,990/);
 });
+
+test("a model code is matched as a word, not as letters hiding inside other words", () => {
+  // "about 800 nits" squashes to "about800nits", which contains the LG's code "ut80".
+  assert.equal(findProduct(pack, "what do I say about 800 nits"), null);
+  assert.equal(findProduct(pack, "about 800 nits"), null);
+  // The real ways a code arrives still match: typed, and read off a tag.
+  assert.equal(findProduct(pack, "the UT80 one")?.sku, "LG-65UT8050");
+  assert.equal(findProduct(pack, "65UT8050")?.sku, "LG-65UT8050");
+  assert.equal(findProduct(pack, "TCL, TCL-55C6KS, 55 inch, 800 nits")?.sku, "TCL-55C6KS");
+});

@@ -34,7 +34,15 @@ export function findProduct(pack: Pack, text: string | undefined): Product | nul
   if (flat.length < 3) return null;
   const bySku = pack.products.find((product) => flat.includes(squash(product.sku)));
   if (bySku) return bySku;
-  const byCode = pack.products.find((product) => codes(product).some((code) => flat.includes(code)));
+  // A code is matched against the words themselves, not against the text with its spaces removed:
+  // "about 800 nits" squashes to "about800nits", which contains "ut80" and used to return the LG.
+  const words = new Set(
+    text
+      .split(/[^A-Za-z0-9]+/)
+      .map(squash)
+      .filter(Boolean),
+  );
+  const byCode = pack.products.find((product) => codes(product).some((code) => words.has(code)));
   if (byCode) return byCode;
   const brand = pack.products.filter((product) => named(text, product.brand));
   if (!brand.length) return null;

@@ -4,6 +4,7 @@ import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.j
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
+import { asksWhatWeHave, greetingReply, inStockReply, intentOf } from "./ask.js";
 import {
   endVisitLog,
   newVisitReference,
@@ -771,8 +772,21 @@ async function answer(
     });
     return reply;
   }
+  // A question is not a description of the customer's home. Until this, every sentence was read as
+  // one, so "is the Sony good for a dark room" was filed as light = dim and "what TVs do we have"
+  // was answered with "how far will you sit from the TV?".
+  const intent = event.action ? "customer" : intentOf(event.text);
+  if (intent === "greeting" && !deterministic(event, session, pack)) return greetingReply(session.language);
+  if (intent === "question" && event.text && !deterministic(event, session, pack)) {
+    // Asked about one set, or about a figure on a label: both are already answered from the pack.
+    const named = packAnswer(pack, event.text, session, "set");
+    if (named) return named;
+    if (asksWhatWeHave(event.text)) return inStockReply(pack, session.card, session.language, isAssessed(session.card));
+    // Anything else falls through to the model, which answers from the facts and is still held to
+    // the floor's shape and to the figures in the pack.
+  }
   // Read what we confidently can from the words before spending a request on them.
-  if (event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
+  if (intent !== "question" && event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
     // What the model heard, with what the extractor can read from the same words on top: the
     // extractor only takes what it is sure of, so where both spoke, the stricter one wins.
     const read = { ...heard, ...extractCard(event.text) };
@@ -803,7 +817,7 @@ async function answer(
   }
   // The customer is standing at one set, or asked what a figure on its label means. Both are pack
   // facts, and both run after the card extractor so a home fact in the same message still wins.
-  if (event.text && !event.image && !event.audio) {
+  if (intent !== "question" && event.text && !event.image && !event.audio) {
     const reply = packAnswer(pack, event.text, session);
     if (reply) {
       session.history.push({

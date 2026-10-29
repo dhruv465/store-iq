@@ -38,6 +38,15 @@ Status is what the code actually does, verified, not what it intends to do.
 | follow through | yes | no |
 | review | yes | no |
 
+## Asking, rather than being asked
+
+| Behaviour | State |
+| --- | --- |
+| An associate can ask what the shop has | **Done.** "What TVs do we have in stock" is answered with what is on the floor — brand, size and panel — and deliberately without prices, because our associates opened with price in 6 of 6 visits and a price list here would teach the habit the product exists to break. Once the home is known the same question offers the three that fit. |
+| An associate can ask about one set | **Done.** "Is the Sony good for a dark room" answers from the pack about that set. It used to be filed as `light = dim`, a fact about the customer's living room. |
+| Saying hello | **Done.** Answered, with what the associate can do next. It used to open the distance question, which is a questionnaire talking to itself. |
+| A question is told from a description | **Done.** `intentOf()` separates them, and a question that is mostly about the customer — "do they have WiFi at home?" — is still read as a description. |
+
 ## Floor rules (contest §2)
 
 | Rule | State |
