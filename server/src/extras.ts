@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { isAssessed } from "./brain.js";
 import type { Pack } from "./pack.js";
-import { score } from "./steps.js";
+import { GUIDE, MAX_SCORE, score, SCORED, type Scored } from "./steps.js";
 import { t, type Lang } from "./i18n.js";
 import type { Reply, Session } from "./types.js";
 
@@ -51,23 +51,37 @@ export function expertReply(pack: Pack, question: string, reference: string, lan
   };
 }
 
-/** What the department manager sees: today's conversations, the weak step, and open questions. */
-export function managerView(sessions: Session[], open: { reference: string; area: string; owner?: string }[]): Reply {
+/** What the department manager sees, in the shape of the store-visit findings' own table: the
+ *  median against the judges' 14, how many reached Guide, how the floor scores on Assess — the
+ *  measure the visits called our largest gap — and the step it is weakest on today. */
+export function managerView(
+  sessions: Session[],
+  open: { reference: string; area: string; owner?: string }[],
+): Reply {
   const real = sessions.filter((session) => session.steps_done.length > 0);
-  if (!real.length) return { text: "No conversations yet today.\n↳ The view fills as associates use the number." };
-  const scores = real.map((session) => score(session).points).sort((a, b) => a - b);
-  const median = scores[Math.floor(scores.length / 2)]!;
-  const missed = new Map<string, number>();
-  for (const session of real) for (const step of score(session).missing) missed.set(step, (missed.get(step) ?? 0) + 1);
-  const weakest = [...missed.entries()].sort((a, b) => b[1] - a[1])[0];
-  const assessedFirst = real.filter((session) => isAssessed(session.card)).length;
+  if (!real.length)
+    return { text: "No conversations yet today.\n\u21b3 The view fills as associates use the number." };
+  const scored = real.map((session) => score(session));
+  const points = scored.map((card) => card.points).sort((a, b) => a - b);
+  const median = points[Math.floor(points.length / 2)]!;
+  const guides = points.filter((value) => value >= GUIDE).length;
+  const average = (step: Scored): number =>
+    scored.reduce((total, card) => total + card.marks[step], 0) / real.length;
+  // Assess is reported whatever it scores, because it is the gap the visits named.
+  const weakest = SCORED.filter((step) => step !== "assess")
+    .map((step) => [step, average(step)] as const)
+    .sort((a, b) => a[1] - b[1])[0]!;
+  const readBack = real.filter((session) => session.card_confirmed).length;
   return {
     text: [
-      `Today: ${real.length} conversations, median ${median} of 14. Home assessed in ${assessedFirst} of ${real.length}.`,
-      weakest ? `Most skipped step: ${weakest[0].replace(/_/g, " ")}, missed in ${weakest[1]}.` : "",
-      open.length ? `Open expert questions: ${open.length} · ${open.slice(0, 2).map((q) => q.reference).join(", ")}` : "No open expert questions.",
+      `Today: ${real.length} conversations · median ${median} of ${MAX_SCORE} · ${guides} at Guide (${GUIDE}+)`,
+      `Assess ${average("assess").toFixed(1)} of 2 · weakest ${weakest[0].replace(/_/g, " ")} ${weakest[1].toFixed(1)} of 2`,
+      `Home read back in ${readBack} of ${real.length}. ${
+        open.length
+          ? `Open questions: ${open.length} · ${open.slice(0, 2).map((question) => question.reference).join(", ")}`
+          : "No open expert questions."
+      }`,
     ]
-      .filter(Boolean)
       .join("\n")
       .slice(0, 1000),
   };

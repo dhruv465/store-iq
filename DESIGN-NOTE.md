@@ -4,10 +4,13 @@ One WhatsApp number. The associate owns the conversation; Store IQ holds the fac
 
 ## The idea the build rests on
 
-The store visits found that our median associate scores 6 of 14 while our best score 13, that we
-open with price in 6 of 6 conversations, and that a median of 2 questions come before the first
-product. So the problem is not knowledge, it is **order**. Store IQ enforces the order our best
-associate already follows, and refuses to skip ahead.
+The store visits of 10 and 11 October found that our median associate scores 6 of 14 while our best
+scored 13 and 12, that we open with price in 6 of 6 conversations against the customer asking first
+at the competitors, and that a median of 2 questions come before the first product. So the problem
+is not knowledge, it is **order**. Store IQ enforces the order our best associate already follows,
+and refuses to skip ahead. It scores itself on the visits' own card — Validate, Assess, Translate,
+Demonstrate, Complete, Close, Follow through, 0 to 2 each — so a conversation here and a conversation
+on that workbook are the same number.
 
 Three rules are enforced in code, not asked of a model:
 
@@ -34,7 +37,7 @@ All nine stages answer from the pack and the session, in **1–15 ms**, spending
 | Recommend + demonstrate | Scored rules over the pack: distance, light, console, sport, sound, budget |
 | Complete | The itemised total is arithmetic, so it is computed rather than generated |
 | Close / follow through | Consent gate, task owner, site needs from the pack |
-| Review | Coverage of the nine stages, mapped to the judges' 0–14 |
+| Review | The store visits' own scorecard: seven steps, 0 to 2 each, Guide at 11 |
 
 A model is needed for exactly two things: reading a **voice note** in phrasing the extractor cannot,
 and reading the **text off a label photo** — and even there it only reads the tag, in one small call;

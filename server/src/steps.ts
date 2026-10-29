@@ -107,36 +107,89 @@ export function briefAnswer(pack: Pack, chosen: string): Reply {
  *  their scale rather than invented: all nine stages is 14, none is 0. */
 export const MAX_SCORE = 14;
 
-export function score(session: Session): { points: number; missing: Step[] } {
-  const done = new Set<Step>(session.steps_done);
-  // Assessing and demonstrating are what the steps are for; claiming them without the evidence is not a step.
-  if (!isAssessed(session.card)) done.delete("assess");
-  if (!session.demonstrated) done.delete("translate");
-  const missing = STEPS.filter((step) => !done.has(step));
-  return { points: Math.round((done.size / STEPS.length) * MAX_SCORE), missing };
+/** The judges' own scorecard, from the store-visit findings of 27 October: seven steps, 0 to 2
+ *  each, maximum 14. Brief, recommend and review are ours and are not on it; what the findings call
+ *  "Demonstrate" is the difference each recommended option carries, which the session tracks as a
+ *  flag rather than a step. */
+export const SCORED = [
+  "validate",
+  "assess",
+  "translate",
+  "demonstrate",
+  "complete",
+  "close",
+  "follow_through",
+] as const;
+export type Scored = (typeof SCORED)[number];
+
+/** Guide is the findings' own name for a conversation at 11 or more. Two of six reached it. */
+export const GUIDE = 11;
+
+/** 2 is the step done with its evidence, 1 is started, 0 is not done. The evidence is what the
+ *  session can prove, never what a reply claimed. */
+function mark(session: Session, step: Scored): 0 | 1 | 2 {
+  const done = (name: Step): boolean => session.steps_done.includes(name);
+  const anything = Object.values(session.card).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "",
+  );
+  switch (step) {
+    // Read back and confirmed is the whole step; a card nobody checked is half of it.
+    case "assess":
+      return isAssessed(session.card) ? (session.card_confirmed ? 2 : 1) : anything ? 1 : 0;
+    case "validate":
+      return done("validate") ? 2 : 0;
+    case "translate":
+      return done("translate") ? 2 : 0;
+    case "demonstrate":
+      return session.demonstrated ? 2 : 0;
+    // The findings' "Complete" is the full cost, charge by charge, not just a product picked.
+    case "complete":
+      return session.selection
+        ? session.selection.charges.length || session.selection.accessories.length
+          ? 2
+          : 1
+        : 0;
+    case "close":
+      return session.consent ? 2 : done("close") ? 1 : 0;
+    case "follow_through":
+      return done("follow_through") ? (session.consent ? 2 : 1) : 0;
+  }
 }
 
-const ADVICE: Record<Step, string> = {
-  brief: "Read the brief before the shift; today's stock and offers changed.",
-  assess: "Ask about the home before the product: distance, light, what they watch.",
+export function score(session: Session): {
+  points: number;
+  missing: Scored[];
+  marks: Record<Scored, 0 | 1 | 2>;
+} {
+  const marks = Object.fromEntries(SCORED.map((step) => [step, mark(session, step)])) as Record<Scored, 0 | 1 | 2>;
+  return {
+    points: SCORED.reduce((total, step) => total + marks[step], 0),
+    missing: SCORED.filter((step) => marks[step] === 0),
+    marks,
+  };
+}
+
+const ADVICE: Record<Scored, string> = {
+  assess: "Ask about the home before the product: distance, light, what they watch, then read it back.",
   validate: "When the customer is half right, confirm the true part before correcting.",
   translate: "Turn one spec on the label into a line about their home.",
-  recommend: "Give three options with a reason each, and point at one difference.",
+  demonstrate: "Point at one difference they can see on the floor, not a number on a sheet.",
   complete: "Give the full cost charge by charge: product, accessories, delivery, installation.",
   close: "Open the offer only after assessing and demonstrating, and state finance in one sentence with its full cost.",
   follow_through: "With consent, send the customer summary, raise the task with an owner and the installation site needs.",
-  review: "Score the conversation and take one thing into the next one.",
 };
 
 /** A score for the steps, and one thing to try next time. */
 export function reviewReply(session: Session): Reply {
-  const { points, missing } = score(session);
-  const covered = STEPS.filter((step) => !missing.includes(step));
-  const next = missing.find((step) => step !== "review");
+  const { points, missing, marks } = score(session);
+  const covered = SCORED.filter((step) => marks[step] > 0);
+  const next = missing[0];
   return {
     text: [
-      t(session.language, "rev.score", { points, max: MAX_SCORE }),
-      covered.length ? t(session.language, "rev.covered", { body: covered.join(", ") }) : t(session.language, "rev.none"),
+      `${t(session.language, "rev.score", { points, max: MAX_SCORE })} ${points >= GUIDE ? t(session.language, "rev.guide") : t(session.language, "rev.toguide", { n: GUIDE })}`,
+      covered.length
+        ? t(session.language, "rev.covered", { body: covered.map((step) => `${step.replace(/_/g, " ")} ${marks[step]}`).join(", ") })
+        : t(session.language, "rev.none"),
       next ? t(session.language, "rev.next", { body: ADVICE[next] }) : t(session.language, "rev.perfect"),
     ]
       .join("\n")

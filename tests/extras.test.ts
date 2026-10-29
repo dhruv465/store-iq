@@ -37,15 +37,15 @@ test("references are unique enough to quote to a customer", () => {
   assert.ok([...seen].every((r) => /^SIQ-\d{4}$/.test(r)));
 });
 
-test("the manager view reports volume, the median score and the weakest step", () => {
+test("the manager view reports the measures the store visits used", () => {
   const reply = managerView(
     [conversation(["assess", "recommend"]), conversation(["assess", "recommend", "complete"]), conversation(["assess"])],
     [{ reference: "SIQ-1111", area: "finance and EMI", owner: "Priya (billing)" }],
   );
-  assert.match(reply.text, /Today: 3 conversations, median \d+ of 14/);
-  assert.match(reply.text, /Home assessed in 3 of 3/);
-  assert.match(reply.text, /Most skipped step: /);
-  assert.match(reply.text, /Open expert questions: 1 · SIQ-1111/);
+  assert.match(reply.text, /Today: 3 conversations · median \d+ of 14 · \d+ at Guide \(11\+\)/);
+  assert.match(reply.text, /Assess \d\.\d of 2 · weakest \w+/);
+  assert.match(reply.text, /Home read back in \d of 3/);
+  assert.match(reply.text, /Open questions: 1 · SIQ-1111/);
 });
 
 test("an empty floor says so rather than inventing numbers", () => {

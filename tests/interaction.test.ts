@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { cardSummary, score, wantsNewCustomer } from "../server/src/steps.js";
+import { SCORED, cardSummary, score, wantsNewCustomer } from "../server/src/steps.js";
 import { deterministic, startInteraction } from "../server/src/brain.js";
 import { newSession, STEPS, type Event, type Session } from "../server/src/types.js";
 
@@ -70,12 +70,16 @@ test("asking to fix the card clears the confirmation", () => {
   assert.equal(session.card_confirmed, false);
 });
 
-test("the score spans the brief's nine stages on the judges' scale", () => {
-  assert.equal(STEPS.length, 9);
+test("the score is the judges' seven steps, not our nine stages", () => {
+  assert.equal(STEPS.length, 9, "we walk nine stages");
+  assert.equal(SCORED.length, 7, "the judges score seven of them, 0 to 2 each");
   const session = newSession("919820000001");
   assert.equal(score(session).points, 0);
   session.steps_done = [...STEPS];
   session.card = { distance_feet: 8, light: "bright", mount: "wall", content: ["x"] };
+  session.card_confirmed = true;
   session.demonstrated = true;
+  session.selection = { sku: "TCL-55C6KS", accessories: [], charges: ["TV-DELIVERY"] };
+  session.consent = true;
   assert.equal(score(session).points, 14);
 });

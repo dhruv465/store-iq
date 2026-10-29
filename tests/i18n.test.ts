@@ -43,8 +43,10 @@ test("the card read-back speaks the associate's language", () => {
 
 test("the review score speaks the associate's language", () => {
   const session = filled("mr");
-  session.steps_done = ["brief"];
-  assert.match(reviewReply(session).text, /ही बातचीत: 14 पैकी 2/);
+  session.steps_done = ["brief", "validate"];
+  // A filled card is half the Assess step, so validate 2 plus assess 1 is 3.
+  assert.match(reviewReply(session).text, /ही बातचीत: 14 पैकी 3/);
+  assert.match(reviewReply(session).text, /गाइड 11 पासून सुरू होतो/);
 });
 
 test("a missing phrase falls back to English rather than breaking", () => {

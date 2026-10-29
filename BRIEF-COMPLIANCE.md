@@ -16,7 +16,7 @@ Status is what the code actually does, verified, not what it intends to do.
 | 7 | Gate offers until assessment and demonstration are complete | **Done.** `offerLeaked()`, fires on an offer word plus a figure. Tested. |
 | 8 | Explain finance using only supplied terms and full cost | **Partial.** Terms are in the pack; the one-sentence full-cost form is unverified. |
 | 9 | Consent-based summary and follow-up task | **Done, deterministic.** Selection comes from a tap only, the summary is withheld until `consent:yes`, and changing the product withdraws consent. Task owner is the associate; site needs come from the pack. Verified live at 1 ms. |
-| 10 | Conversation score and one improvement suggestion | **Done.** Deterministic, 0–14, costs no model request. |
+| 10 | Conversation score and one improvement suggestion | **Done.** The store visits' own card: seven steps, 0 to 2 each, Guide at 11. Deterministic, costs no model request. |
 
 ## Section 8 acceptance sequence
 
