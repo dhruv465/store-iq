@@ -217,6 +217,94 @@ export async function labelText(image: NonNullable<Event["image"]>, request: typ
   return /^none\b/i.test(text) ? "" : text.slice(0, 200);
 }
 
+const VOICE_PROMPT = `The associate just spoke this voice note on a shop floor. Do two things and nothing else.
+
+1. transcript: write down what they said, in the language they said it, as plainly as you can.
+2. card: whatever they said about the CUSTOMER'S HOME, and only what they actually said. Leave a
+   field out rather than guessing it. distance_m and distance_feet are how far the customer sits
+   from the screen, never the size of the room. budget_rupees is a number of rupees.
+
+Write no advice, no greeting and no reply to the associate. Something else writes that.`;
+
+/** The voice schema is deliberately small: the facts, and the words that were said. */
+const voiceSchema = {
+  type: "OBJECT",
+  required: ["transcript", "card"],
+  properties: {
+    transcript: { type: "STRING" },
+    card: {
+      type: "OBJECT",
+      properties: {
+        room: { type: "STRING", nullable: true },
+        distance_m: { type: "NUMBER", nullable: true },
+        distance_feet: { type: "NUMBER", nullable: true },
+        light: { type: "STRING", nullable: true },
+        mount: { type: "STRING", nullable: true },
+        content: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
+        devices: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
+        family: { type: "STRING", nullable: true },
+        internet: { type: "STRING", nullable: true },
+        budget_rupees: { type: "NUMBER", nullable: true },
+        replacing: { type: "STRING", nullable: true },
+        priorities: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
+        site_constraints: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
+      },
+    },
+  },
+} as const;
+
+/** A voice note, read the way a label photo is read: the model only says what it heard, and the
+ *  code writes the reply.
+ *
+ *  Letting the model answer a voice note directly was the one surface where our floor rules were a
+ *  prompt rather than code, and it showed — a real note came back as "Okay, so 5 feet viewing
+ *  distance in the bedroom", which greets, carries no question and follows none of the shape every
+ *  other reply obeys. Extraction only, and the deterministic path takes it from there. */
+export async function voiceNote(
+  audio: NonNullable<Event["audio"]>,
+  request: typeof fetch = fetch,
+): Promise<{ transcript: string; card: Partial<Session["card"]> }> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw Error("Missing GEMINI_API_KEY");
+  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+  const response = await geminiRequest(
+    request,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: VOICE_PROMPT },
+              { inline_data: { mime_type: audio.mimeType, data: Buffer.from(audio.bytes).toString("base64") } },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: voiceSchema,
+          temperature: 0,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    },
+  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 256 * 1024)));
+  const text: string = (body?.candidates?.[0]?.content?.parts ?? [])
+    .map((part: any) => part?.text)
+    .filter((value: unknown) => typeof value === "string")
+    .join("");
+  if (!text.trim()) throw Error("Empty voice response");
+  const heard = JSON.parse(text) as { transcript?: string; card?: Record<string, unknown> };
+  const card: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(heard.card ?? {}))
+    if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length)) card[field] = value;
+  return { transcript: String(heard.transcript ?? "").slice(0, 600), card };
+}
+
 const OFFER_WORDS = /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|chhoot|छूट)s?\b/i;
 /** A figure beside the offer word is the difference between quoting a deal and declining to. */
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
@@ -587,6 +675,16 @@ async function answer(
   store?: Store,
 ): Promise<Reply> {
   if (event.name) session.associate = event.name;
+  // A voice note becomes the words that were said, so everything below treats it exactly as it
+  // treats typing: the same extraction, the same objections and products, the same floor shape.
+  let heard: Partial<Session["card"]> = {};
+  if (event.audio) {
+    const spoken = await voiceNote(event.audio, request);
+    heard = spoken.card;
+    const said = [spoken.transcript, event.text].filter(Boolean).join(" ").trim();
+    event = { ...event, ...(said ? { text: said } : {}) };
+    delete event.audio;
+  }
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);
@@ -639,7 +737,9 @@ async function answer(
   }
   // Read what we confidently can from the words before spending a request on them.
   if (event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
-    const read = extractCard(event.text);
+    // What the model heard, with what the extractor can read from the same words on top: the
+    // extractor only takes what it is sure of, so where both spoke, the stricter one wins.
+    const read = { ...heard, ...extractCard(event.text) };
     const fields = Object.entries(read).filter(
       ([, value]) => value !== undefined && !(Array.isArray(value) && !value.length),
     );
@@ -708,16 +808,10 @@ async function answer(
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw Error("Missing GEMINI_API_KEY");
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+  // Text only, now. A voice note became the words that were said before anything below ran, and a
+  // photo is answered from the pack and never reaches here, so this call is the last resort for a
+  // sentence no deterministic path could read.
   const parts: Record<string, unknown>[] = [{ text: prompt(event, session, pack, tapped) }];
-  // One call carries the voice note or the label photo: no transcription hop before the answer.
-  for (const media of [event.audio, event.image])
-    if (media)
-      parts.push({
-        inline_data: {
-          mime_type: media.mimeType,
-          data: Buffer.from(media.bytes).toString("base64"),
-        },
-      });
   const response = await geminiRequest(
     request,
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,

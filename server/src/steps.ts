@@ -271,6 +271,9 @@ export function questionFlow(
 export function nextQuestionReply(session: Session, prefix?: string): Reply {
   const lang = session.language;
   const step = questionFlow(lang).find((entry) => {
+    // The flow asks the distance in metres, but an associate who said "five feet" has answered it.
+    // Asking again is how you look like you were not listening.
+    if (entry.field === "distance_m") return !stated(session.card.distance_m) && !stated(session.card.distance_feet);
     const value = (session.card as Record<string, unknown>)[entry.field];
     return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
   });
