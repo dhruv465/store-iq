@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { providerRequest, readLimited } from "./http.js";
+import { modelRequest, providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, canonUnit, factsFor, pairsIn, recommendedInches, spellOut, type Pack } from "./pack.js";
+import { falConfig, falText, readJson, shapeInstruction } from "./fal.js";
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
@@ -127,29 +128,6 @@ const schema = {
 /** Gemini answers 503 UNAVAILABLE under load and sometimes just hangs; both clear on a retry.
  *  429 is deliberately absent: the free tier's limit is per DAY (Google asked for a 19 hour delay
  *  when it was hit), so retrying only spends two more of the day's requests on a certain failure. */
-const RETRYABLE = /request failed or timed out|unavailable: HTTP (404|500|502|503|504)/;
-const ATTEMPT_TIMEOUT_MS = 9000;
-const ATTEMPTS = 3;
-
-/** Retries a generateContent call. Safe because generation has no side effect beyond tokens spent. */
-export async function geminiRequest(
-  request: typeof fetch,
-  url: string,
-  init: RequestInit,
-  attempts = ATTEMPTS,
-  wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-): Promise<Response> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await providerRequest(request, url, init, "Gemini", ATTEMPT_TIMEOUT_MS);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (attempt >= attempts || !RETRYABLE.test(message)) throw error;
-      console.error(`Gemini attempt ${attempt} failed (${message}); retrying`);
-      await wait(250 * attempt * attempt);
-    }
-  }
-}
 
 /** Fails loudly for a wrong model name, but never blocks start-up just because Google is unreachable. */
 export async function assertModelAvailable(request: typeof fetch = fetch): Promise<string> {
@@ -189,7 +167,7 @@ export async function labelText(image: NonNullable<Event["image"]>, request: typ
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return "";
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-  const response = await geminiRequest(
+  const response = await modelRequest(
     request,
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -278,7 +256,7 @@ export async function voiceNote(
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw Error("Missing GEMINI_API_KEY");
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-  const response = await geminiRequest(
+  const response = await modelRequest(
     request,
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -990,43 +968,59 @@ async function answer(
     session.history = session.history.slice(-12);
     return free;
   }
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) throw Error("Missing GEMINI_API_KEY");
-  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-  // Text only, now. A voice note became the words that were said before anything below ran, and a
-  // photo is answered from the pack and never reaches here, so this call is the last resort for a
-  // sentence no deterministic path could read.
-  const parts: Record<string, unknown>[] = [{ text: prompt(event, session, pack, tapped, notes) }];
-  const response = await geminiRequest(
-    request,
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
-      method: "POST",
-      headers: { "x-goog-api-key": key, "content-type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          temperature: 0.3,
-          // The floor wants an answer, not deliberation: thinking is off for the 5-second rule.
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    },
-  );
-  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024)));
-  const text: string | undefined = body?.candidates?.[0]?.content?.parts
-    ?.map((part: any) => part?.text)
-    .filter((value: unknown) => typeof value === "string")
-    .join("");
-  if (typeof text !== "string" || !text.trim())
-    throw Error(
-      `Empty Gemini response${body?.promptFeedback?.blockReason ? `: ${body.promptFeedback.blockReason}` : ""}`,
+  // Text only, now. A voice note became the words that were said before anything above ran, and a
+  // photo is answered from the pack and never reaches here, so this call is for a sentence no
+  // deterministic path could read — which, since the written questions went, is most turns.
+  //
+  // fal.ai's router when FAL_KEY is set, Gemini otherwise. The router is the paid path and costs
+  // about a hundredth of a US cent a turn; Gemini's free tier is 20 requests a day, which is no
+  // longer a product. Gemini keeps the voice note and the photo either way: the router takes
+  // neither audio nor images.
+  const asked = prompt(event, session, pack, tapped, notes);
+  const fal = falConfig();
+  let text: string;
+  if (fal) {
+    // No response schema on this endpoint, so the shape is asked for in words and read tolerantly.
+    const answered = await falText(fal, `${SYSTEM}\n\n${shapeInstruction(schema)}`, asked, request);
+    if (process.env.STOREIQ_DEBUG === "1")
+      console.log(`fal ${fal.model} $${answered.cost.toFixed(6)} RAW>>>`, answered.text, "<<<RAW");
+    text = answered.text;
+  } else {
+    const key = process.env.GEMINI_API_KEY?.trim();
+    if (!key) throw Error("Missing GEMINI_API_KEY");
+    const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+    const response = await modelRequest(
+      request,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "content-type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: "user", parts: [{ text: asked }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+            temperature: 0.3,
+            // The floor wants an answer, not deliberation: thinking is off for the 5-second rule.
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+      },
     );
-  if (process.env.STOREIQ_DEBUG === "1") console.log("RAW>>>", text, "<<<RAW");
-  const decision = JSON.parse(text) as Decision;
+    const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024)));
+    const written: string | undefined = body?.candidates?.[0]?.content?.parts
+      ?.map((part: any) => part?.text)
+      .filter((value: unknown) => typeof value === "string")
+      .join("");
+    if (typeof written !== "string" || !written.trim())
+      throw Error(
+        `Empty Gemini response${body?.promptFeedback?.blockReason ? `: ${body.promptFeedback.blockReason}` : ""}`,
+      );
+    if (process.env.STOREIQ_DEBUG === "1") console.log("RAW>>>", written, "<<<RAW");
+    text = written;
+  }
+  const decision = readJson<Decision>(text);
 
   // Merge the card before the gate: this turn's answers count towards being assessed.
   for (const [field, value] of Object.entries(decision.card ?? {}))

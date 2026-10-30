@@ -48,6 +48,17 @@ checked twice before it is sent:
 A refused reply is recorded as `skipped` with the reason, never silently dropped. `GET /health/recent`
 (localhost only) shows what the provider actually accepted.
 
+## Which model answers
+
+`FAL_KEY` set: the turn goes through **fal.ai's OpenRouter router**, on the slug in `FAL_MODEL`
+(default `qwen/qwen3.7-flash`). A turn is about 3,200 tokens in and 50 out — a hundredth of a US
+cent. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
+read tolerantly; it takes no audio and no images.
+
+So **Gemini stays** for the two things it cannot do: a voice note and a shelf-tag photo. With no
+`FAL_KEY` at all, Gemini answers the turn too, on a free tier of 20 requests a day — about twenty
+sentences, which stopped being enough the day the written questions went.
+
 ## What never reaches the model
 
 Anything that states a figure. The brief, the product sheet, the itemised total, the finance terms,
