@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { decide, floor, render } from "../server/src/brain.js";
+import { decide, floor, pretty, render } from "../server/src/brain.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
 import { manager } from "./model.js";
 
@@ -82,7 +82,8 @@ test("the gate keeps the words to say and drops the reason when something has to
       { id: "d", title: "D" },
     ],
   });
-  assert.deepEqual(long.text.split("\n"), ['Ask: "the first thing"', 'Ask: "the second thing"', "↳ the reason"]);
+  // Trimmed first, then formatted: the words to say come out emboldened and the reason italic.
+  assert.deepEqual(long.text.split("\n"), ['Ask: "*the first thing*"', 'Ask: "*the second thing*"', "_↳ the reason_"]);
   assert.equal(long.buttons!.length, 3);
 });
 
@@ -106,4 +107,20 @@ test("a reason with nothing to do is not an answer", () => {
   assert.equal(lines.length, 2);
   assert.doesNotMatch(lines[0]!, /^↳/, "something to do comes first");
   assert.match(lines[1]!, /^↳/);
+});
+
+test("WhatsApp's own formatting, and nothing it would render as litter", () => {
+  const one = (text: string): string => pretty({ text }).text;
+  // The sentence to speak is what the eye should land on.
+  assert.equal(one('Ask: "How far will they sit?"'), 'Ask: "*How far will they sit?*"');
+  // An inch mark is a double quote. A looser rule paired two of them and emboldened the gap
+  // between two televisions: `Sony 55"* LED · LG 65*" LED`.
+  assert.equal(one('On the floor: Sony 55" LED · LG 65" LED'), '*On the floor:* Sony 55" LED · LG 65" LED');
+  // One weight per line: the label takes it, so the figures on that line stay plain.
+  assert.equal(one("Wall mount: Rs 1,499 fitted"), "*Wall mount:* Rs 1,499 fitted");
+  // And where there is no label, the price is what the eye should find.
+  assert.equal(one("TCL 55 inch · Rs 54,990 · 9 in stock"), "TCL 55 inch · *Rs 54,990* · 9 in stock");
+  assert.equal(one("↳ because the room decides"), "_↳ because the room decides_");
+  // A line with neither is left alone rather than decorated for its own sake.
+  assert.equal(one("Right?"), "Right?");
 });

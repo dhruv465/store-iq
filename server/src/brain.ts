@@ -453,6 +453,37 @@ export function moneySafe(text: string): string {
  *  deterministically and build their own text, so each of those was its own chance to break it. One
  *  gate at the exit is the only version of this rule that cannot drift. The reason line counts as a
  *  line, because on a phone it is one. */
+/** WhatsApp's own formatting, applied to every reply as it leaves.
+ *
+ *  An associate reads this at a glance with a customer waiting, so the words to say out loud have
+ *  to be the thing their eye lands on. WhatsApp gives *bold*, _italic_ and nothing else worth
+ *  having, and the markers must hug the text or they show up as asterisks.
+ *
+ *  Three rules, none of which can overlap another, because a nested marker renders as litter:
+ *   - the reason line is context, not words: italic, whole
+ *   - a line with quoted words has the quote emboldened and nothing else, because that is the
+ *     sentence to speak — in any language, which is why this reads the quotes and not the label
+ *   - any other line gets its leading label and its rupee figures picked out */
+export function pretty(reply: Reply): Reply {
+  const money = (part: string): string => part.replace(/\bRs\s?([\d,]+)/g, "*Rs $1*");
+  const text = reply.text
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("↳")) return `_${line}_`;
+      // A quote only counts as the sentence to speak where our own replies put one: straight after
+      // a colon and running to the end of the line. A loose rule paired the inch marks in
+      // `Sony 55" LED · LG 65" LED` and emboldened the gap between two televisions.
+      const spoken = line.match(/^(.*?: )"(.+)"([\s.]*)$/);
+      if (spoken) return `${spoken[1]}"*${spoken[2]}*"${spoken[3]}`;
+      // One weight per line. A label and its three rupee figures all emboldened is four bold spans
+      // in one line, which reads as litter rather than emphasis.
+      const colon = line.indexOf(":");
+      return colon > 0 && colon <= 24 ? `*${line.slice(0, colon + 1)}*${line.slice(colon + 1)}` : money(line);
+    })
+    .join("\n");
+  return { ...reply, text };
+}
+
 export function floor(reply: Reply): Reply {
   const lines = reply.text.split("\n").filter((line) => line.trim());
   // When something has to go, the reason goes last and the words to say survive.
@@ -460,10 +491,12 @@ export function floor(reply: Reply): Reply {
   const said = lines.filter((line) => !line.startsWith("↳"));
   const kept = reason ? [...said.slice(0, 2), reason] : said.slice(0, 3);
   const buttons = (reply.buttons ?? []).slice(0, 3);
-  return {
+  // Formatted after the trim, never before: the reason is found by its ↳, and an italic marker in
+  // front of it hid the line from the rule that exists to protect it.
+  return pretty({
     text: kept.join("\n").slice(0, 1000),
     ...(buttons.length ? { buttons } : {}),
-  };
+  });
 }
 
 export function render(decision: Decision): Reply {

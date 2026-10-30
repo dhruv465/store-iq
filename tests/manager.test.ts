@@ -66,7 +66,7 @@ test("the row the portal renders says who is quiet and when they were last seen"
 });
 
 test("a floor notice says who it is from, so it is not read as the agent talking", () => {
-  assert.equal(notice("  TCL is Rs 54,990 today  ", "Store manager"), "📢 Store manager:\nTCL is Rs 54,990 today");
+  assert.equal(notice("  TCL is Rs 54,990 today  ", "Store manager"), "📢 *Store manager*:\nTCL is Rs 54,990 today");
   assert.ok(notice("x".repeat(2000), "Manager").length < 950, "a notice is capped before it reaches WhatsApp");
 });
 

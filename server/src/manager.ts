@@ -49,7 +49,8 @@ export function phoneOf(raw: unknown): string | null {
 
 /** A floor notice carries who it is from, so an associate does not read it as the agent talking. */
 export function notice(text: string, from: string): string {
-  return `📢 ${from}:\n${text.trim().slice(0, 900)}`;
+  // Bold on WhatsApp, like every reply: a notice is read on a phone between customers.
+  return `📢 *${from}*:\n${text.trim().slice(0, 900)}`;
 }
 
 /** Who a floor notice is actually for: the manager's own people who can be reached right now.
