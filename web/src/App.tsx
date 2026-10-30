@@ -97,7 +97,7 @@ function TodayOverview({ floor }: { floor: Floor }) {
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-6 sm:grid-cols-5">
+      <CardContent className="grid grid-cols-2 gap-6 sm:grid-cols-6">
         <Stat label="Customers taken" value={String(total)} hint="total interactions started" />
         <Stat
           label="Home cards made"
@@ -114,6 +114,15 @@ function TodayOverview({ floor }: { floor: Floor }) {
           label="Quiet on roster"
           value={String(quiet)}
           hint={quiet ? "associates with 0 customers" : "everyone has served"}
+        />
+        <Stat
+          label="Model cost"
+          value={floor.spend === undefined ? "—" : `$${floor.spend.toFixed(4)}`}
+          hint={
+            floor.spend !== undefined && total > 0
+              ? `$${(floor.spend / total).toFixed(4)} a customer · ${floor.model ?? ""}`
+              : `since the server started · ${floor.model ?? ""}`
+          }
         />
       </CardContent>
     </Card>

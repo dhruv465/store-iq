@@ -79,6 +79,9 @@ export type Floor = {
   objections?: ObjectionInsight[];
   products?: ProductInsight[];
   feed?: FeedItem[];
+  /** What the model has cost since the server started, in US dollars, and which model it is. */
+  spend?: number;
+  model?: string;
 };
 
 export type Preview = {

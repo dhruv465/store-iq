@@ -17,6 +17,7 @@ import {
   type ProductInsight,
   type Rostered,
 } from "./extras.js";
+import { falConfig, falSpend } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
 import { loadPack, type Pack } from "./pack.js";
 
@@ -99,6 +100,11 @@ export function validSession(password: string, raw: string | undefined, now = Da
   return given.length === want.length && timingSafeEqual(given, want);
 }
 
+/** Which model is answering turns, for the portal to name. */
+function catalogModel(): string {
+  return falConfig()?.model ?? process.env.GEMINI_MODEL?.trim() ?? "gemini";
+}
+
 export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
   const user = process.env.ADMIN_USER?.trim() || "manager";
   const password = process.env.ADMIN_PASSWORD!;
@@ -164,6 +170,11 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
       maxScore: MAX_SCORE,
       guide: GUIDE,
       from,
+      // What the model has cost since this process started, and which one is answering. A store
+      // runs on margins: "the floor cost 4 cents today" is the sentence that makes an AI copilot
+      // an easy yes. It resets on restart, and fal's dashboard is the ledger.
+      spend: Number(falSpend().toFixed(6)),
+      model: catalogModel(),
       objections: objectionInsights(sessions, packData),
       products: productInsights(sessions, packData),
       feed: floorFeed(sessions),
