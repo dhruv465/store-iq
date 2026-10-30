@@ -27,7 +27,7 @@ try {
   // every turn was going to fal, which is the sort of thing that costs an afternoon.
   const fal = falConfig();
   const model = fal
-    ? `fal ${fal.model} (voice and photo on ${await assertModelAvailable()})`
+    ? `fal ${fal.model} · voice on fal-ai/whisper · photo on ${await assertModelAvailable()}`
     : await assertModelAvailable();
   const worker = startWorker(db, pack, { whatsapp });
   const app = createApp(
