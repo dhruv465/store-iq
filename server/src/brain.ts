@@ -575,11 +575,21 @@ export function languageOf(text: string | undefined): "en" | "hi" {
 function prompt(event: Event, session: Session, pack: Pack, tapped?: string, notes: string[] = []): string {
   const facts = factsFor(pack, session.card, session.shortlist);
   // The arithmetic the model should not do in its head, and only where a screen is being sold.
+  // The sizes we can actually hand over, beside the rule of thumb. Told only the rule, it answered
+  // a real associate "6 फीट की दूरी के लिए 43 इंच का टीवी सही रहेगा" — and this shop has no 43.
+  const sizes = [...new Set(pack.products.filter((p) => p.stock_units > 0).map((p) => p.size_inch))]
+    .sort((a, b) => a - b)
+    .join(", ");
   const sizeHint = !needsSizing(pack, session)
     ? ""
-    : session.card.distance_feet
-      ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
-      : "Viewing distance is still unknown, and it is what sizes a screen.";
+    : [
+        session.card.distance_feet
+          ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
+          : "Viewing distance is still unknown, and it is what sizes a screen.",
+        sizes ? `In stock today, in inches: ${sizes}. Never name a size that is not on that list.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
   // What is not on the card yet. Not an order to follow and not a question: the manager picks
   // which of these is worth asking this customer, and whether to ask anything at all.
   const card = session.card as Record<string, unknown>;

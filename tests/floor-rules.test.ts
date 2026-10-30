@@ -131,3 +131,21 @@ test("WhatsApp's own formatting, and nothing it would render as litter", () => {
   // A line with neither is left alone rather than decorated for its own sake.
   assert.equal(one("Right?"), "Right?");
 });
+
+test("the prompt names the sizes the shop can actually hand over", async () => {
+  // Told only the rule of thumb, it answered a real associate "6 फीट की दूरी के लिए 43 इंच का टीवी
+  // सही रहेगा" — and this shop stocks no 43. The guard let it through because the shift brief's own
+  // question mentions 43 inch, which is how a figure can be quotable and still be wrong.
+  const session = newSession("919820000009");
+  session.card = { distance_feet: 6 };
+  const model = manager({ lines: ["x"] });
+  await decide(
+    { id: "s1", phone: session.phone, modality: "text", text: "they sit 6 feet away" } as Event,
+    session,
+    pack,
+    model.fetch,
+  );
+  const sent = model.prompts.join(" ");
+  assert.match(sent, /In stock today, in inches: 55, 65/);
+  assert.match(sent, /Never name a size that is not on that list/);
+});
