@@ -79,16 +79,165 @@ export function offerAmount(product: Product, offer: Record<string, any>): numbe
   return 0;
 }
 
-/** Every number Store IQ is allowed to say. Anything else in a reply is an invention. */
-export function allowedNumbers(pack: Pack): Set<number> {
-  const allowed = new Set<number>();
-  const walk = (value: unknown): void => {
-    if (typeof value === "number") allowed.add(value);
+/** A number on its own is not a fact; a number with its unit is. The pack holds `1` as an HDMI
+ *  port count, which is why "the warranty is one year" passed a check on the number alone — twice,
+ *  in front of a customer. So a figure that carries a unit is checked as a pair.
+ *
+ *  Units of money are deliberately absent: a rupee figure is checked against the numbers, because
+ *  the pack's own arithmetic (price less offers, plus charges) produces amounts no key names. */
+const UNIT_OF: Record<string, string> = {
+  inch: "inch",
+  inches: "inch",
+  nits: "nits",
+  hz: "hz",
+  w: "watt",
+  watt: "watt",
+  watts: "watt",
+  month: "month",
+  months: "month",
+  year: "year",
+  years: "year",
+  yr: "year",
+  yrs: "year",
+  day: "day",
+  days: "day",
+  week: "week",
+  weeks: "week",
+  unit: "unit",
+  units: "unit",
+  port: "port",
+  ports: "port",
+  hdmi: "port",
+  percent: "percent",
+  "%": "percent",
+  kg: "kg",
+  litre: "litre",
+  litres: "litre",
+  liter: "litre",
+  liters: "litre",
+  star: "star",
+  stars: "star",
+  metre: "metre",
+  metres: "metre",
+  meter: "metre",
+  meters: "metre",
+  foot: "foot",
+  feet: "foot",
+  minute: "minute",
+  minutes: "minute",
+  hour: "hour",
+  hours: "hour",
+  // Every reply can be in Hindi or Marathi, so every unit can be. A model answered "warranty 1
+  // saal ki milti hai" and walked straight past an English-only table.
+  saal: "year",
+  sal: "year",
+  varsh: "year",
+  साल: "year",
+  वर्ष: "year",
+  वर्षे: "year",
+  mahina: "month",
+  mahine: "month",
+  mahino: "month",
+  महीना: "month",
+  महीने: "month",
+  महीनों: "month",
+  महिना: "month",
+  महिने: "month",
+  din: "day",
+  dino: "day",
+  दिन: "day",
+  दिनों: "day",
+  दिवस: "day",
+  hafta: "week",
+  hafte: "week",
+  saptah: "week",
+  हफ्ता: "week",
+  हफ्ते: "week",
+  सप्ताह: "week",
+  ghanta: "hour",
+  ghante: "hour",
+  घंटा: "hour",
+  घंटे: "hour",
+  इंच: "inch",
+  फुट: "foot",
+  फीट: "foot",
+  वाट: "watt",
+  यूनिट: "unit",
+  pratishat: "percent",
+  प्रतिशत: "percent",
+  kilo: "kg",
+  किलो: "kg",
+};
+
+/** Spelled out, a number slips past a digit scan entirely. */
+const SPELLED: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+export function canonUnit(word: string | undefined): string | undefined {
+  // Devanagari survives the tidy-up: stripping it left an empty string and every Hindi unit read
+  // as no unit at all.
+  return word ? UNIT_OF[word.toLowerCase().replace(/[^a-z%\u0900-\u097f]/g, "")] : undefined;
+}
+
+/** "one year" is a figure a digit scan never sees, so it is rewritten to "1 year" first. */
+export function spellOut(text: string): string {
+  return text.replace(
+    new RegExp(`\\b(${Object.keys(SPELLED).join("|")})[\\s-]+(?=[a-z%"])`, "gi"),
+    (whole, word: string) => `${SPELLED[word.toLowerCase()] ?? whole} `,
+  );
+}
+
+/** "2-year extended warranty" and "one year" both read as the pair `2 year` / `1 year`. */
+export function pairsIn(text: string): Set<string> {
+  const spelled = spellOut(text);
+  const pairs = new Set<string>();
+  for (const match of spelled.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*-?\s*("|%|[a-z\u0900-\u097f]+)/gi)) {
+    const unit = canonUnit(match[2]);
+    if (unit) pairs.add(`${Number(match[1]!.replace(/,/g, ""))} ${unit}`);
+  }
+  return pairs;
+}
+
+/** A key name carries the unit of the number under it: size_inch, peak_nits, months. The first
+ *  unit word in the key wins, so units_per_year_4h_day is units and not years. */
+function unitInKey(key: string): string | undefined {
+  const parts = key
+    .toLowerCase()
+    .split(/[^a-z%]+/)
+    .filter(Boolean);
+  for (const part of parts) if (UNIT_OF[part]) return UNIT_OF[part];
+  return undefined;
+}
+
+/** Every figure Store IQ is allowed to say. Anything else in a reply is an invention.
+ *
+ *  Numbers are members; a figure that carries a unit is a member as the string "55 inch". */
+export function allowedNumbers(pack: Pack): Set<number | string> {
+  const allowed = new Set<number | string>();
+  const walk = (value: unknown, key = ""): void => {
+    if (typeof value === "number") {
+      allowed.add(value);
+      const unit = unitInKey(key);
+      if (unit) allowed.add(`${value} ${unit}`);
+    }
     // Figures inside prose, such as the "2 PM sunlight" label line, are quotable too.
-    else if (typeof value === "string")
+    else if (typeof value === "string") {
       for (const token of value.matchAll(/\d+(?:\.\d+)?/g)) allowed.add(Number(token[0]));
-    else if (Array.isArray(value)) value.forEach(walk);
-    else if (value && typeof value === "object") Object.values(value).forEach(walk);
+      for (const pair of pairsIn(value)) allowed.add(pair);
+    } else if (Array.isArray(value)) value.forEach((entry) => walk(entry, key));
+    else if (value && typeof value === "object") for (const [name, entry] of Object.entries(value)) walk(entry, name);
   };
   walk({
     p: pack.products,

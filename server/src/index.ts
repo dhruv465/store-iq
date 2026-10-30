@@ -74,7 +74,14 @@ try {
       };
       const session = await db.session(phone);
       const started = Date.now();
-      const reply = await decide(event, session, pack, fetch, db);
+      // The worker answers a failed turn with an honest line on WhatsApp. Here the reason itself is
+      // the useful thing: a 500 saying "Internal error" sent me looking for a bug that was a quota.
+      let reply;
+      try {
+        reply = await decide(event, session, pack, fetch, db);
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "unknown", step: session.step }, 502);
+      }
       // Nothing is queued here on purpose, so /try never messages a real phone; the price measure
       // would otherwise be the one thing the harness could not reproduce.
       if (pricedEarly(session, reply)) session.priced_before_home = true;

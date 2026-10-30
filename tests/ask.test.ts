@@ -120,3 +120,18 @@ test("an associate relaying a customer's question is asking, not describing", as
   await decide(said("customer is asking what warranty comes with the TCL"), session, pack, dead).catch(() => null);
   assert.deepEqual(session.card, {}, "it used to file priorities = warranty");
 });
+
+test("an associate addresses their manager, and it is still a greeting or a question", () => {
+  // Six of six store conversations opened with an address word. Both patterns are anchored, so
+  // "namaste sir" read as a description of a customer and "boss, kitne ka target hai" as one too.
+  for (const hello of ["namaste sir", "hi boss", "hello bhai", "namaste ji", "हाय सर"])
+    assert.equal(intentOf(hello), "greeting", hello);
+  for (const question of [
+    "boss kitne ka target hai aaj",
+    "sir what do we have in 65 inch",
+    "bhai kaunsa TV lena chahiye",
+  ])
+    assert.equal(intentOf(question), "question", question);
+  // And an address word does not turn the customer's own details into a question about the shop.
+  assert.equal(intentOf("sir the customer sits 8 feet away"), "customer");
+});

@@ -29,11 +29,26 @@ const DESCRIBING = /\b(they|them|their|customer|grahak|he |she |his |her |family
 const RELAYING =
   /\b(asking|asks|asked|wants to know|wants to understand|poochh?|puchh?|pooch raha|what do i (say|tell|do)|how do i (say|tell|explain)|kya bolun|kya bataun|क्या बताऊँ|पूछ रहा)\b/i;
 
+/** Nobody on a shop floor writes to their manager without addressing them. "Namaste sir" was not
+ *  a greeting and "boss kitne ka target hai aaj" was not a question, because both patterns are
+ *  anchored and the address word sat where the anchor is. It comes off before either is tried.
+ *
+ *  No \b on the Devanagari words: in JavaScript a word boundary only knows ASCII. */
+const ADDRESS_FIRST =
+  /^(?:(?:boss|bhai|bhaiya|bro|sir|sirji|madam|ma'?am|yaar|saab|anna|ji|भाई|भैया|सर|बॉस|साहब|जी)[\s,.!]+)+/i;
+const ADDRESS_LAST =
+  /(?:^|[\s,])(?:boss|bhai|bhaiya|bro|sir|sirji|madam|ma'?am|yaar|saab|anna|ji|भाई|भैया|सर|बॉस|साहब|जी)[\s!.।?]*$/i;
+
+export function plain(text: string): string {
+  return text.replace(ADDRESS_FIRST, "").replace(ADDRESS_LAST, "").trim() || text.trim();
+}
+
 export function intentOf(text: string | undefined): Intent {
   if (!text?.trim()) return "customer";
-  if (GREETING.test(text)) return "greeting";
+  const addressed = plain(text);
+  if (GREETING.test(addressed)) return "greeting";
   if (RELAYING.test(text)) return "question";
-  const asks = ASKING.test(text) || /\?\s*$/.test(text);
+  const asks = ASKING.test(addressed) || /\?\s*$/.test(text);
   if (!asks) return "customer";
   // "Do they have WiFi?" is the associate reporting the home, not asking the shop about itself.
   // A question that is mostly about the customer is still a description.

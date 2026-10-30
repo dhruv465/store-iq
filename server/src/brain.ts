@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { providerRequest, readLimited } from "./http.js";
-import { allowedNumbers, factsFor, recommendedInches, type Pack } from "./pack.js";
+import { allowedNumbers, canonUnit, factsFor, pairsIn, recommendedInches, spellOut, type Pack } from "./pack.js";
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
@@ -50,7 +50,7 @@ How to be:
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
 
 Hard rules, never bent:
-- Never invent a price, offer, stock figure, finance term or specification. Use only the FACTS given to you. If a figure is not there, say so plainly and tell them where to check.
+- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. Use only the FACTS given to you. If it is not there, say you do not have it and tell them who does — the shelf tag, the ASM, the service desk. "I do not have today's target" is a real answer and a good one.
 - Never open offers, discounts, exchange or finance before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines plus your reason, except three options which take three lines. At most 3 buttons, 20 characters each. They read this at a glance, out loud, with a customer waiting.
@@ -361,40 +361,38 @@ export function numbersIn(text: string): Set<number> {
 /** The units a figure can carry. A number with one of these after it is a claim about a product,
  *  however small it is: "3 years" is as much an invention as "Rs 3,000" when the pack says neither. */
 const UNITS =
-  "%|percent|inch|inches|nits|hz|w\\b|watt|watts|months?|years?|yrs?|days?|weeks?|units?|rupees|ports?|hdmi|kg|litres?|liters?|stars?|metres?|meters?|feet|foot";
+  "%|percent|inch|inches|nits|hz|w\\b|watt|watts|months?|minutes?|hours?|years?|yrs?|days?|weeks?|units?|rupees|ports?|hdmi|kg|litres?|liters?|stars?|metres?|meters?|feet|foot" +
+  // The same units as the replies themselves can be written in.
+  "|saal|sal|varsh|mahin[aeo]|dino?|haft[ae]|saptah|ghant[ae]|pratishat|kilo" +
+  "|साल|वर्षे|वर्ष|महीनों|महीने|महीना|महिने|महिना|दिनों|दिवस|दिन|हफ्ते|हफ्ता|सप्ताह|घंटे|घंटा" +
+  "|इंच|फुट|फीट|वाट|यूनिट|प्रतिशत|किलो";
 
-/** Spelled out, a number slips past a digit scan entirely. "The warranty is one year" was invented
- *  by the model and read as prose. */
-const SPELLED: Record<string, number> = {
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  eleven: 11,
-  twelve: 12,
-};
-
-export function unsupportedNumbers(text: string, allowed: Set<number>, said: string): string[] {
+/** A figure that carries a unit is checked as a pair: "one year" is not in today's data because
+ *  no `1 year` is, however many 1s the pack holds as HDMI ports. A rupee figure stays a check on
+ *  the number, because the pack's own arithmetic produces amounts no key names. */
+export function unsupportedNumbers(text: string, allowed: Set<number | string>, said: string): string[] {
   const quoted = numbersIn(said);
+  const spoken = pairsIn(said);
   const bad: string[] = [];
-  // Rewrite "one year" as "1 year" first, so one scan covers both ways of writing it.
-  const scanned = text.replace(
-    new RegExp(`\\b(${Object.keys(SPELLED).join("|")})\\s+(?=(?:${UNITS}))`, "gi"),
-    (_whole, word: string) => `${SPELLED[word.toLowerCase()]} `,
-  );
+  const scanned = spellOut(text);
   for (const match of scanned.matchAll(
-    new RegExp(`(₹\\s?|\\bRs\\.?\\s?)?(\\d[\\d,]*(?:\\.\\d+)?)\\s?(${UNITS})?`, "gi"),
+    new RegExp(`(₹\\s?|\\bRs\\.?\\s?)?(\\d[\\d,]*(?:\\.\\d+)?)\\s?-?\\s?(${UNITS})?`, "gi"),
   )) {
     const raw = match[2]!.replace(/,/g, "");
     const value = Number(raw);
-    const factLike = !!match[1] || !!match[3] || value >= 100;
-    if (!factLike || !Number.isFinite(value)) continue;
+    if (!Number.isFinite(value)) continue;
+    const unit = match[1] ? undefined : canonUnit(match[3]);
+    if (unit) {
+      const pair = `${value} ${unit}`;
+      if (!allowed.has(pair) && !spoken.has(pair)) bad.push(`${raw} ${unit}`);
+      continue;
+    }
+    // A bare count is a claim too: a model announced "target is 12 TVs today" and no target of
+    // any kind is in the pack. Under ten stays prose, so "three options" and "two bedsheets" are
+    // left alone.
+    // shortcut: a bare number below ten is not checked. Pair it with its noun to close that.
+    const factLike = !!match[1] || !!match[3] || value >= 10;
+    if (!factLike) continue;
     if (allowed.has(value) || quoted.has(value)) continue;
     bad.push(raw);
   }
