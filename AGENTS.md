@@ -64,6 +64,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   first, because Whisper answers "Unsupported data URL" to base64 inline. The router has no
   response schema, so the JSON shape is asked for in words and read by `readJson()`.
   **Gemini is still the label photo**, and answers the turn when there is no `FAL_KEY`.
+- The pack comes from the **live catalogue** when `CATALOG_HOST`, `CATALOG_APPLICATION_ID` and
+  `CATALOG_APPLICATION_TOKEN` are set (`startingPack()` in `pack.ts`), and from `data/pack.json`
+  otherwise — or when the live call fails, loudly, so a bad key cannot kill the number.
 - Money is written `Rs 54,990`, never `₹`.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - Never commit `.env`, `web/dist`, `web/node_modules`, `data/runtime/`.

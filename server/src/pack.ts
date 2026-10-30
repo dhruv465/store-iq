@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HomeCard } from "./types.js";
-import { adaptPack } from "./adapt.js";
+import { adaptPack, fromFdk, fromPromotion, running } from "./adapt.js";
+import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig } from "./catalog.js";
 
 export type Pack = {
   version: string;
@@ -52,6 +53,66 @@ export async function readSource(source: string): Promise<string> {
   });
   if (!response.ok) throw Error(`Data pack ${source} answered HTTP ${response.status}`);
   return response.text();
+}
+
+/** The live store, read-only, in the shape the rest of this reads.
+ *
+ *  getProducts for the catalogue, getPromotionOffers for what is running on the few we would
+ *  actually recommend — the endpoint is per slug, so this is not a crawl. Everything those two
+ *  methods do not carry — finance terms, charges, myths, labels, install requirements — stays from
+ *  `base`, which is data/pack.json, because no endpoint this product may call has them.
+ *
+ *  shortcut: read once, at startup. Stock moves during a shift and this will not notice until the
+ *  server restarts. Add a refresh when the floor is live all day rather than for a demo. */
+export async function livePack(
+  config: CatalogConfig,
+  base: Record<string, any>,
+  request: typeof fetch = fetch,
+): Promise<Record<string, any>> {
+  const { items } = await getProducts(
+    config,
+    { q: process.env.CATALOG_QUERY?.trim() || "television", page_size: 24, page_no: 1, page_type: "number" },
+    request,
+  );
+  if (!items.length) throw Error("The catalogue answered with no products");
+  const offers = new Map<string, Record<string, unknown>>();
+  for (const row of items.slice(0, 5)) {
+    const slug = (row as { slug?: string }).slug;
+    if (!slug) continue;
+    for (const promotion of await getPromotionOffers(config, { slug }, request)) {
+      const offer = fromPromotion(promotion);
+      if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
+    }
+  }
+  return {
+    ...base,
+    version: `live-${new Date().toISOString().slice(0, 10)}`,
+    products: items.map(fromFdk),
+    // The pack's own offers are kept when the store is running none: an empty offers list would
+    // quietly close the offer step rather than say there is nothing on.
+    offers: offers.size ? [...offers.values()] : base.offers,
+  };
+}
+
+/** The pack the server serves: the live catalogue when it is configured, the file otherwise.
+ *
+ *  A bad key must not kill the number. It says so loudly and serves the file, because an associate
+ *  with a customer in front of them needs an answer more than they need our configuration to be
+ *  right. */
+export async function startingPack(request: typeof fetch = fetch): Promise<{ pack: Pack; source: string }> {
+  const config = catalogConfig();
+  const file = process.env.PACK_PATH || "data/pack.json";
+  if (!config) return { pack: await loadPack(file), source: file };
+  try {
+    const { pack, problems } = adaptPack(
+      (await livePack(config, JSON.parse(await readSource(file)), request)) as never,
+    );
+    if (problems.length) throw Error(problems.join("; "));
+    return { pack, source: `live catalogue · ${pack.products.length} products` };
+  } catch (error) {
+    console.error(`Live catalogue unusable, serving ${file}: ${error instanceof Error ? error.message : "unknown"}`);
+    return { pack: await loadPack(file), source: `${file} (live catalogue failed)` };
+  }
 }
 
 /** Single source of facts. Prices, offers, stock and finance terms exist only here.

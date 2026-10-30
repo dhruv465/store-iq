@@ -9,6 +9,7 @@ import {
   getStock,
   read,
 } from "../server/src/catalog.js";
+import { startingPack } from "../server/src/pack.js";
 
 /** This talks to a production store. The tests below are the proof that it cannot write to one,
  *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
@@ -122,4 +123,58 @@ test("every parameter the v1.9.5 reference documents reaches the query", async (
   const offers = new URL(calls[1]!.url);
   assert.equal(offers.searchParams.get("cart_type"), "value");
   assert.equal(offers.searchParams.get("promotion_group"), "bank");
+});
+
+/** One page of the live catalogue, in the shape getProducts returns it. */
+function store(body: Record<string, unknown>): typeof fetch {
+  return (async (url: string | URL) =>
+    new Response(JSON.stringify(String(url).includes("available-promotions") ? { available_promotions: [] } : body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as unknown as typeof fetch;
+}
+
+const LIVE = {
+  items: [
+    {
+      uid: 1,
+      name: 'Sony Bravia 2 55" 4K LED Google TV',
+      slug: "sony-bravia-2-55",
+      item_code: "SON-K55S30",
+      brand: { name: "Sony" },
+      price: { marked: { min: 79900 }, effective: { min: 62990 } },
+      attributes: { display_type: "LED", peak_nits: 400 },
+      sellable: true,
+    },
+  ],
+  page: { item_total: 1 },
+};
+
+test("the server serves the live catalogue the moment the credentials are set", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  try {
+    const live = await startingPack(store(LIVE));
+    assert.match(live.source, /live catalogue · 1 product/);
+    assert.equal(live.pack.products[0]!.sku, "SON-K55S30");
+    assert.equal(live.pack.products[0]!.price_rupees, 62990);
+    // Everything the two methods do not carry stays from the file.
+    assert.ok(live.pack.finance.length, "finance terms are ours");
+    assert.ok(live.pack.charges.length, "so are the charges");
+    assert.ok(live.pack.offers.length, "and the pack's offers, when the store is running none");
+
+    // A bad key must not kill the number: say so and serve the file.
+    const broken = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+    const fallen = await startingPack(broken);
+    assert.match(fallen.source, /live catalogue failed/);
+    assert.equal(fallen.pack.version, "stub-1");
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
 });

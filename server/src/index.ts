@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
 import { openDatabase, pricedEarly } from "./db.js";
-import { loadPack } from "./pack.js";
+import { startingPack } from "./pack.js";
 import { falConfig } from "./fal.js";
 import { startWorker } from "./worker.js";
 import { managerRoutes } from "./manager.js";
@@ -13,7 +13,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error("PORT must 
 const host = process.env.HOST || "127.0.0.1";
 const local = ["127.0.0.1", "localhost", "::1"].includes(host);
 
-const pack = await loadPack();
+const { pack, source: packSource } = await startingPack();
 const db = await openDatabase();
 try {
   const whatsapp = !!(
@@ -105,7 +105,7 @@ try {
     });
   const server = serve({ fetch: app.fetch, port, hostname: host }, () =>
     console.log(
-      `Store IQ http://${host}:${port} · pack ${pack.version} · ${model} · whatsapp ${whatsapp ? "on" : "off"}`,
+      `Store IQ http://${host}:${port} · pack ${pack.version} (${packSource}) · ${model} · whatsapp ${whatsapp ? "on" : "off"}`,
     ),
   );
   let closing = false;

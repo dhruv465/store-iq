@@ -120,7 +120,16 @@ have at all is reported as defaulted, which tells you which ranking rule can no 
 
 ### The live Jio Commerce catalogue
 
-With `CATALOG_HOST`, `CATALOG_APPLICATION_ID` and `CATALOG_APPLICATION_TOKEN` in `.env`:
+Put `CATALOG_HOST`, `CATALOG_APPLICATION_ID` and `CATALOG_APPLICATION_TOKEN` in `.env` and
+restart. That is the whole switch: the server builds its pack from the store instead of
+`data/pack.json`, and the startup line says which it served. If the credentials are wrong it says
+so and serves the file, because an associate with a customer in front of them needs an answer more
+than they need our configuration to be right.
+
+Finance terms, charges, labels, myths and install requirements stay from `data/pack.json`: no
+endpoint this product may call carries them. Stock is read once, at startup.
+
+To see what the store answers before the number serves it:
 
 ```bash
 npm run pack:check -- live
