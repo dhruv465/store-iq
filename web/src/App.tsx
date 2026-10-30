@@ -28,6 +28,7 @@ import {
   type ProductInsight,
 } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -193,6 +194,7 @@ function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => voi
                     <TableRow key={row.phone} className={row.quiet ? "text-muted-foreground" : undefined}>
                       <TableCell className="font-medium">
                         <span className="flex items-center gap-2">
+                          <Avatar seed={row.phone} />
                           {row.name}
                           {row.quiet ? <Badge variant="outline">quiet today</Badge> : null}
                           {row.onRoster ? null : <Badge variant="secondary">not on roster</Badge>}
@@ -732,6 +734,7 @@ function TellTheFloor({ floor }: { floor: Floor }) {
             <div className="flex flex-wrap gap-2">
               {preview.to.map((person) => (
                 <Badge key={person.phone} variant="secondary">
+                  <Avatar seed={person.phone} className="size-5 text-xs" />
                   {person.name}
                 </Badge>
               ))}
