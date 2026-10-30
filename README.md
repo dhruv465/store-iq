@@ -52,7 +52,8 @@ A refused reply is recorded as `skipped` with the reason, never silently dropped
 
 `FAL_KEY` set: the turn goes through **fal.ai's OpenRouter router**, on the slug in `FAL_MODEL`
 (default `google/gemini-2.5-flash`). A turn is about 3,200 tokens in and 50 out, which measured
-**$0.0007** on real turns — 1,400 turns to the dollar. `server/src/fal.ts` carries the table of
+**$0.0007 to $0.0015** on real turns — roughly a thousand turns to the dollar. `GET /health`
+reports `spend_usd_since_start`, which is the only record there is: fal has no usage endpoint. `server/src/fal.ts` carries the table of
 what the cheaper slugs did instead, including one that invented a brand warranty and two the
 router refuses outright. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
 read tolerantly; it takes no audio and no images.

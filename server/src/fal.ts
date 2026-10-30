@@ -17,8 +17,9 @@ export type FalConfig = { key: string; model: string };
  *  ones cannot do this job, and the router says why in three different ways. Measured 30 Oct 2026,
  *  four real turns each:
  *
- *   google/gemini-2.5-flash        ~$0.0007 a turn. The default: the prompt was written against
- *                                  this family, and Hindi and Marathi come back clean.
+ *   google/gemini-2.5-flash        $0.0007 to $0.0015 a turn, by how much of the pack the turn
+ *                                  carries. The default: the prompt was written against this
+ *                                  family, and Hindi and Marathi come back clean.
  *   mistralai/mistral-small-24b    ~$0.00015 a turn, and it invented a 2-year brand warranty and a
  *                                  price match with Croma. Cheap is not the only axis.
  *   anthropic/claude-haiku-4.5     works, about three times the default.
@@ -29,6 +30,15 @@ export type FalConfig = { key: string; model: string };
  *   qwen/qwen3-32b                 answered with an empty string and billed for it.
  *   openrouter/auto                answered `{"ok":<|endoftext|>true}`. Never route through it. */
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
+
+/** What this process has spent, since fal returns the cost of every call it bills and nothing
+ *  else records it. It resets when the server restarts, which under `npm run dev` is often, so it
+ *  answers "what is this costing" rather than "what has it cost". fal's dashboard is the ledger. */
+let spent = 0;
+
+export function falSpend(): number {
+  return spent;
+}
 
 export function falConfig(env = process.env): FalConfig | null {
   const key = env.FAL_KEY?.trim();
@@ -67,6 +77,7 @@ export async function falText(
   };
   if (body.error) throw Error(`fal refused: ${body.error}`);
   if (!body.output?.trim()) throw Error("Empty fal response");
+  spent += body.usage?.cost ?? 0;
   return { text: body.output, cost: body.usage?.cost ?? 0 };
 }
 

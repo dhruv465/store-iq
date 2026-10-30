@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { falSpend } from "./fal.js";
 import { decide } from "./brain.js";
 import type { DB } from "./db.js";
 import type { Pack } from "./pack.js";
@@ -114,8 +115,15 @@ export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) 
     await deliverHeldNotices(db, row.phone);
     const session = await db.session(row.phone);
     let reply: Reply;
+    const started = Date.now();
     try {
       reply = await decide(event, session, pack, fetch, db);
+      // A turn that worked used to print nothing at all, so the only evidence a real conversation
+      // had happened was the manager portal. One line each: what came in, how long it took, and
+      // what the day has cost so far.
+      console.log(
+        `${row.message_type} answered in ${Date.now() - started} ms · step ${session.step} · $${falSpend().toFixed(5)} so far`,
+      );
     } catch (error) {
       // Silence in front of a customer is worse than an honest line. The session is left untouched,
       // so the associate can simply ask again from where they were.

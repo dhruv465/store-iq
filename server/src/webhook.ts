@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { falSpend } from "./fal.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
@@ -84,6 +85,9 @@ export function createApp(config: Config, enqueue?: InboxWriter) {
       stage: config.ready ? "store-iq" : "foundation",
       agent_ready: config.ready === true,
       ...(config.ready ? { whatsapp_configured: config.whatsappReady === true } : {}),
+      // What the model has cost since this process started, because nothing else records it and
+      // fal has no endpoint to ask.
+      spend_usd_since_start: Number(falSpend().toFixed(6)),
     }),
   );
 
