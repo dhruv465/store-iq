@@ -13,9 +13,22 @@ import { modelRequest, readLimited } from "./http.js";
 
 export type FalConfig = { key: string; model: string };
 
-/** Cheap enough not to think about: at ~3,200 tokens a turn this is about a hundredth of a US cent.
- *  Any OpenRouter slug works — FAL_MODEL swaps it without a code change. */
-const DEFAULT_MODEL = "qwen/qwen3.7-flash";
+/** Any OpenRouter slug works — FAL_MODEL swaps it without a code change — but most of the cheap
+ *  ones cannot do this job, and the router says why in three different ways. Measured 30 Oct 2026,
+ *  four real turns each:
+ *
+ *   google/gemini-2.5-flash        ~$0.0007 a turn. The default: the prompt was written against
+ *                                  this family, and Hindi and Marathi come back clean.
+ *   mistralai/mistral-small-24b    ~$0.00015 a turn, and it invented a 2-year brand warranty and a
+ *                                  price match with Croma. Cheap is not the only axis.
+ *   anthropic/claude-haiku-4.5     works, about three times the default.
+ *   qwen/qwen3.7-flash             refused: "ZDR violation (account settings)" — no provider for
+ *                                  it meets the zero-data-retention policy on this account.
+ *   z-ai/glm-5.3-flash, gpt-5-nano refused: "Reasoning is mandatory for this endpoint", and we ask
+ *                                  for none, because the floor wants an answer in five seconds.
+ *   qwen/qwen3-32b                 answered with an empty string and billed for it.
+ *   openrouter/auto                answered `{"ok":<|endoftext|>true}`. Never route through it. */
+const DEFAULT_MODEL = "google/gemini-2.5-flash";
 
 export function falConfig(env = process.env): FalConfig | null {
   const key = env.FAL_KEY?.trim();

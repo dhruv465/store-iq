@@ -51,8 +51,10 @@ A refused reply is recorded as `skipped` with the reason, never silently dropped
 ## Which model answers
 
 `FAL_KEY` set: the turn goes through **fal.ai's OpenRouter router**, on the slug in `FAL_MODEL`
-(default `qwen/qwen3.7-flash`). A turn is about 3,200 tokens in and 50 out — a hundredth of a US
-cent. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
+(default `google/gemini-2.5-flash`). A turn is about 3,200 tokens in and 50 out, which measured
+**$0.0007** on real turns — 1,400 turns to the dollar. `server/src/fal.ts` carries the table of
+what the cheaper slugs did instead, including one that invented a brand warranty and two the
+router refuses outright. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
 read tolerantly; it takes no audio and no images.
 
 So **Gemini stays** for the two things it cannot do: a voice note and a shelf-tag photo. With no

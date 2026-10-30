@@ -65,7 +65,7 @@ test("the shape is spelled out, since there is nowhere to put a schema", () => {
 
 test("the catalogue of settings: nothing is on until the key is", () => {
   assert.equal(falConfig({} as never), null);
-  assert.deepEqual(falConfig({ FAL_KEY: " k " } as never), { key: "k", model: "qwen/qwen3.7-flash" });
+  assert.deepEqual(falConfig({ FAL_KEY: " k " } as never), { key: "k", model: "google/gemini-2.5-flash" });
   assert.equal(falConfig({ FAL_KEY: "k", FAL_MODEL: "z-ai/glm-5.3-flash" } as never)!.model, "z-ai/glm-5.3-flash");
 });
 

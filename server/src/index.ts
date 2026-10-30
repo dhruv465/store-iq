@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
 import { openDatabase, pricedEarly } from "./db.js";
 import { loadPack } from "./pack.js";
+import { falConfig } from "./fal.js";
 import { startWorker } from "./worker.js";
 import { managerRoutes } from "./manager.js";
 import { assertModelAvailable, decide } from "./brain.js";
@@ -22,7 +23,12 @@ try {
     process.env.WHATSAPP_APP_SECRET &&
     process.env.WHATSAPP_VERIFY_TOKEN
   );
-  const model = await assertModelAvailable();
+  // Which model answers a turn, said plainly at startup: the log read "gemini-2.5-flash" while
+  // every turn was going to fal, which is the sort of thing that costs an afternoon.
+  const fal = falConfig();
+  const model = fal
+    ? `fal ${fal.model} (voice and photo on ${await assertModelAvailable()})`
+    : await assertModelAvailable();
   const worker = startWorker(db, pack, { whatsapp });
   const app = createApp(
     {
