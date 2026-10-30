@@ -8,7 +8,9 @@ import {
   moneySafe,
   nextQuestion,
   numbersIn,
+  offerExpert,
   offerLeaked,
+  unknownReply,
   render,
   unsupportedNumbers,
 } from "../server/src/brain.js";
@@ -272,4 +274,23 @@ test("a bare count is a claim once it is bigger than prose", () => {
   // shortcut: 12 is in the pack, inside a demo cue that says "stand at 8 feet, then 12", so a
   // bare 12 of anything passes. Closing this needs the noun paired, not just the unit.
   assert.deepEqual(unsupportedNumbers("Target is 12 TVs today.", allowed, ""), []);
+});
+
+test("a reply that could not answer carries a human who can", () => {
+  const refused = offerExpert({ text: "I do not have that." }, "en");
+  assert.deepEqual(refused.buttons, [{ id: "ask_expert", title: "Find out for me" }]);
+  // Never twice, and never when there is no store to log the question against.
+  assert.deepEqual(offerExpert(refused, "en").buttons?.length, 1);
+  assert.equal(offerExpert({ text: "x" }, "en", false).buttons, undefined);
+  assert.equal(offerExpert({ text: "x" }, "hi").buttons![0]!.title, "पता करके बताइए");
+});
+
+test("asked for something the pack does not have, the reason is ours and a human is offered", () => {
+  const reply = unknownReply({ text: 'Ask: "Which model is it?"\n↳ The requested information is not in FACTS.' }, "en");
+  assert.deepEqual(reply.text.split("\n"), [
+    'Ask: "Which model is it?"',
+    "↳ Nothing in today's data has it — I can get it from the expert.",
+  ]);
+  assert.deepEqual(reply.buttons, [{ id: "ask_expert", title: "Find out for me" }]);
+  assert.match(unknownReply({ text: "x" }, "hi").text, /एक्सपर्ट/);
 });

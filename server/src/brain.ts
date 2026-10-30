@@ -16,7 +16,7 @@ import {
   worthFiling,
 } from "./visit.js";
 import { describe, extractCard } from "./extract.js";
-import { askedToSwitchLanguage, languageFrom, t } from "./i18n.js";
+import { askedToSwitchLanguage, languageFrom, t, type Lang } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import {
   briefAnswer,
@@ -48,9 +48,11 @@ How to be:
 - When they are with a customer and have told you about them, the order that works is: learn the home, correct a wrong belief kindly, turn a spec into something about this home, show three options with one reason and one difference each, give the full cost charge by charge, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "How far will you sit from the TV?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
+- Your reason line is for the associate, about the floor: why this question, why this set, why now. Never about yourself, your FACTS, your rules or what you are designed to do.
 
 Hard rules, never bent:
-- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. Use only the FACTS given to you. If it is not there, say you do not have it and tell them who does — the shelf tag, the ASM, the service desk. "I do not have today's target" is a real answer and a good one.
+- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. Use only the FACTS given to you. If it is not there, say you do not have it and tell them who does — the shelf tag, the ASM, the service desk. "I do not have today's target" is a real answer and a good one. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
+- Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not fill in a customer's home from it, and do not steer it back to a product.
 - Never open offers, discounts, exchange or finance before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines plus your reason, except three options which take three lines. At most 3 buttons, 20 characters each. They read this at a glance, out loud, with a customer waiting.
@@ -66,11 +68,16 @@ export type Decision = {
   lines: string[];
   buttons: { id: string; title: string }[];
   reason: string;
+  /** Set when the answer is not in the pack. A manager who does not know says they will find out,
+   *  so the reply carries the button that puts the question to a human. */
+  unknown?: boolean;
 };
 
 const schema = {
   type: "OBJECT",
-  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "reason"],
+  // "unknown" is required or the model simply leaves it out: it said "I do not have that"
+  // in prose and reported nothing, so no human was ever offered.
+  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "reason", "unknown"],
   properties: {
     step: { type: "STRING", enum: [...STEPS] },
     card: {
@@ -111,6 +118,10 @@ const schema = {
       },
     },
     reason: { type: "STRING", description: "one short line: why this answer" },
+    unknown: {
+      type: "BOOLEAN",
+      description: "true when FACTS do not hold what they asked for, so a human has to answer it",
+    },
   },
 } as const;
 
@@ -397,6 +408,22 @@ export function unsupportedNumbers(text: string, allowed: Set<number | string>, 
     bad.push(raw);
   }
   return bad;
+}
+
+/** What they asked for is not in the pack: the words they can say stay, the reason becomes ours,
+ *  and a human is offered. Asked for something missing, the model explains itself to the associate
+ *  — "not in FACTS", "I am designed not to invent" — which is this product talking about itself to
+ *  somebody holding a customer. */
+export function unknownReply(reply: Reply, lang: Lang): Reply {
+  const words = reply.text.split("\n").filter((line) => line.trim() && !line.startsWith("↳"));
+  return offerExpert({ ...reply, text: [...words, `↳ ${t(lang, "unknown.reason")}`].join("\n") }, lang);
+}
+
+/** The same offer on every reply that could not answer: one more button, never a second copy. */
+export function offerExpert(reply: Reply, lang: Lang, when = true): Reply {
+  const buttons = reply.buttons ?? [];
+  if (!when || buttons.some((button) => button.id === "ask_expert")) return reply;
+  return { ...reply, buttons: [...buttons, { id: "ask_expert", title: t(lang, "btn.expert") }] };
 }
 
 export function moneySafe(text: string): string {
@@ -938,11 +965,22 @@ async function answer(
 
   let reply = render(decision);
   const said = `${event.text ?? ""} ${event.action ?? ""}`;
+  // A manager who does not know the answer finds out. The question goes to the named expert and
+  // comes back as a notice, so the associate is not left with "I do not have that".
+  //
+  // The reason line is written here rather than left to the model: asked for something missing it
+  // explains itself to the associate — "not in FACTS", "I am designed not to invent" — which is
+  // this product talking about itself to somebody holding a customer.
+  if (decision.unknown && store) reply = unknownReply(reply, session.language);
   const bad = unsupportedNumbers(reply.text, allowedNumbers(pack), said);
   if (bad.length)
-    reply = {
-      text: `That figure is not in today's data pack, so I will not say it.\n↳ Check the shelf tag or the manager before quoting ${bad[0]}.`,
-    };
+    reply = offerExpert(
+      {
+        text: `That figure is not in today's data pack, so I will not say it.\n↳ Check the shelf tag or the manager before quoting ${bad[0]}.`,
+      },
+      session.language,
+      !!store,
+    );
   else if (offerLeaked(reply.text, session.assessed, session.demonstrated))
     reply = {
       text: `${t(session.language, "gate.offers", { body: nextQuestionReply(session).text.split("\n").pop() ?? "" })}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
