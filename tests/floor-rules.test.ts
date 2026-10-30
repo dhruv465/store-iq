@@ -47,12 +47,16 @@ const WALK: ({ text: string } | { action: string })[] = [
  *  is the one shape where a separate reason line would push it over the limit. */
 const REASON_INSIDE_THE_LINE = /Show:|दिखाइए:|दाखवा:/;
 
+/** Lines of something to read. A reply is spaced with a blank line between each part, because
+ *  WhatsApp renders one as space, and the contest's limit of three counts what there is to read. */
+const content = (text: string): string[] => text.split("\n").filter((line) => line.trim());
+
 test("every reply on a whole conversation obeys the floor's three lines and three buttons", async () => {
   const session = newSession("919820000001");
   for (const [index, turn] of WALK.entries()) {
     const event: Event = { id: `w${index}`, phone: session.phone, modality: "text", ...turn } as Event;
     const reply = await decide(event, session, pack, wordy().fetch);
-    const lines = reply.text.split("\n");
+    const lines = content(reply.text);
     const what = `turn ${index + 1} (${JSON.stringify(turn)}): ${reply.text}`;
     assert.ok(lines.length <= 3, `more than three lines — ${what}`);
     assert.ok((reply.buttons ?? []).length <= 3, `more than three buttons — ${what}`);
@@ -66,7 +70,7 @@ test("the same walk in Hindi and in Marathi keeps the same shape", async () => {
     for (const [index, turn] of WALK.entries()) {
       const event: Event = { id: `w${index}`, phone: session.phone, modality: "text", ...turn } as Event;
       const reply = await decide(event, session, pack, wordy().fetch);
-      assert.ok(reply.text.split("\n").length <= 3, `${language} turn ${index + 1}: ${reply.text}`);
+      assert.ok(content(reply.text).length <= 3, `${language} turn ${index + 1}: ${reply.text}`);
       assert.ok((reply.buttons ?? []).length <= 3, `${language} turn ${index + 1}`);
     }
   }
@@ -82,13 +86,16 @@ test("the gate keeps the words to say and drops the reason when something has to
       { id: "d", title: "D" },
     ],
   });
-  // Trimmed first, then formatted: the words to say come out emboldened and the reason italic.
-  assert.deepEqual(long.text.split("\n"), ['Ask: "*the first thing*"', 'Ask: "*the second thing*"', "_↳ the reason_"]);
+  // Trimmed first, then formatted: the words to say come out emboldened, the reason italic, and a
+  // blank line between each.
+  assert.equal(long.text, 'Ask: "*the first thing*"\n\nAsk: "*the second thing*"\n\n_↳ the reason_');
   assert.equal(long.buttons!.length, 3);
 });
 
 test("a blank line is not a line", () => {
-  assert.equal(floor({ text: "one\n\n\ntwo" }).text, "one\ntwo");
+  // Blank lines in, one blank line out between each part: what is counted is what there is to read.
+  assert.deepEqual(content(floor({ text: "one\n\n\ntwo" }).text), ["one", "two"]);
+  assert.equal(floor({ text: "one\n\n\ntwo" }).text, "one\n\ntwo");
 });
 
 test("a reason with nothing to do is not an answer", () => {

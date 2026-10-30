@@ -493,8 +493,12 @@ export function floor(reply: Reply): Reply {
   const buttons = (reply.buttons ?? []).slice(0, 3);
   // Formatted after the trim, never before: the reason is found by its ↳, and an italic marker in
   // front of it hid the line from the rule that exists to protect it.
+  //
+  // A blank line between each part, because WhatsApp renders one as space and three lines run
+  // together is a wall of text on a phone held in one hand. The contest's limit is three lines of
+  // something to read, and a blank line is not one of those.
   return pretty({
-    text: kept.join("\n").slice(0, 1000),
+    text: kept.join("\n\n").slice(0, 1000),
     ...(buttons.length ? { buttons } : {}),
   });
 }

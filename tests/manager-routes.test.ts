@@ -165,7 +165,7 @@ test("the preview says who it reaches and queues nothing", async () => {
     body.to.map((person: any) => person.name),
     ["Ramesh", "Asha"],
   );
-  assert.match(body.message, /^📢 .*:\ntwo LG 65 inch left$/s);
+  assert.match(body.message, /^📢 .*:\n\ntwo LG 65 inch left$/s);
   assert.deepEqual(sent, [], "a preview sends nothing");
 });
 
@@ -181,7 +181,7 @@ test("the manager's own click reaches every associate inside the window", async 
     ["919820000001", "919820000002"],
     "the stranger who messaged the number is not on the floor and is not sent to",
   );
-  assert.match(sent[0]!.reply.text, /^📢 .*:\nTCL 55 inch is Rs 54,990 today only$/s);
+  assert.match(sent[0]!.reply.text, /^📢 .*:\n\nTCL 55 inch is Rs 54,990 today only$/s);
 });
 
 test("an empty notice is not sent to anyone", async () => {
