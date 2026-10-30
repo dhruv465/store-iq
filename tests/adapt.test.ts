@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adaptPack, adaptProduct, figure, fromFdk } from "../server/src/adapt.js";
+import { adaptPack, adaptProduct, figure, fromFdk, fromPromotion, running } from "../server/src/adapt.js";
 import { rank } from "../server/src/recommend.js";
 import type { Pack } from "../server/src/pack.js";
 
@@ -141,4 +141,40 @@ test("the screen size is the number before inch, not the first number in the nam
   assert.equal(adaptProduct(fromFdk({ ...fdkRow, attributes: {} })).product.size_inch, 55);
   assert.equal(adaptProduct(fromFdk({ name: 'LG 4 Series 65" UHD', price: {} })).product.size_inch, 65);
   assert.equal(adaptProduct(fromFdk({ name: "Samsung Series 7 Washing Machine", price: {} })).product.size_inch, 0);
+});
+
+/** One PromotionOffer as getPromotionOffers returns it, with the fields the reference documents. */
+const promotion = {
+  id: "661f0c5d8a",
+  offer_text: "10% off up to Rs 8,000 on HDFC credit cards",
+  promotion_name: "HDFC October",
+  promotion_type: "bank_offer",
+  promotion_group: "bank",
+  valid_till: "2026-11-30T18:30:00.000Z",
+  description: "On HDFC credit cards. Not valid with no-cost EMI.",
+  discount_rules: [{ some_key_we_have_not_seen: 10 }],
+};
+
+test("a live promotion becomes an offer, with its own words and no figure of ours", () => {
+  const offer = fromPromotion(promotion);
+  assert.equal(offer.id, "661f0c5d8a");
+  assert.equal(offer.title, "10% off up to Rs 8,000 on HDFC credit cards");
+  assert.equal(offer.applies_to, "bank");
+  assert.match(String(offer.needs), /no-cost EMI/);
+  // discount_rules is undocumented, so nothing is read off it and nothing is computed from it.
+  assert.equal(offer.percent, undefined);
+  assert.equal(offer.flat_rupees, undefined);
+});
+
+test("an offer that has run out is not running", () => {
+  const nov = Date.parse("2026-11-01T00:00:00.000Z");
+  assert.equal(running(fromPromotion(promotion), nov), true);
+  assert.equal(running(fromPromotion(promotion), Date.parse("2026-12-01T00:00:00.000Z")), false);
+  assert.equal(running({ title: "no end date" }, nov), true, "an offer with no end date is on");
+});
+
+test("the floor questions a listing can answer come through with the specs", () => {
+  const { product } = adaptProduct(fromFdk({ ...fdkRow, country_of_origin: "Vietnam" }));
+  assert.equal(product.specs.country_of_origin, "Vietnam");
+  assert.equal(product.specs.rating, 4.3);
 });

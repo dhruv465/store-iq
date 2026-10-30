@@ -11,15 +11,16 @@ import { providerRequest, readLimited } from "./http.js";
  *  1. There is no write code. No POST, PUT, PATCH or DELETE is issued anywhere in this file, and
  *     no function here takes a method. The official FDK client library is deliberately NOT used:
  *     its cart object carries addItems, updateCart and deleteCart on the same handle, and a
- *     mistake or a clever suggestion could reach them. Two hand-written GETs cannot.
- *  2. The path is checked against a list of exactly two, taken from the method reference the
- *     judges supplied. Both are on /service/application/, which is the storefront surface; the
- *     writable surface is /service/platform/ and nothing here can reach it.
+ *     mistake or a clever suggestion could reach them. A handful of hand-written GETs cannot.
+ *  2. The path is checked against a short list, taken from the method reference the judges
+ *     supplied (FDK v1.9.5). Every one is on /service/application/, which is the storefront
+ *     surface; the writable surface is /service/platform/ and nothing here can reach it.
  *  3. The final URL is re-checked after the query is built, so no parameter can steer the path. */
 
-/** The only two endpoints this product is allowed to call, from the FDK method reference. */
+/** The only endpoints this product is allowed to call, from the FDK method reference v1.9.5. */
 export const ALLOWED_PATHS = [
-  // The two the judges' method reference names.
+  // The two the judges' method reference names, documented in full at
+  //   partners.jiocommerce.io/help/docs/sdk/1.9.5/application/{catalog,cart}
   "/service/application/catalog/v1.0/products",
   "/service/application/cart/v1.0/available-promotions",
   // And the three this product cannot work without: the contest is about what is in THIS store
@@ -44,7 +45,8 @@ export function catalogConfig(env = process.env): CatalogConfig | null {
   return { host, applicationId, applicationToken };
 }
 
-/** A GET, to one of two paths, on the configured host. Anything else throws before a socket opens.
+/** A GET, to one of the listed paths, on the configured host. Anything else throws before a
+ *  socket opens.
  *
  *  The token is never put in the URL and never appears in a thrown message, because an error from
  *  here is logged and a logged credential is a leaked credential. */
@@ -54,13 +56,13 @@ export async function read(
   params: Record<string, string | number | boolean | undefined> = {},
   request: typeof fetch = fetch,
 ): Promise<unknown> {
-  if (!ALLOWED_PATHS.includes(path)) throw Error(`Refusing to call ${path}: not one of the two readable endpoints`);
+  if (!ALLOWED_PATHS.includes(path)) throw Error(`Refusing to call ${path}: not a readable endpoint`);
   const url = new URL(path, config.host.startsWith("http") ? config.host : `https://${config.host}`);
   for (const [key, value] of Object.entries(params)) if (value !== undefined) url.searchParams.set(key, String(value));
   // A parameter cannot steer the path, and a host cannot be swapped in: both are checked after the
   // URL is assembled rather than before.
   if (!ALLOWED_PATHS.includes(url.pathname as (typeof ALLOWED_PATHS)[number]))
-    throw Error(`Refusing to call ${url.pathname}: not one of the two readable endpoints`);
+    throw Error(`Refusing to call ${url.pathname}: not a readable endpoint`);
   const configured = new URL(config.host.startsWith("http") ? config.host : `https://${config.host}`);
   if (url.host !== configured.host) throw Error(`Refusing to call ${url.host}: not the configured catalogue host`);
 
@@ -81,7 +83,18 @@ export async function read(
 /** Catalog · getProducts. Search, filter and page through what the store actually sells. */
 export async function getProducts(
   config: CatalogConfig,
-  options: { q?: string; f?: string; sort_on?: string; page_no?: number; page_size?: number } = {},
+  // Every parameter the reference documents: a filter string, cursor or numbered paging, and
+  // `filters`, which returns the store's own brand and category facets alongside the items.
+  options: {
+    q?: string;
+    f?: string;
+    filters?: boolean;
+    sort_on?: string;
+    page_id?: string;
+    page_no?: number;
+    page_size?: number;
+    page_type?: "cursor" | "number";
+  } = {},
   request: typeof fetch = fetch,
 ): Promise<{ items: Record<string, unknown>[]; page: Record<string, unknown> }> {
   const body = (await read(
@@ -121,7 +134,7 @@ export async function getLocations(
 /** Cart · getPromotionOffers. The offers actually running on one product today. */
 export async function getPromotionOffers(
   config: CatalogConfig,
-  options: { slug?: string; store_id?: number; page_size?: number; promotion_group?: string } = {},
+  options: { slug?: string; store_id?: number; page_size?: number; promotion_group?: string; cart_type?: string } = {},
   request: typeof fetch = fetch,
 ): Promise<Record<string, unknown>[]> {
   const body = (await read(config, "/service/application/cart/v1.0/available-promotions", options, request)) as {

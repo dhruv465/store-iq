@@ -1,17 +1,62 @@
-import { adaptPack } from "../server/src/adapt.js";
+import { adaptPack, fromFdk, fromPromotion, running } from "../server/src/adapt.js";
+import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig } from "../server/src/catalog.js";
 import { allowedNumbers, readSource, type Pack } from "../server/src/pack.js";
 import { rank } from "../server/src/recommend.js";
 
 /** Point this at a candidate catalogue before the number ever serves it:
  *    npm run pack:check -- data/pack.json
  *    npm run pack:check -- https://feed.example.com/catalogue.json
+ *    npm run pack:check -- live          the real Jio Commerce store, read and nothing else
  *  It says what loaded, what it had to default, what it cannot serve and why, and then runs one
  *  real recommendation off it so the answer is proven, not assumed. */
 
+/** The live store through the two methods the judges' reference documents: getProducts for the
+ *  catalogue, getPromotionOffers for what is running on each product. Everything those two do not
+ *  carry — finance terms, charges, myths, labels, install requirements — stays from our own pack,
+ *  because no endpoint this product is allowed to call has it.
+ *
+ *  Both calls are GETs through catalog.ts, which is the only way this build can reach that store. */
+async function live(config: CatalogConfig, base: Record<string, any>): Promise<Record<string, any>> {
+  const query = process.env.CATALOG_QUERY?.trim() || "television";
+  const { items, page } = await getProducts(config, { q: query, page_size: 24, page_no: 1, page_type: "number" });
+  say(`\nLive: ${items.length} of ${page.item_total ?? "?"} products matching "${query}".`);
+  if (items.length) say(`Keys on the first row: ${Object.keys(items[0]!).sort().join(", ")}`);
+
+  const offers = new Map<string, Record<string, unknown>>();
+  // One promotion lookup per product, on the few we would actually recommend, because the
+  // endpoint is per slug and this is a check, not a crawl.
+  for (const row of items.slice(0, 5)) {
+    const slug = (row as { slug?: string }).slug;
+    if (!slug) continue;
+    for (const promotion of await getPromotionOffers(config, { slug })) {
+      const offer = fromPromotion(promotion);
+      if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
+      else say(`  (skipped ${offer.title}: ran out on ${offer.valid_till})`);
+    }
+  }
+  say(`Promotions running on them: ${offers.size}${offers.size ? "" : " — the pack's own offers are kept"}`);
+  for (const offer of offers.values()) say(`  ${offer.title ?? offer.id}`);
+
+  return {
+    ...base,
+    version: `live-${new Date().toISOString().slice(0, 10)}`,
+    products: items.map(fromFdk),
+    offers: offers.size ? [...offers.values()] : base.offers,
+  };
+}
+
 const source = process.argv[2] ?? process.env.PACK_PATH ?? "data/pack.json";
-const raw = JSON.parse(await readSource(source));
-const { pack, problems } = adaptPack(raw);
 const say = (line: string): void => console.log(line);
+let raw: Record<string, any>;
+if (source === "live") {
+  const config = catalogConfig();
+  if (!config) {
+    console.error("Set CATALOG_HOST, CATALOG_APPLICATION_ID and CATALOG_APPLICATION_TOKEN in .env first.");
+    process.exit(1);
+  }
+  raw = await live(config, JSON.parse(await readSource("data/pack.json")));
+} else raw = JSON.parse(await readSource(source));
+const { pack, problems } = adaptPack(raw as never);
 
 say(`\nSource: ${source}`);
 say(

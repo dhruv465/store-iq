@@ -141,10 +141,43 @@ export function fromFdk(row: Record<string, any>): Record<string, unknown> {
     price_rupees: price.effective?.min ?? price.selling?.min ?? price.effective?.max,
     stock_units: row.sellable === false ? 0 : 1,
     good_for: Array.isArray(row.highlights) ? row.highlights : undefined,
-    specs: attributes,
+    // Two things the listing carries outside the attributes bag that an associate is asked about
+    // on the floor, so they belong with the specs the answers are drawn from.
+    specs: {
+      ...attributes,
+      ...(row.country_of_origin ? { country_of_origin: row.country_of_origin } : {}),
+      ...(typeof row.rating === "number" ? { rating: row.rating } : {}),
+    },
     categories: (row.categories ?? []).map((category: any) => category?.name).filter(Boolean),
     slug: row.slug,
   };
+}
+
+/** One PromotionOffer from getPromotionOffers, in the shape pack.offers already carries.
+ *
+ *  No figure is read off it. The reference documents discount_rules as "array of object" and says
+ *  nothing about what is inside, and guessing a key is how the amount of a real offer gets quoted
+ *  wrongly to a real customer. An offer with no percent and no flat amount is quoted by its own
+ *  title and its own terms, and offerAmount() returns 0 for it, which is the honest answer while
+ *  the shop's API has not told us the number.
+ *
+ *  shortcut: amounts are not mapped. Print one real available-promotions response (npm run
+ *  pack:check -- live) and add the keys discount_rules actually uses. */
+export function fromPromotion(row: Record<string, any>): Record<string, unknown> {
+  return {
+    id: row.id,
+    title: row.offer_text || row.promotion_name || row.promotion_type,
+    applies_to: row.promotion_group,
+    needs: row.description,
+    valid_till: row.valid_till,
+  };
+}
+
+/** An offer whose end date has passed is not on today, whatever the catalogue still lists. */
+export function running(offer: Record<string, any>, now = Date.now()): boolean {
+  if (!offer.valid_till) return true;
+  const ends = Date.parse(String(offer.valid_till));
+  return !Number.isFinite(ends) || ends >= now;
 }
 
 /** Every reason a catalogue cannot be served, named by row, rather than the first one only. */

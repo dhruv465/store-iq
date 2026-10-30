@@ -12,7 +12,7 @@ import {
 
 /** This talks to a production store. The tests below are the proof that it cannot write to one,
  *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
- *  two paths, on one host. */
+ *  the listed paths, on one host. */
 
 const config = { host: "https://api.example.com", applicationId: "app-id", applicationToken: "app-token" };
 
@@ -103,4 +103,23 @@ test("products and promotions come back in the shape the reference describes", a
 
   const empty = spy({});
   assert.deepEqual(await getPromotionOffers(config, {}, empty.fetch), [], "no offers is not an error");
+});
+
+test("every parameter the v1.9.5 reference documents reaches the query", async () => {
+  const { fetch: fake, calls } = spy();
+  await getProducts(
+    config,
+    { q: "tv", f: "brand:Sony", filters: true, sort_on: "popular", page_id: "636a", page_type: "cursor" },
+    fake,
+  );
+  const products = new URL(calls[0]!.url);
+  assert.equal(products.searchParams.get("f"), "brand:Sony");
+  assert.equal(products.searchParams.get("filters"), "true");
+  assert.equal(products.searchParams.get("page_id"), "636a");
+  assert.equal(products.searchParams.get("page_type"), "cursor", "the caller's paging beats the default");
+
+  await getPromotionOffers(config, { slug: "sony-55", cart_type: "value", promotion_group: "bank" }, fake);
+  const offers = new URL(calls[1]!.url);
+  assert.equal(offers.searchParams.get("cart_type"), "value");
+  assert.equal(offers.searchParams.get("promotion_group"), "bank");
 });

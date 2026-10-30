@@ -95,6 +95,22 @@ PACK_TOKEN=...                            # only if the feed needs a bearer toke
 and restart. A field they name differently is one entry in `FIELDS` or `SPECS`; a field they do not
 have at all is reported as defaulted, which tells you which ranking rule can no longer fire.
 
+### The live Jio Commerce catalogue
+
+With `CATALOG_HOST`, `CATALOG_APPLICATION_ID` and `CATALOG_APPLICATION_TOKEN` in `.env`:
+
+```bash
+npm run pack:check -- live
+```
+
+reads the real store through the two methods the judges' FDK reference v1.9.5 documents —
+`getProducts` for the catalogue and `getPromotionOffers` for what is running on each product — and
+prints the keys the first row actually uses, the promotions still inside their `valid_till`, and
+then the same servability report as above. It is a read and nothing else: `server/src/catalog.ts`
+can issue a GET to a short list of `/service/application/` paths and has no write code in it at
+all. Finance terms, charges, labels, myths and install requirements stay from `data/pack.json`,
+because no endpoint this product is allowed to call carries them.
+
 ## Logging a store visit
 
 The visits of 10 and 11 October are why this product exists, and they were written up from memory
