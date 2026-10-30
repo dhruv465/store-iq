@@ -584,7 +584,14 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string, not
     `HOME CARD SO FAR:\n${JSON.stringify(session.card)}`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     sizeHint,
-    gaps ? `STILL BLANK ON THE CARD: ${gaps}` : "The card is full.",
+    // Once they have confirmed the card the blanks stop being the point: a manager who has been
+    // told enough moves on. Listing them had it asking about the home internet after the card was
+    // agreed, with the customer standing there waiting to be shown a television.
+    session.card_confirmed
+      ? "The card is confirmed. Do not go back to gathering."
+      : gaps
+        ? `STILL BLANK ON THE CARD: ${gaps}`
+        : "The card is full.",
     gate,
     // What the code knows and the model does not: a fact just filed, a gate just hit, a tap. The
     // questions used to be written here in a fixed list of six, which is a questionnaire with a

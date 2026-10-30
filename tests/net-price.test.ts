@@ -65,8 +65,14 @@ test("with the gate open the summary leads with the MRP saving and the send ends
   // 89990 MRP against 54990 today, and only after the home is assessed.
   assert.match(draft.text, /Rs 35,000 off MRP today: listed Rs 89,990, here Rs 54,990/);
   assert.doesNotMatch(draft.text, /Net with those/, "the net waits until after consent");
-  const sent = tap(session, "consent:yes")!;
-  assert.match(sent.text, /Total Rs 56,489/, "the gross stays visible, so both figures are on the table");
+  // A wall mount means the site is asked about first, and that turn is only the question: with the
+  // closing figures on it too, the floor's three lines dropped the question itself.
+  const asked = tap(session, "consent:yes")!;
+  assert.match(asked.text, /Total Rs 56,489/, "the gross stays visible, so both figures are on the table");
+  assert.match(asked.text, /wall type/, "the thing to check, not just the reason for checking");
+  assert.doesNotMatch(asked.text, /− Rs/, "the offers wait one turn");
+  const sent = tap(session, "site:ok")!;
+  assert.match(sent.text, /Total Rs 56,489/);
   assert.match(sent.text, /HDFC credit card instant discount: − Rs 4,124/);
   assert.match(sent.text, /− Rs 3,000 if they have working old TV, same household/);
   assert.match(sent.text, /Net with those: Rs 49,365 to pay in all/);

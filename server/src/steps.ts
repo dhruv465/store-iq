@@ -316,13 +316,16 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   // associate reads the two figures in order — the big number, then the number they pay.
   const closing = closeLines(pack, product, itemised.total, session.language, gateOpen);
 
+  // The closing figures are deliberately not here. With them this turn ran to four lines and the
+  // floor's limit dropped the last one — which was the site question itself, the whole point of the
+  // turn: the associate saw two buttons and the reason for asking, and never the thing to ask. The
+  // offers and the net payable arrive on the next turn, once the wall has been checked.
   if (needs.length && !session.site_checked)
     return {
       text: [
         t(session.language, "ft.send", {
           body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
         }),
-        ...closing,
         t(session.language, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }),
         `↳ ${t(session.language, "why.sitecheck")}`,
       ].join("\n"),
