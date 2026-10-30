@@ -7,6 +7,7 @@ import {
   languageOf,
   moneySafe,
   needsSizing,
+  decide,
   numbersIn,
   offerExpert,
   offerLeaked,
@@ -297,4 +298,29 @@ test("a unit conversion of what they said is not an invention", () => {
   assert.deepEqual(unsupportedNumbers("sits 1.5 metres away", allowed, "about 5 feet from the wall"), []);
   // And a distance nobody mentioned is still refused.
   assert.deepEqual(unsupportedNumbers("At 14 feet you want bigger.", allowed, "they sit 3 metres away"), ["14 foot"]);
+});
+
+test("tapping Find out for me logs what they actually asked", async () => {
+  // The button is how this is reached now, and a tap carries no words: the question was logged as
+  // an empty string, so the manager portal showed an escalation with nothing in it.
+  const logged: { question: string; area: string }[] = [];
+  const store = {
+    today: async () => [],
+    openQuestions: async () => [],
+    logVisit: async () => {},
+    logQuestion: async (row: { question: string; area: string }) => void logged.push(row),
+  };
+  const session = newSession("919820000010");
+  session.history.push({ who: "associate", text: "customer is asking how many USB ports this one has" });
+  session.history.push({ who: "storeiq", text: "I do not have that detail right now." });
+  const reply = await decide(
+    { id: "e1", phone: session.phone, modality: "interactive", action: "ask_expert" },
+    session,
+    pack,
+    undefined,
+    store,
+  );
+  assert.equal(logged.length, 1);
+  assert.match(logged[0]!.question, /USB ports/);
+  assert.match(reply.text, /SIQ-/, "with a reference the associate can quote");
 });

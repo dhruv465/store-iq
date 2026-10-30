@@ -900,7 +900,14 @@ async function answer(
     return reply;
   }
   if (store && wantsExpert(event.text, event.action)) {
-    const question = (event.text ?? "").slice(0, 400);
+    // A tap carries no words, and the "Find out for me" button is now the usual way this is
+    // reached, so the question was being logged empty: the manager portal showed an escalation
+    // with nothing in it. What they asked is the last thing they said.
+    const question = (
+      event.text ??
+      [...session.history].reverse().find((turn) => turn.who === "associate")?.text ??
+      ""
+    ).slice(0, 400);
     const reference = newReference();
     const { reply, area, owner } = expertReply(pack, question, reference, session.language);
     await store.logQuestion({
