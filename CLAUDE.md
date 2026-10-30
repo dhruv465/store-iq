@@ -1,8 +1,10 @@
 # Store IQ — instructions for Claude
 
-A WhatsApp copilot for a **Reliance Digital store associate**, not for customers. The associate is
-on the shop floor with a customer in front of them; every reply is a question for them to ask out
-loud, prefixed `Ask:`, or a line for them to say. Never address the customer. Never greet.
+A WhatsApp copilot for a **Reliance Digital store associate**, not for customers. Think of it as
+the **floor manager** the associate messages with whatever they do not know — a customer standing in
+front of them, a product, an offer, what arrived today, a shift, a bad morning. Answer whichever it
+is. A question for the customer is prefixed `Ask:`. Everything you say is to the associate; the
+customer never talks to you.
 
 ## SecBrain memory
 
@@ -23,13 +25,25 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
 ## The rules this codebase is built on
 
 1. **No invented figures.** Every amount, percentage and specification in a reply must exist in
-   `data/pack.json`, be derivable from it, or have been said by the associate. The guard matches
-   exact numeric tokens.
+   `data/pack.json`, be derivable from it, or have been said by the associate. A figure carrying a
+   unit is checked as a **pair** — `2 year` passes, `1 year` does not, however many 1s the pack
+   holds — in English, Hindi and Marathi.
+   **Because of this, the replies that state a figure are composed in code, and stay that way.**
+   The product sheet, the itemised cost, finance, the card read-back, the brief and the score are
+   written phrases with the pack's numbers in them. Do not hand them to the model to phrase: that
+   is where "the warranty is one year" and "today's target is 12 TVs" came from. Decided
+   2026-10-30, by the user, after both were proposed.
 2. **The offer gate.** No offer, discount, exchange, EMI or finance figure before the home is
    assessed *and* a difference demonstrated.
 3. **Consent.** Nothing reaches a customer without an explicit tap. Changing the product withdraws it.
-4. **Deterministic first.** The Gemini free tier is 20 requests a day. If it can be answered from
-   the pack, answer from the pack. All nine stages currently do, in 1–15 ms.
+4. **No written questions.** The model asks. `questionFlow` and `nextQuestion` were deleted on
+   2026-10-30 — six questions with buttons and eight more — because a written list can only ever be
+   about a television, and it made the product a form with a chat window around it. The code files
+   what it reads and tells the model in a note (`JUST NOW:`, `STILL BLANK ON THE CARD:`); what is
+   worth asking this customer is the model's judgement. **Do not add a question to the code.**
+   What still answers without a model request is anything that is a fact rather than a judgement: a
+   product sheet, a label figure, an objection matched from the pack, the card read-back, the brief,
+   the itemised cost, the score.
 5. **The 24-hour window.** Replies go only to numbers that wrote to us inside Meta's window. Never
    remove `withinWindow()`.
 

@@ -23,14 +23,19 @@ number.
 3. **Nothing is sent without consent.** The summary waits for a tap, and changing the product
    withdraws consent again.
 
-## Almost none of it needs a model
+## The model talks; the code owns every figure
 
-All nine stages — brief, assess, validate, translate, recommend with its demonstration cue,
-complete, close, follow through, review — answer from the pack and the session in **1–15 ms**,
-spending nothing. The card is read from plain words or filled by tap; a claim, myth or objection is
-matched to the pack's own confirm/correct pair; three options are ranked by scored rules over
-distance, light, console, sport and sound; the itemised total, the net payable after offers and the
-saving off MRP are arithmetic.
+The manager answers in its own words and asks whatever this customer makes worth asking. There is
+no written list of questions: one existed, six in order with their buttons, and a written list can
+only ever be about a television.
+
+Everything that states a number is composed in code, in **1–15 ms**: the product sheet, a claim or
+objection matched to the pack's own confirm/correct pair, three options ranked by scored rules over
+distance, light, console, sport and sound, the itemised total, the net payable after offers, the
+saving off MRP, the finance terms, the brief and the score. A figure with a unit is checked as a
+pair in all three languages, so `2 year` passes and `1 year` does not, however many 1s the pack
+holds. That division is the design: the model is never the source of a figure, the code is never
+the source of a question.
 
 A model is needed for two things: a **voice note** phrased beyond the extractor, and the **text on
 a label photo** — and there it only reads the tag, in one small call. The answer is then written

@@ -48,11 +48,15 @@ checked twice before it is sent:
 A refused reply is recorded as `skipped` with the reason, never silently dropped. `GET /health/recent`
 (localhost only) shows what the provider actually accepted.
 
-## Three steps never reach the model
+## What never reaches the model
 
-The brief, the brief's question and the review are facts about the pack and the session, so they are
-answered in `steps.ts` before any request is spent: **0 to 7 ms** instead of ~2.4 s, no quota, and no
-figure can be invented. They keep working with the API quota exhausted, which is how they were verified.
+Anything that states a figure. The brief, the product sheet, the itemised total, the finance terms,
+the card read-back and the review are facts about the pack and the session, so they are answered in
+`steps.ts` before any request is spent: **0 to 7 ms** instead of ~2.4 s, no quota, and no figure can
+be invented. They keep working with the API quota exhausted, which is how they were verified.
+
+The questions are not among them. The model asks: the code files what it reads from the words and
+tells it what was just saved and what is still blank on the card.
 
 The self-score uses the judges' scale: two marks per step of section 2, 14 in all. A step the model
 *claims* does not score — `assess` needs four home facts on the card and `translate` needs the
@@ -63,7 +67,7 @@ demonstrated flag, or the mark is withheld.
 Three rules are enforced in code, not asked of the model:
 
 1. **No invented figures.** Every money amount, percentage and spec number in a reply must exist in the data pack, be derivable from it (price + charge, price − offer, price ÷ months) or have been said by the associate. Anything else is replaced with "that figure is not in today's data pack".
-2. **The offer stays shut.** Offers, discounts, exchange and finance cannot be mentioned until the home is assessed (four home facts, including viewing distance) **and** a spec has been demonstrated. Otherwise the reply becomes the next home question.
+2. **The offer stays shut.** Offers, discounts, exchange and finance cannot be mentioned until the home is assessed (four home facts, including viewing distance) **and** a spec has been demonstrated. Otherwise the reply says so, with its reason and no figure.
 3. **Floor shape.** At most two lines plus one reason line, at most three buttons, every answer carries its reason.
 
 ## Data pack
