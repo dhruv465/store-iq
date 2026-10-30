@@ -162,13 +162,18 @@ test("the finance line names the worst full cost, not the friendliest one", () =
 test("finance waits for the home and the demonstration, like every other money answer", () => {
   const session = newSession("919820000001");
   tap(session, "select:TCL-55C6KS");
+  const notes: string[] = [];
   const early = deterministic(
     { id: "f1", phone: session.phone, modality: "text", text: "what is the EMI" },
     session,
     pack,
-  )!;
-  assert.match(early.text, /Finance comes after the home/);
-  assert.doesNotMatch(early.text, /\d{4}/, "no figure before the gate opens");
+    notes,
+  );
+  // The gate holds; the words that hold it are the manager's. What the code guarantees is that no
+  // figure leaves before the home is known, and that is what the note tells the model.
+  assert.equal(early, null);
+  assert.match(notes.join(" "), /before the home is known/);
+  assert.doesNotMatch(notes.join(" "), /\d{4}/, "no figure before the gate opens");
 
   session.card = { distance_m: 3, light: "bright", mount: "wall", content: ["cricket"] };
   session.card_confirmed = true;

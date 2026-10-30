@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
 import { decide } from "../server/src/brain.js";
 import { asksWhatWeHave, inStockReply, intentOf } from "../server/src/ask.js";
+import { manager } from "./model.js";
 import { newSession, type Event } from "../server/src/types.js";
 
 /** An associate who does not know the range has to be able to ask. Every sentence used to be read
@@ -78,12 +79,18 @@ test("saying hello is answered, not turned into a questionnaire", async () => {
   assert.deepEqual(session.card, {});
 });
 
-test("a description still fills the card, which is the whole point of the flow", async () => {
+test("a description still fills the card, and the manager is told what was filed", async () => {
   const session = newSession("919820000001");
-  await decide(said("customer sits 3 m away in the hall with four people"), session, pack, dead);
+  const model = manager({ lines: ['Ask: "Where does the sun hit that wall?"'] });
+  const reply = await decide(said("customer sits 3 m away in the hall with four people"), session, pack, model.fetch);
   assert.equal(session.card.distance_m, 3);
   assert.equal(session.card.room, "hall");
   assert.equal(session.card.family, "4 people");
+  // The code files the facts and says so; what is worth asking next is the manager's judgement,
+  // not the next line of a list of six.
+  assert.match(model.prompts[0]!, /JUST NOW/);
+  assert.match(model.prompts[0]!, /sits 3 m away/);
+  assert.match(reply.text, /sun hit that wall/);
 });
 
 test("asking what we have is not confused with asking about one set", () => {

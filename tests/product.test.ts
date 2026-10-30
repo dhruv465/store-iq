@@ -5,6 +5,7 @@ import { findProduct, productReply, translateSpec } from "../server/src/product.
 import { decide } from "../server/src/brain.js";
 import { newSession } from "../server/src/types.js";
 import type { Event } from "../server/src/types.js";
+import { manager } from "./model.js";
 
 const pack = await loadPack("data/pack.json");
 const dead: typeof fetch = () => Promise.reject(Error("the model must not be reached for a pack fact"));
@@ -59,15 +60,19 @@ test("naming a set answers from the pack without reaching the model, and shortli
 
 test("a home fact in the same message still goes to the card first", async () => {
   const session = newSession("919000000000");
-  const reply = await decide(said("they sit 3 m away and want a Samsung"), session, pack, dead);
+  const model = manager({ lines: ['Ask: "Which room is it for?"'] });
+  const reply = await decide(said("they sit 3 m away and want a Samsung"), session, pack, model.fetch);
   assert.equal(session.card.distance_m, 3);
   assert.doesNotMatch(reply.text, /Rs 71,990/, "the price is not quoted before the home is read");
 });
 
-test("asking which ones are good before the home is known returns a question, not a product", async () => {
+test("asked for the good ones before the home is known, the manager asks rather than sells", async () => {
   const session = newSession("919000000000");
-  const reply = await decide(said("which ones are good?"), session, pack, dead);
-  assert.match(reply.text, /Two quick questions first/);
+  const model = manager({ lines: ['Ask: "How far back will they be sitting?"'] });
+  const reply = await decide(said("which ones are good?"), session, pack, model.fetch);
+  // The gate is still the code's: it refuses to recommend and says why, in a note the manager
+  // answers around. The question itself is no longer one of six written ones.
+  assert.match(model.prompts[0]!, /the home is not assessed yet/i);
   assert.match(reply.text, /Ask:/);
   assert.ok(!/Rs /.test(reply.text), "no price before the home");
 });

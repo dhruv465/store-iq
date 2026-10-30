@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { askedToSwitchLanguage, languageFrom, t } from "../server/src/i18n.js";
-import { cardSummary, nextQuestionReply, reviewReply } from "../server/src/steps.js";
+import { PHRASES, askedToSwitchLanguage, languageFrom, t } from "../server/src/i18n.js";
+import { cardSummary, reviewReply } from "../server/src/steps.js";
 import { newSession, type Session } from "../server/src/types.js";
 
 function filled(lang: Session["language"]): Session {
@@ -25,17 +25,13 @@ test("an explicit request switches language outright", () => {
   assert.equal(askedToSwitchLanguage("recommend three options"), null);
 });
 
-test("the floor questions and their buttons are translated, not just the text", () => {
-  const hi = nextQuestionReply(newSession("91982"));
-  const session = newSession("91982");
-  session.language = "hi";
-  const asked = nextQuestionReply(session);
-  assert.match(asked.text, /पूछिए/);
-  assert.ok(
-    asked.buttons!.some((b) => b.title === "पता नहीं"),
-    "the Not sure button is translated too",
-  );
-  assert.match(hi.text, /Ask:/, "English is unaffected");
+test("every phrase the code still writes exists in all three languages", () => {
+  // The six written questions and their buttons used to be the bulk of this. What is left is the
+  // card read-back, the gates and the refusals — and a phrase missing from one language is a
+  // sentence of English in the middle of a Hindi conversation.
+  for (const key of Object.keys(PHRASES.en))
+    for (const lang of ["hi", "mr"] as const)
+      assert.ok(PHRASES[lang][key] !== undefined, `${key} is missing from ${lang}`);
 });
 
 test("the card read-back speaks the associate's language", () => {

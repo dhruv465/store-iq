@@ -24,7 +24,6 @@ import {
   financeReply,
   followThrough,
   itemisedTotal,
-  nextQuestionReply,
   reviewReply,
   shiftBrief,
   siteNeeds,
@@ -336,7 +335,21 @@ export function stated(value: unknown): boolean {
   return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
 }
 
-export function isAssessed(card: Session["card"]): boolean {
+/** Viewing distance sizes a screen. It means nothing for a washing machine, so it is required
+ *  only where the thing being sold has a screen at all — which the catalogue says by carrying a
+ *  size in inches. Six hardcoded questions could not know the difference; this can. */
+export function needsSizing(pack: Pack, session?: Session): boolean {
+  const shortlisted = session?.shortlist?.length
+    ? pack.products.filter((product) => session.shortlist.includes(product.sku))
+    : pack.products;
+  return shortlisted.some((product) => product.size_inch > 0);
+}
+
+export function assessedFor(pack: Pack, session: Session): boolean {
+  return isAssessed(session.card, needsSizing(pack, session));
+}
+
+export function isAssessed(card: Session["card"], sizing = true): boolean {
   const filled = [
     "room",
     "distance_m",
@@ -349,9 +362,10 @@ export function isAssessed(card: Session["card"]): boolean {
     "internet",
     "budget_rupees",
   ].filter((key) => stated((card as Record<string, unknown>)[key]));
-  // How far they sit is what sizes the screen, so "not sure" there leaves the home unassessed.
+  // How far they sit is what sizes the screen, so "not sure" there leaves the home unassessed —
+  // where a screen is what is being sold.
   const hasDistance = typeof card.distance_m === "number" || typeof card.distance_feet === "number";
-  return filled.length >= 4 && hasDistance;
+  return filled.length >= 4 && (hasDistance || !sizing);
 }
 
 /** Every number a text states, as exact tokens. */
@@ -454,11 +468,11 @@ export function floor(reply: Reply): Reply {
 
 export function render(decision: Decision): Reply {
   const options = decision.step === "recommend";
-  const lines = decision.lines
+  const lines = (decision.lines ?? [])
     .map((line) => moneySafe(line).trim())
     .filter(Boolean)
     .slice(0, options ? 3 : 2);
-  const reason = moneySafe(decision.reason).trim();
+  const reason = moneySafe(decision.reason ?? "").trim();
   // A reason on its own is not an answer. The model sometimes returns only its justification —
   // "the viewing distance is the most important factor" — and an associate reading that alone has
   // been told nothing to do, so the fallback supplies the missing instruction instead.
@@ -527,13 +541,26 @@ export function languageOf(text: string | undefined): "en" | "hi" {
   return text && /[\u0900-\u097F]/.test(text) ? "hi" : "en";
 }
 
-function prompt(event: Event, session: Session, pack: Pack, tapped?: string): string {
+function prompt(event: Event, session: Session, pack: Pack, tapped?: string, notes: string[] = []): string {
   const facts = factsFor(pack, session.card, session.shortlist);
-  const sizeHint = session.card.distance_feet
-    ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
-    : "Viewing distance is still unknown.";
+  // The arithmetic the model should not do in its head, and only where a screen is being sold.
+  const sizeHint = !needsSizing(pack, session)
+    ? ""
+    : session.card.distance_feet
+      ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
+      : "Viewing distance is still unknown, and it is what sizes a screen.";
+  // What is not on the card yet. Not an order to follow and not a question: the manager picks
+  // which of these is worth asking this customer, and whether to ask anything at all.
+  const card = session.card as Record<string, unknown>;
+  // Feet or metres, it is one fact: listing "distance_feet" as blank after they said three metres
+  // is how you ask somebody the same thing twice.
+  const gaps = ["room", "distance", "light", "mount", "content", "devices", "family", "internet", "budget_rupees"]
+    .filter((field) =>
+      field === "distance" ? !stated(card.distance_feet) && !stated(card.distance_m) : !stated(card[field]),
+    )
+    .join(", ");
   const gate =
-    isAssessed(session.card) && session.demonstrated
+    assessedFor(pack, session) && session.demonstrated
       ? "The home is assessed and a spec has been demonstrated, so offers and finance are open."
       : "The home is NOT yet assessed or nothing has been demonstrated. Do not mention offers, discounts, exchange or finance.";
   return [
@@ -542,7 +569,12 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string): st
     `HOME CARD SO FAR:\n${JSON.stringify(session.card)}`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     sizeHint,
+    gaps ? `STILL BLANK ON THE CARD: ${gaps}` : "The card is full.",
     gate,
+    // What the code knows and the model does not: a fact just filed, a gate just hit, a tap. The
+    // questions used to be written here in a fixed list of six, which is a questionnaire with a
+    // chat window around it. The manager asks; this only says what has just happened.
+    notes.length ? `JUST NOW:\n- ${notes.join("\n- ")}` : "",
     session.language === "hi"
       ? "The associate is writing in Hindi. Answer in Hindi."
       : "The associate is writing in Latin script. Answer in English or Hinglish in Latin script, never Devanagari.",
@@ -571,7 +603,11 @@ export function startInteraction(session: Session): void {
   session.history = [];
 }
 
-export function deterministic(event: Event, session: Session, pack: Pack): Reply | null {
+export function deterministic(event: Event, session: Session, pack: Pack, notes: string[] = []): Reply | null {
+  const note = (line: string): null => {
+    if (!notes.includes(line)) notes.push(line);
+    return null;
+  };
   if (wantsNewCustomer(event.text, event.action)) {
     startInteraction(session);
     return { text: `${t(session.language, "newcustomer")}\n↳ ${t(session.language, "why.newcustomer")}` };
@@ -579,7 +615,7 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
     if (!session.steps_done.includes("assess")) session.steps_done.push("assess");
-    return nextQuestionReply(session, t(session.language, "card.confirmed"));
+    return note("They just confirmed the home card is right. Carry on from there.");
   }
   if (event.action === "card:correct") {
     session.card_confirmed = false;
@@ -638,7 +674,7 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
     }
   }
   // Section 4E: ranking the pack against a confirmed card is arithmetic, so no request is spent.
-  if (wantsRecommend(event.text, event.action) && isAssessed(session.card)) {
+  if (wantsRecommend(event.text, event.action) && assessedFor(pack, session)) {
     if (!session.card_confirmed) return cardSummary(session);
     session.step = "recommend";
     if (!session.steps_done.includes("recommend")) session.steps_done.push("recommend");
@@ -650,15 +686,19 @@ export function deterministic(event: Event, session: Session, pack: Pack): Reply
   // A home fact in the same message outranks it, so the card extractor is not robbed of the turn.
   if (
     wantsRecommend(event.text, event.action) &&
-    !isAssessed(session.card) &&
+    !assessedFor(pack, session) &&
     !Object.keys(extractCard(event.text ?? "")).length
   )
-    return nextQuestionReply(session, t(session.language, "rec.first"));
+    return note(
+      "They want the three options, but the home is not assessed yet. Ask for the one thing you most need to size this up, in your own words.",
+    );
   // Section 6: finance in one sentence with its full cost. It is arithmetic over the pack's terms,
   // and it sits behind the same gate as every other money conversation.
   if (wantsFinance(event.text, event.action)) {
-    if (!(isAssessed(session.card) && session.demonstrated))
-      return nextQuestionReply(session, t(session.language, "fin.gate"));
+    if (!(assessedFor(pack, session) && session.demonstrated))
+      return note(
+        "They asked about EMI or finance before the home is known and a difference shown. Do not open money. Ask what you still need instead.",
+      );
     const total = session.selection ? itemisedTotal(pack, session.selection)?.total : undefined;
     if (!total) return followThrough(session, pack, event.name ?? session.phone);
     session.step = "complete";
@@ -700,7 +740,7 @@ function packAnswer(pack: Pack, said: string, session: Session, wants: "set" | "
   // opposite case: there the figure IS the question.
   if (wants === "set" && product) {
     if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
-    return productReply(product, session.language, isAssessed(session.card));
+    return productReply(product, session.language, assessedFor(pack, session));
   }
   const translated = translateSpec(pack, said, product, session.language);
   if (translated) {
@@ -711,7 +751,7 @@ function packAnswer(pack: Pack, said: string, session: Session, wants: "set" | "
   }
   if (!product) return null;
   if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
-  return productReply(product, session.language, isAssessed(session.card));
+  return productReply(product, session.language, assessedFor(pack, session));
 }
 
 export type Store = {
@@ -739,6 +779,11 @@ async function answer(
   store?: Store,
 ): Promise<Reply> {
   if (event.name) session.associate = event.name;
+  // What has just happened, for the model to answer around. Nothing in here is a question.
+  const notes: string[] = [];
+  // Set once a home fact has been filed this turn. The product sheet must not win after that: it
+  // carries a price, and "they sit 3 m away and want a Samsung" is the home, not a price request.
+  let filed = false;
   // A voice note becomes the words that were said, so everything below treats it exactly as it
   // treats typing: the same extraction, the same objections and products, the same floor shape.
   let heard: Partial<Session["card"]> = {};
@@ -753,28 +798,27 @@ async function answer(
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);
   const tapped = applyAction(session, event.action);
-  if (tapped && !deterministic(event, session, pack)) {
-    session.assessed = isAssessed(session.card);
-    const reply =
-      session.assessed && !session.card_confirmed
-        ? cardSummary(session)
-        : nextQuestionReply(session, t(session.language, "noted", { body: tapped }));
-    session.history.push({
-      who: "associate",
-      text: String(event.action).slice(0, 300),
-    });
-    session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-    return reply;
+  if (tapped && !deterministic(event, session, pack, notes)) {
+    session.assessed = assessedFor(pack, session);
+    // A filled card gets read back for correction; anything else goes on to the model, which
+    // decides what is worth asking next. The tap itself is already in the prompt.
+    if (session.assessed && !session.card_confirmed) {
+      const reply = cardSummary(session);
+      session.history.push({ who: "associate", text: String(event.action).slice(0, 300) });
+      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+      return reply;
+    }
+    notes.push(`Saved to the card from their tap: ${tapped}.`);
   }
   // "Not sure" is a real answer: it fills nothing and moves on.
   const skipped = event.action?.match(/^skip:([a-z_]+)$/);
   if (skipped) {
     (session.card as Record<string, unknown>)[skipped[1]!] = NOT_STATED;
-    return nextQuestionReply(session, t(session.language, "noted.notsure"));
+    notes.push(`They do not know the ${skipped[1]!.replace(/_/g, " ")}. It stays blank; work without it.`);
   }
   // A request to switch language is a whole turn on its own.
   if (switched && (event.text ?? "").trim().split(/\s+/).length <= 4)
-    return nextQuestionReply(session, t(session.language, "lang.switched"));
+    return { text: t(session.language, "lang.switched") };
   // Extra points: a store visit, in the visitor's own words. It comes before everything that reads
   // text as a customer, because a visit note is full of rooms, prices and brands and would
   // otherwise be read as somebody's home.
@@ -824,8 +868,8 @@ async function answer(
   // one, so "is the Sony good for a dark room" was filed as light = dim and "what TVs do we have"
   // was answered with "how far will you sit from the TV?".
   const intent = event.action ? "customer" : intentOf(event.text);
-  if (intent === "greeting" && !deterministic(event, session, pack)) return greetingReply(session.language);
-  if (intent === "question" && event.text && !deterministic(event, session, pack)) {
+  if (intent === "greeting" && !deterministic(event, session, pack, notes)) return greetingReply(session.language);
+  if (intent === "question" && event.text && !deterministic(event, session, pack, notes)) {
     // Asked about one set, or about a figure on a label: both are already answered from the pack.
     // But a summary of the set is the wrong answer to "what warranty comes with it", so a question
     // about something specific goes on to the model, which has the charges and terms in front of it.
@@ -833,12 +877,19 @@ async function answer(
       const named = packAnswer(pack, event.text, session, "set");
       if (named) return named;
     }
-    if (asksWhatWeHave(event.text)) return inStockReply(pack, session.card, session.language, isAssessed(session.card));
+    if (asksWhatWeHave(event.text))
+      return inStockReply(pack, session.card, session.language, assessedFor(pack, session));
     // Anything else falls through to the model, which answers from the facts and is still held to
     // the floor's shape and to the figures in the pack.
   }
   // Read what we confidently can from the words before spending a request on them.
-  if (intent !== "question" && event.text && !event.image && !event.audio && !deterministic(event, session, pack)) {
+  if (
+    intent !== "question" &&
+    event.text &&
+    !event.image &&
+    !event.audio &&
+    !deterministic(event, session, pack, notes)
+  ) {
     // What the model heard, with what the extractor can read from the same words on top: the
     // extractor only takes what it is sure of, so where both spoke, the stricter one wins.
     const read = { ...heard, ...extractCard(event.text) };
@@ -847,29 +898,24 @@ async function answer(
     );
     if (fields.length) {
       for (const [field, value] of fields) (session.card as Record<string, unknown>)[field] = value;
-      session.assessed = isAssessed(session.card);
+      session.assessed = assessedFor(pack, session);
       if (!session.steps_done.includes("assess") && session.assessed) session.steps_done.push("assess");
-      const reply =
-        session.assessed && !session.card_confirmed
-          ? cardSummary(session)
-          : nextQuestionReply(
-              session,
-              t(session.language, "noted", {
-                body: describe(Object.fromEntries(fields)),
-              }),
-            );
-      session.history.push({
-        who: "associate",
-        text: event.text.slice(0, 300),
-      });
-      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-      session.history = session.history.slice(-12);
-      return reply;
+      // A full card is read back for correction. Short of that the facts are filed and the turn
+      // goes to the model, because what is worth asking next is a judgement, not a list.
+      if (session.assessed && !session.card_confirmed) {
+        const reply = cardSummary(session);
+        session.history.push({ who: "associate", text: event.text.slice(0, 300) });
+        session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+        session.history = session.history.slice(-12);
+        return reply;
+      }
+      notes.push(`Read from their own words and saved: ${describe(Object.fromEntries(fields))}.`);
+      filed = true;
     }
   }
   // The customer is standing at one set, or asked what a figure on its label means. Both are pack
   // facts, and both run after the card extractor so a home fact in the same message still wins.
-  if (intent !== "question" && event.text && !event.image && !event.audio) {
+  if (intent !== "question" && event.text && !event.image && !event.audio && !filed) {
     const reply = packAnswer(pack, event.text, session);
     if (reply) {
       session.history.push({
@@ -897,7 +943,7 @@ async function answer(
     session.history = session.history.slice(-12);
     return answer;
   }
-  const free = deterministic(event, session, pack);
+  const free = deterministic(event, session, pack, notes);
   if (free) {
     session.history.push({
       who: "associate",
@@ -913,7 +959,7 @@ async function answer(
   // Text only, now. A voice note became the words that were said before anything below ran, and a
   // photo is answered from the pack and never reaches here, so this call is the last resort for a
   // sentence no deterministic path could read.
-  const parts: Record<string, unknown>[] = [{ text: prompt(event, session, pack, tapped) }];
+  const parts: Record<string, unknown>[] = [{ text: prompt(event, session, pack, tapped, notes) }];
   const response = await geminiRequest(
     request,
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -952,7 +998,7 @@ async function answer(
   session.shortlist = (decision.shortlist ?? [])
     .filter((sku) => pack.products.some((product) => product.sku === sku))
     .slice(0, 3);
-  session.assessed = isAssessed(session.card);
+  session.assessed = assessedFor(pack, session);
   if (decision.demonstrated) session.demonstrated = true;
   if (STEPS.includes(decision.step)) {
     session.step = decision.step;
@@ -983,7 +1029,9 @@ async function answer(
     );
   else if (offerLeaked(reply.text, session.assessed, session.demonstrated))
     reply = {
-      text: `${t(session.language, "gate.offers", { body: nextQuestionReply(session).text.split("\n").pop() ?? "" })}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
+      // The gate is the code's and the words after it are the manager's: this used to borrow the
+      // next written question, which put the questionnaire back in by the side door.
+      text: `${t(session.language, "gate.offers", { body: t(session.language, "gate.offers.ask") })}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
     };
   session.history.push({
     who: "associate",
@@ -992,23 +1040,4 @@ async function answer(
   session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
   session.history = session.history.slice(-12);
   return reply;
-}
-
-/** The next unanswered home question, in the order that matters on the floor. */
-export function nextQuestion(session: Session): string {
-  const questions: [keyof Session["card"], string][] = [
-    ["distance_feet", "How far do they sit from the wall, in feet?"],
-    ["light", "How much light hits that wall in the afternoon?"],
-    ["mount", "Wall mount or table top?"],
-    ["content", "What do they watch most: cricket, OTT, news?"],
-    ["devices", "Set-top box, PS5, soundbar at home?"],
-    ["room", "Which room, and how big?"],
-    ["internet", "Do they have WiFi at home?"],
-    ["family", "Who watches together?"],
-  ];
-  const next = questions.find(([field]) => {
-    const value = session.card[field];
-    return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
-  });
-  return next ? `Ask: ${next[1]}` : "Ask what they want to see on the screen first.";
 }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
 import { decide, floor, render } from "../server/src/brain.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
+import { manager } from "./model.js";
 
 /** The contest's own floor rules: "not more than 3 lines and 3 buttons", and, in the judging, a
  *  reason in each answer. They were enforced only on model output, and eight of the nine stages
@@ -10,7 +11,20 @@ import { newSession, type Event, type Session } from "../server/src/types.js";
  *  them, whichever path wrote it. */
 
 const pack = await loadPack("data/pack.json");
-const dead: typeof fetch = () => Promise.reject(Error("a floor turn must not need the model"));
+/** A manager who writes too much, on purpose: five lines and five buttons. The turns that go
+ *  through the model are held to the floor's shape by floor(), not by the model's restraint. */
+const wordy = (): ReturnType<typeof manager> =>
+  manager({
+    lines: ["First line", "Second line", "Third line", "Fourth line", "Fifth line"],
+    buttons: [
+      { id: "a", title: "One" },
+      { id: "b", title: "Two" },
+      { id: "c", title: "Three" },
+      { id: "d", title: "Four" },
+      { id: "e", title: "Five" },
+    ],
+    reason: "a reason of its own",
+  });
 
 const WALK: ({ text: string } | { action: string })[] = [
   { text: "new customer" },
@@ -37,7 +51,7 @@ test("every reply on a whole conversation obeys the floor's three lines and thre
   const session = newSession("919820000001");
   for (const [index, turn] of WALK.entries()) {
     const event: Event = { id: `w${index}`, phone: session.phone, modality: "text", ...turn } as Event;
-    const reply = await decide(event, session, pack, dead);
+    const reply = await decide(event, session, pack, wordy().fetch);
     const lines = reply.text.split("\n");
     const what = `turn ${index + 1} (${JSON.stringify(turn)}): ${reply.text}`;
     assert.ok(lines.length <= 3, `more than three lines — ${what}`);
@@ -51,7 +65,7 @@ test("the same walk in Hindi and in Marathi keeps the same shape", async () => {
     const session: Session = Object.assign(newSession("919820000002"), { language });
     for (const [index, turn] of WALK.entries()) {
       const event: Event = { id: `w${index}`, phone: session.phone, modality: "text", ...turn } as Event;
-      const reply = await decide(event, session, pack, dead);
+      const reply = await decide(event, session, pack, wordy().fetch);
       assert.ok(reply.text.split("\n").length <= 3, `${language} turn ${index + 1}: ${reply.text}`);
       assert.ok((reply.buttons ?? []).length <= 3, `${language} turn ${index + 1}`);
     }

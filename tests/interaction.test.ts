@@ -58,12 +58,16 @@ test("an empty card asks rather than inventing a summary", () => {
   assert.equal(reply.buttons, undefined);
 });
 
-test("confirming the card records the assess step and moves on", () => {
+test("confirming the card records the assess step and tells the manager so", () => {
   const session = assessed();
   const event: Event = { id: "x", phone: session.phone, modality: "interactive", action: "card:confirmed" };
-  const reply = deterministic(event, session, pack);
+  const notes: string[] = [];
+  // Nothing is written here any more: the code records the step and hands the turn over, because
+  // what follows a confirmed card is a judgement about this customer.
+  assert.equal(deterministic(event, session, pack, notes), null);
   assert.equal(session.card_confirmed, true);
-  assert.match(reply!.text, /Card confirmed/);
+  assert.ok(session.steps_done.includes("assess"));
+  assert.match(notes.join(" "), /confirmed the home card/);
 });
 
 test("asking to fix the card clears the confirmation", () => {

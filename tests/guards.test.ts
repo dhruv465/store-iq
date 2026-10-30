@@ -6,7 +6,7 @@ import {
   isAssessed,
   languageOf,
   moneySafe,
-  nextQuestion,
+  needsSizing,
   numbersIn,
   offerExpert,
   offerLeaked,
@@ -83,20 +83,15 @@ test("assessed needs four home facts including the viewing distance", () => {
   assert.equal(isAssessed({ distance_feet: 8, light: "bright", mount: "wall", content: ["cricket"] }), true);
 });
 
-test("the next question follows the floor order and runs out cleanly", () => {
-  const session = newSession("919999999999");
-  assert.match(nextQuestion(session), /feet/);
-  session.card = {
-    distance_feet: 8,
-    light: "bright",
-    mount: "wall",
-    content: ["ott"],
-    devices: ["set-top box"],
-    room: "hall",
-    internet: "yes",
-    family: "four",
-  };
-  assert.doesNotMatch(nextQuestion(session), /feet/);
+test("the viewing distance is only required where there is a screen", () => {
+  const home = { room: "hall", light: "bright", mount: "wall", content: ["cricket"] };
+  // Four facts and no distance: not assessed for a television, assessed for anything without a
+  // screen. The six written questions asked every customer how far they would sit.
+  assert.equal(isAssessed(home), false);
+  assert.equal(isAssessed(home, false), true);
+  assert.equal(needsSizing(pack), true, "this pack sells televisions");
+  const washing = { ...pack, products: pack.products.map((product) => ({ ...product, size_inch: 0 })) };
+  assert.equal(needsSizing(washing), false);
 });
 
 test("the 4K size rule of thumb matches the floor answer", () => {

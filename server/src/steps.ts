@@ -199,101 +199,14 @@ export function reviewReply(session: Session): Reply {
   };
 }
 
-/** The floor order of questions, each with its own answers, so a tap never needs the model. */
-export function questionFlow(
-  lang: Session["language"],
-): { field: string; ask: string; why: string; options: [string, string][] }[] {
-  return [
-    {
-      field: "distance_m",
-      why: t(lang, "why.distance_m"),
-      ask: t(lang, "ask.distance"),
-      options: [
-        ["2-3", "2-3 m"],
-        ["3-4", "3-4 m"],
-        ["", t(lang, "opt.notsure")],
-      ],
-    },
-    {
-      field: "light",
-      why: t(lang, "why.light"),
-      ask: t(lang, "ask.light"),
-      options: [
-        ["bright afternoon sun", t(lang, "opt.bright")],
-        ["some light", t(lang, "opt.some")],
-        ["dim", t(lang, "opt.dim")],
-      ],
-    },
-    {
-      field: "mount",
-      why: t(lang, "why.mount"),
-      ask: t(lang, "ask.mount"),
-      options: [
-        ["wall", t(lang, "opt.wall")],
-        ["table", t(lang, "opt.table")],
-        ["", t(lang, "opt.notsure")],
-      ],
-    },
-    {
-      field: "content",
-      why: t(lang, "why.content"),
-      ask: t(lang, "ask.content"),
-      options: [
-        ["cricket", t(lang, "opt.cricket")],
-        ["OTT", t(lang, "opt.ott")],
-        ["news", t(lang, "opt.news")],
-      ],
-    },
-    {
-      field: "devices",
-      why: t(lang, "why.devices"),
-      ask: t(lang, "ask.devices"),
-      options: [
-        ["set-top box", t(lang, "opt.settop")],
-        ["PS5", t(lang, "opt.console")],
-        ["none", t(lang, "opt.nothing")],
-      ],
-    },
-    {
-      field: "family",
-      why: t(lang, "why.family"),
-      ask: t(lang, "ask.family"),
-      options: [
-        ["two people", t(lang, "opt.two")],
-        ["four people", t(lang, "opt.four")],
-        ["more than four", t(lang, "opt.more")],
-      ],
-    },
-  ];
-}
-
-/** The next unanswered question, with its buttons. "Not sure" carries no value, so it fills nothing. */
-export function nextQuestionReply(session: Session, prefix?: string): Reply {
-  const lang = session.language;
-  const step = questionFlow(lang).find((entry) => {
-    // The flow asks the distance in metres, but an associate who said "five feet" has answered it.
-    // Asking again is how you look like you were not listening.
-    if (entry.field === "distance_m") return !stated(session.card.distance_m) && !stated(session.card.distance_feet);
-    const value = (session.card as Record<string, unknown>)[entry.field];
-    return Array.isArray(value) ? !value.length : value === undefined || value === null || value === "";
-  });
-  if (!step)
-    return {
-      text: [prefix, t(lang, "card.full"), `↳ ${t(lang, "why.full")}`].filter(Boolean).join("\n"),
-      buttons: [
-        { id: "card:show", title: t(lang, "btn.showcard") },
-        { id: "recommend", title: t(lang, "btn.three") },
-      ],
-    };
-  return {
-    // Every answer carries its reason, which here is why this question and not another one.
-    text: [prefix, step.ask, `↳ ${step.why}`].filter(Boolean).join("\n"),
-    buttons: step.options.map(([value, title]) => ({
-      id: value ? `card:${step.field}:${value}` : `skip:${step.field}`,
-      title,
-    })),
-  };
-}
+/** The questions are the manager's, not a list.
+ *
+ *  There were six of them here, in order, with their buttons: distance, light, mount, content,
+ *  devices, family. They were written when the free tier allowed twenty requests a day, and they
+ *  are why this felt like a form with a chat window around it — and they could only ever be about
+ *  a television, so a washing machine was asked its viewing distance. The code still files what it
+ *  reads and still holds every gate; what to ask next is now answered by the model, which can see
+ *  the card, the catalogue and the last six turns. */
 
 const RECOMMEND_WORDS = /\b(three options|3 options|recommend|options to show|kaunsa|which ones?)\b/i;
 
