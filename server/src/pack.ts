@@ -69,11 +69,9 @@ export async function livePack(
   base: Record<string, any>,
   request: typeof fetch = fetch,
 ): Promise<Record<string, any>> {
-  const { items } = await getProducts(
-    config,
-    { q: process.env.CATALOG_QUERY?.trim() || "television", page_size: 24, page_no: 1, page_type: "number" },
-    request,
-  );
+  // No search term: the associate can be asked about anything the store sells, so the catalogue
+  // comes as the catalogue. What bounds the prompt is factsFor, not what we fetch.
+  const { items } = await getProducts(config, { page_size: 24, page_no: 1, page_type: "number" }, request);
   if (!items.length) throw Error("The catalogue answered with no products");
   const offers = new Map<string, Record<string, unknown>>();
   for (const row of items.slice(0, 5)) {
@@ -367,9 +365,16 @@ export function factsFor(pack: Pack, card: HomeCard, shortlist: string[]): strin
   const sized = card.distance_feet
     ? picked.filter((product) => Math.abs(product.size_inch - recommendedInches(card.distance_feet!)) <= 12)
     : picked;
+  // A real catalogue is thousands of lines and this goes into every prompt. The shortlist and the
+  // distance filter first; this is the backstop that keeps a turn affordable when neither has
+  // narrowed anything yet.
+  // shortcut: the first twelve, not the twelve that matter. Search the catalogue per conversation
+  // when the pack stops being one category.
   return JSON.stringify({
     store: pack.store,
-    products: (sized.length ? sized : picked).map((product) => ({ ...product, in_stock: product.stock_units > 0 })),
+    products: (sized.length ? sized : picked)
+      .slice(0, 12)
+      .map((product) => ({ ...product, in_stock: product.stock_units > 0 })),
     offers: pack.offers,
     finance: pack.finance,
     charges: pack.charges,

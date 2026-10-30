@@ -85,7 +85,14 @@ test("a refusal never names the token", async () => {
 test("the catalogue stays off unless all three settings are present", () => {
   assert.equal(catalogConfig({} as never), null);
   assert.equal(catalogConfig({ CATALOG_HOST: "x" } as never), null);
-  assert.equal(catalogConfig({ CATALOG_HOST: "x", CATALOG_APPLICATION_ID: "y" } as never), null);
+  assert.equal(catalogConfig({ CATALOG_APPLICATION_ID: "y" } as never), null);
+  // The pair is enough: Jio Commerce is on Fynd's platform, and the application selects the sales
+  // channel. The method reference names no host because with the SDK you never type one.
+  assert.deepEqual(catalogConfig({ CATALOG_APPLICATION_ID: "y", CATALOG_APPLICATION_TOKEN: "z" } as never), {
+    host: "https://api.fynd.com",
+    applicationId: "y",
+    applicationToken: "z",
+  });
   assert.deepEqual(
     catalogConfig({ CATALOG_HOST: "x", CATALOG_APPLICATION_ID: "y", CATALOG_APPLICATION_TOKEN: "z" } as never),
     { host: "x", applicationId: "y", applicationToken: "z" },

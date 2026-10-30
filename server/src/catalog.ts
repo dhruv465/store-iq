@@ -36,13 +36,17 @@ export type CatalogConfig = {
   applicationToken: string;
 };
 
+/** Jio Commerce runs on Fynd's platform, so the storefront API is Fynd's and the application pair
+ *  is what selects the sales channel — Reliance Digital. That is why the method reference names no
+ *  host: with the SDK you never type one, and `api.fynd.com` is the FDK client's own default.
+ *  CATALOG_HOST stays as an override for the day that is not true. */
+const DEFAULT_HOST = "https://api.fynd.com";
+
 export function catalogConfig(env = process.env): CatalogConfig | null {
-  // The FDK client defaults to https://api.fynd.com; a Jio Commerce application has its own.
-  const host = env.CATALOG_HOST?.trim();
   const applicationId = env.CATALOG_APPLICATION_ID?.trim();
   const applicationToken = env.CATALOG_APPLICATION_TOKEN?.trim();
-  if (!host || !applicationId || !applicationToken) return null;
-  return { host, applicationId, applicationToken };
+  if (!applicationId || !applicationToken) return null;
+  return { host: env.CATALOG_HOST?.trim() || DEFAULT_HOST, applicationId, applicationToken };
 }
 
 /** A GET, to one of the listed paths, on the configured host. Anything else throws before a
