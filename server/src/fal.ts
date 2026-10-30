@@ -70,6 +70,77 @@ export async function falText(
   return { text: body.output, cost: body.usage?.cost ?? 0 };
 }
 
+/** Whisper takes a URL and nothing else: a base64 data URI is refused with "Unsupported data URL",
+ *  whatever the general file documentation says. So the bytes go to fal's own storage first, which
+ *  hands back the URL to transcribe.
+ *
+ *  That URL is on a public CDN, and the voice note is a customer's room described out loud. It is
+ *  the same trust boundary as sending the bytes to any transcription provider — WhatsApp's own CDN
+ *  already holds the file — but it is worth knowing that is where it goes. */
+async function falUpload(
+  config: FalConfig,
+  audio: { bytes: Uint8Array; mimeType: string },
+  request: typeof fetch,
+): Promise<string> {
+  const started = await modelRequest(
+    request,
+    "https://rest.alpha.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3",
+    {
+      method: "POST",
+      headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
+      // A neutral name: nothing about the associate or the customer goes into it.
+      body: JSON.stringify({ content_type: audio.mimeType, file_name: "note" }),
+    },
+    "fal",
+  );
+  const where = JSON.parse(new TextDecoder().decode(await readLimited(started, 8 * 1024))) as {
+    upload_url?: string;
+    file_url?: string;
+  };
+  if (!where.upload_url || !where.file_url) throw Error("fal storage gave no upload URL");
+  await modelRequest(
+    request,
+    where.upload_url,
+    { method: "PUT", headers: { "content-type": audio.mimeType }, body: audio.bytes as unknown as BodyInit },
+    "fal",
+  );
+  return where.file_url;
+}
+
+/** A voice note, transcribed. Whisper on fal, because the router takes no audio and Gemini's free
+ *  tier is 20 requests a day — which is how an associate on a real phone got "I could not answer
+ *  that just now" twice in a row.
+ *
+ *  Language is left unset on purpose: Whisper detects it, and this product is spoken to in three. */
+export async function falTranscribe(
+  config: FalConfig,
+  audio: { bytes: Uint8Array; mimeType: string },
+  request: typeof fetch = fetch,
+): Promise<string> {
+  const response = await modelRequest(
+    request,
+    "https://fal.run/fal-ai/whisper",
+    {
+      method: "POST",
+      headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        audio_url: await falUpload(config, audio, request),
+        task: "transcribe",
+        // One chunk: we want the words, not where they sat in the file.
+        chunk_level: "none",
+      }),
+    },
+    "fal",
+  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024))) as {
+    text?: string;
+    error?: string;
+  };
+  if (body.error) throw Error(`fal refused the audio: ${body.error}`);
+  if (!body.text?.trim()) throw Error("Nothing heard in the voice note");
+  return body.text.trim().slice(0, 600);
+}
+
 /** JSON out of a model that was only asked for it in words.
  *
  *  Without a response schema the answer arrives wrapped in a code fence, or with a sentence in

@@ -289,3 +289,12 @@ test("asked for something the pack does not have, the reason is ours and a human
   assert.deepEqual(reply.buttons, [{ id: "ask_expert", title: "Find out for me" }]);
   assert.match(unknownReply({ text: "x" }, "hi").text, /एक्सपर्ट/);
 });
+
+test("a unit conversion of what they said is not an invention", () => {
+  // A Hindi voice note said "तीन मीटर दूर बैठते हैं" and the manager answered in feet. Three metres
+  // is ten feet, and refusing that is the guard calling arithmetic a lie.
+  assert.deepEqual(unsupportedNumbers("At 10 feet, a 65 inch fills the wall.", allowed, "they sit 3 metres away"), []);
+  assert.deepEqual(unsupportedNumbers("sits 1.5 metres away", allowed, "about 5 feet from the wall"), []);
+  // And a distance nobody mentioned is still refused.
+  assert.deepEqual(unsupportedNumbers("At 14 feet you want bigger.", allowed, "they sit 3 metres away"), ["14 foot"]);
+});

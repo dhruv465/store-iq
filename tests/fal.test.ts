@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { falConfig, falText, readJson, shapeInstruction } from "../server/src/fal.js";
+import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "../server/src/fal.js";
 import { decide } from "../server/src/brain.js";
 import { loadPack } from "../server/src/pack.js";
 import { newSession, type Event } from "../server/src/types.js";
@@ -92,4 +92,40 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
     else process.env.FAL_KEY = saved.fal;
     if (saved.gemini !== undefined) process.env.GEMINI_API_KEY = saved.gemini;
   }
+});
+
+test("a voice note is uploaded first, because Whisper refuses a data URI", async () => {
+  // "Unsupported data URL" is what the endpoint answers to base64 inline, whatever the general file
+  // documentation says. So the bytes go to fal's storage and the URL it returns is transcribed.
+  const calls: { url: string; init: RequestInit }[] = [];
+  const fake = (async (url: string | URL, init: RequestInit = {}) => {
+    calls.push({ url: String(url), init });
+    const body = String(url).includes("storage/upload")
+      ? { upload_url: "https://v3b.fal.media/files/b/x?signature=s", file_url: "https://v3b.fal.media/files/b/x" }
+      : String(url).includes("whisper")
+        ? { text: "  they sit about five feet away  " }
+        : {};
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  }) as unknown as typeof fetch;
+
+  const heard = await falTranscribe(
+    { key: "fal-secret", model: "ignored" },
+    {
+      bytes: new Uint8Array([1, 2, 3]),
+      mimeType: "audio/ogg",
+    },
+    fake,
+  );
+  assert.equal(heard, "they sit about five feet away");
+  assert.deepEqual(
+    calls.map((call) => `${call.init.method} ${new URL(call.url).host}${new URL(call.url).pathname}`),
+    ["POST rest.alpha.fal.ai/storage/upload/initiate", "PUT v3b.fal.media/files/b/x", "POST fal.run/fal-ai/whisper"],
+  );
+  // The file name carries nothing about the associate or the customer.
+  assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { content_type: "audio/ogg", file_name: "note" });
+  assert.doesNotMatch(String(calls[2]!.init.body), /base64/, "the audio itself is not in the transcribe call");
+  // The key goes to fal's own API. The upload URL is already signed, so the CDN never sees it.
+  for (const index of [0, 2])
+    assert.equal((calls[index]!.init.headers as Record<string, string>).authorization, "Key fal-secret");
+  assert.equal((calls[1]!.init.headers as Record<string, string>).authorization, undefined);
 });

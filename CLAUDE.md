@@ -59,10 +59,11 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
 
 - Test on localhost with `POST /try`. It never queues a WhatsApp message. Do not message real
   numbers while testing.
-- The turn goes through **fal.ai's OpenRouter router** when `FAL_KEY` is set (`server/src/fal.ts`,
-  model in `FAL_MODEL`); Gemini answers it otherwise. Gemini is still needed either way for a voice
-  note and a label photo: the router takes neither audio nor images, and it has no response schema,
-  so the JSON shape is asked for in words and read by `readJson()`.
+- With `FAL_KEY` set (`server/src/fal.ts`): the turn goes through **fal.ai's OpenRouter router**
+  (model in `FAL_MODEL`) and a **voice note through `fal-ai/whisper`** — uploaded to fal storage
+  first, because Whisper answers "Unsupported data URL" to base64 inline. The router has no
+  response schema, so the JSON shape is asked for in words and read by `readJson()`.
+  **Gemini is still the label photo**, and answers the turn when there is no `FAL_KEY`.
 - Money is written `Rs 54,990`, never `₹`.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - Never commit `.env`, `web/dist`, `web/node_modules`, `data/runtime/`.

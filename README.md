@@ -57,9 +57,14 @@ what the cheaper slugs did instead, including one that invented a brand warranty
 router refuses outright. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
 read tolerantly; it takes no audio and no images.
 
-So **Gemini stays** for the two things it cannot do: a voice note and a shelf-tag photo. With no
-`FAL_KEY` at all, Gemini answers the turn too, on a free tier of 20 requests a day — about twenty
-sentences, which stopped being enough the day the written questions went.
+A **voice note** goes to `fal-ai/whisper` on the same key, uploaded to fal storage first because
+Whisper answers "Unsupported data URL" to base64 inline. It returns the words and nothing else,
+which is all the rest wants: the card is then read from those words exactly as from typed ones.
+Proven on real audio in English and Hindi.
+
+So **Gemini is now only the shelf-tag photo**, plus the turn when there is no `FAL_KEY` at all — on
+a free tier of 20 requests a day, which is what answered an associate "I could not answer that just
+now" twice on a real phone before this.
 
 ## What never reaches the model
 

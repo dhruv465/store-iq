@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 import { allowedNumbers, canonUnit, factsFor, pairsIn, recommendedInches, spellOut, type Pack } from "./pack.js";
-import { falConfig, falText, readJson, shapeInstruction } from "./fal.js";
+import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "./fal.js";
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
 import { findProduct, productReply, translateSpec } from "./product.js";
@@ -253,6 +253,12 @@ export async function voiceNote(
   audio: NonNullable<Event["audio"]>,
   request: typeof fetch = fetch,
 ): Promise<{ transcript: string; card: Partial<Session["card"]> }> {
+  // Whisper on fal where there is a key, because Gemini's free tier is 20 requests a day and a
+  // voice note is the one thing an associate sends when their hands are full. Whisper returns the
+  // words and nothing else, which is all the rest of this file wants: the card is then read from
+  // those words exactly as it is from typed ones, by the extractor first and the manager after.
+  const fal = falConfig();
+  if (fal) return { transcript: await falTranscribe(fal, audio, request), card: {} };
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw Error("Missing GEMINI_API_KEY");
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
@@ -376,6 +382,16 @@ const UNITS =
 export function unsupportedNumbers(text: string, allowed: Set<number | string>, said: string): string[] {
   const quoted = numbersIn(said);
   const spoken = pairsIn(said);
+  // Three metres is ten feet. Associates on this floor say metres and the manager answers in feet,
+  // and refusing that is the guard calling a unit conversion an invention. A spoken voice note in
+  // Hindi — "तीन मीटर दूर बैठते हैं" — was answered with "10 foot" and refused.
+  for (const pair of [...spoken]) {
+    const [value, unit] = pair.split(" ");
+    const measure = Number(value);
+    if (!Number.isFinite(measure)) continue;
+    if (unit === "metre") for (const feet of [measure * 3.28, measure * 3.3]) spoken.add(`${Math.round(feet)} foot`);
+    if (unit === "foot") spoken.add(`${Math.round((measure / 3.28) * 10) / 10} metre`);
+  }
   const bad: string[] = [];
   const scanned = spellOut(text);
   for (const match of scanned.matchAll(
@@ -1048,7 +1064,14 @@ async function answer(
     return cardSummary(session);
 
   let reply = render(decision);
-  const said = `${event.text ?? ""} ${event.action ?? ""}`;
+  // What the associate has told us, this turn and before: the card holds nothing they did not say
+  // or tap, and a figure they gave in one turn is still theirs in the next.
+  const told = [
+    typeof session.card.distance_feet === "number" ? `${session.card.distance_feet} feet` : "",
+    typeof session.card.distance_m === "number" ? `${session.card.distance_m} metre` : "",
+    typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
+  ].filter(Boolean);
+  const said = [event.text, event.action, ...told].filter(Boolean).join(" ");
   // A manager who does not know the answer finds out. The question goes to the named expert and
   // comes back as a notice, so the associate is not left with "I do not have that".
   //
