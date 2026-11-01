@@ -178,3 +178,37 @@ test("the floor questions a listing can answer come through with the specs", () 
   assert.equal(product.specs.country_of_origin, "Vietnam");
   assert.equal(product.specs.rating, 4.3);
 });
+
+/** A real Reliance Digital promotion, 1 Nov 2026: what the store actually returns. */
+const liveOffer = {
+  id: "69b25c62744fd8d69d6c7fd4",
+  promotion_type: "free_gift_items",
+  promotion_name: "MAR29226",
+  offer_text: "MAR29226\n",
+  description: '<table width="141"><tbody><tr><td>MAR29226</td></tr></tbody></table><style>.x{max-width:100%}</style>',
+  promotion_group: "product",
+  valid_till: "2027-03-31T18:25:00+00:00",
+  free_gift_items: [{ item_id: 7517594, item_name: "SONY WALL MOUNT WM 60 65", item_brand_name: "Sony" }],
+  discount_rules: [{ discount_type: "free_gift_items", offer: { max_offer_quantity: 1 } }],
+};
+
+test("a live promotion is read for what it does, not for its reference", () => {
+  // offer_text and promotion_name are both the code "MAR29226". What it is — buy the television,
+  // get a Sony wall mount — is only in free_gift_items.
+  const offer = fromPromotion(liveOffer);
+  assert.equal(offer.title, "Free with it: SONY WALL MOUNT WM 60 65");
+  assert.equal(offer.applies_to, "product");
+  assert.equal(offer.valid_till, "2027-03-31T18:25:00+00:00");
+  // The description is a TinyMCE table and a block of CSS saying the code again. Keeping it would
+  // put "141" and "100" into allowedNumbers as quotable figures.
+  assert.equal(offer.needs, undefined);
+  assert.equal(offer.percent, undefined, "no amount is read: discount_rules says the kind, not how much");
+
+  // With no gift and no words, the code is said as a reference rather than as an offer.
+  assert.equal(fromPromotion({ ...liveOffer, free_gift_items: [] }).title, "Offer MAR29226");
+  // And a promotion whose text is actually words keeps them.
+  assert.equal(
+    fromPromotion({ offer_text: "10% off on HDFC cards", free_gift_items: [] }).title,
+    "10% off on HDFC cards",
+  );
+});

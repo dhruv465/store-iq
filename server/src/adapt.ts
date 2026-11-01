@@ -159,22 +159,44 @@ export function fromFdk(row: Record<string, any>): Record<string, unknown> {
 
 /** One PromotionOffer from getPromotionOffers, in the shape pack.offers already carries.
  *
- *  No figure is read off it. The reference documents discount_rules as "array of object" and says
- *  nothing about what is inside, and guessing a key is how the amount of a real offer gets quoted
- *  wrongly to a real customer. An offer with no percent and no flat amount is quoted by its own
- *  title and its own terms, and offerAmount() returns 0 for it, which is the honest answer while
- *  the shop's API has not told us the number.
+ *  The live store's promotions are not written for a reader. A real one on a Sony television came
+ *  back as promotion_name "MAR29226", offer_text "MAR29226", and a description that was a TinyMCE
+ *  table wrapped in two blocks of CSS containing the same code. What it actually is — buy the
+ *  television, get a Sony wall mount free — lives only in free_gift_items.
  *
- *  shortcut: amounts are not mapped. Print one real available-promotions response (npm run
- *  pack:check -- live) and add the keys discount_rules actually uses. */
+ *  So the words are built from what the promotion does, the HTML is stripped (its stray numbers
+ *  would otherwise become quotable figures through allowedNumbers), and a bare code is only ever
+ *  the last resort.
+ *
+ *  No amount is read. discount_rules says what KIND of discount it is, not how much, and guessing
+ *  is how a real offer gets quoted wrongly to a real customer. */
 export function fromPromotion(row: Record<string, any>): Record<string, unknown> {
+  const plain = (value: unknown): string =>
+    String(value ?? "")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&[a-z]+;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const gifts = (row.free_gift_items ?? []).map((gift: any) => gift?.item_name).filter(Boolean) as string[];
+  const said = plain(row.offer_text) || plain(row.promotion_name);
+  // "MAR29226" is a reference, not an offer. Capitals and digits with no space are not words.
+  const isCode = !said || /^[A-Z0-9_\-]+$/.test(said);
+  const detail = plain(row.description);
   return {
-    id: row.id,
-    title: row.offer_text || row.promotion_name || row.promotion_type,
+    id: row.id ?? row.promotion_name,
+    title: gifts.length ? `Free with it: ${gifts.join(", ")}` : isCode ? `Offer ${said}` : said,
     applies_to: row.promotion_group,
-    needs: row.description,
+    // The description is kept only when it says something the title does not.
+    ...(detail && detail !== said && !isCodeOnly(detail, said) ? { needs: detail.slice(0, 300) } : {}),
+    ...(row.is_bank_offer ? { bank_offer: true } : {}),
     valid_till: row.valid_till,
   };
+}
+
+/** A description that is only the promotion's own code repeated is not terms, it is noise. */
+function isCodeOnly(detail: string, said: string): boolean {
+  return detail.replace(/\s+/g, "") === said.replace(/\s+/g, "");
 }
 
 /** An offer whose end date has passed is not on today, whatever the catalogue still lists. */
