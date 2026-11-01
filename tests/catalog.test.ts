@@ -9,7 +9,7 @@ import {
   getStock,
   read,
 } from "../server/src/catalog.js";
-import { startingPack } from "../server/src/pack.js";
+import { startingPack, searchPack, narrow, terms, words, aboutTheWords, type Pack } from "../server/src/pack.js";
 
 /** This talks to a production store. The tests below are the proof that it cannot write to one,
  *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
@@ -254,4 +254,169 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
   // Nothing to narrow to is not an error: the loose query's own rows stand.
   assert.equal(narrow([], 12), undefined);
   assert.equal(narrow([facet("category", [["extended-warranty", 9]])], 9), undefined);
+
+  // "iphone" is the case that killed the count pick. The store's own facets for q=iphone put
+  // sports-fitness-watches (142) above smart-phones (117), and the count pick refined the search
+  // into Apple Watches. The kind said — iphone is a phone — is inside smart-phones, and that is
+  // the category that counts.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["sports-fitness-watches", 142],
+          ["mobile-cases", 133],
+          ["smart-phones", 117],
+          ["premium-laptops", 38],
+        ]),
+        facet("brand", [["apple", 406]]),
+      ],
+      547,
+      ["iphone"],
+    ),
+    "brand:apple:::category:smart-phones",
+  );
+});
+
+const base: Pack = {
+  version: "stub-1",
+  store: { id: "1", name: "Reliance Digital", city: "Mumbai" },
+  shift_brief: {},
+  products: [],
+  offers: [],
+  finance: [],
+  charges: [],
+  accessories: [],
+  experts: [],
+  electricity: { tariff_rupees_per_unit: 8, note: "" },
+  labels: [],
+  myths: [],
+  install_requirements: {},
+};
+
+/** The store's real answer to q="iphone" and to the category the facets pick, on 1 Nov 2026: the
+ *  loose search ranks a MagSafe wallet first out of 547, and the phones sit behind the refine. */
+test("an iphone question finds iphones, on the associate's own sentence", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  try {
+    const calls: string[] = [];
+    const phones = {
+      items: [
+        {
+          uid: 1,
+          name: "Apple iPhone 16 128 GB, Pink",
+          slug: "apple-iphone-16",
+          item_code: "AP16",
+          brand: { name: "Apple" },
+          price: { marked: { min: 64900 }, effective: { min: 52990 } },
+          sellable: true,
+        },
+        {
+          uid: 2,
+          name: "Apple iPhone 17 256 GB, Black",
+          slug: "apple-iphone-17",
+          item_code: "AP17",
+          brand: { name: "Apple" },
+          price: { marked: { min: 79900 }, effective: { min: 67990 } },
+          sellable: true,
+        },
+      ],
+      page: { item_total: 117 },
+    };
+    const loose = {
+      items: [
+        {
+          uid: 9,
+          name: "Apple iPhone Fine Woven MagSafe Mobile Wallet, Burgundy",
+          slug: "apple-wallet",
+          item_code: "WAL1",
+          brand: { name: "Apple" },
+          price: { marked: { min: 3900 }, effective: { min: 2999 } },
+          sellable: true,
+        },
+      ],
+      page: { item_total: 547 },
+      filters: [
+        {
+          key: { name: "category" },
+          values: [
+            { value: "sports-fitness-watches", count: 142 },
+            { value: "mobile-cases", count: 133 },
+            { value: "smart-phones", count: 117 },
+          ],
+        },
+        { key: { name: "brand" }, values: [{ value: "apple", count: 406 }] },
+      ],
+    };
+    const fake = (async (url: string | URL) => {
+      calls.push(String(url));
+      const u = new URL(String(url));
+      const body = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : u.searchParams.get("f")
+          ? phones
+          : loose;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    // The full sentence the associate sends, not a product name: the question words must fall
+    // away, because "asking iphone" was a query the store answered with smart glasses.
+    assert.deepEqual(terms("customer is asking about the iphone which i can see at the store"), ["iphone"]);
+
+    const pack = await searchPack(base, "customer is asking about the iphone which i can see at the store", fake);
+    assert.deepEqual(
+      pack.products.map((product) => product.name),
+      ["Apple iPhone 16 128 GB, Pink", "Apple iPhone 17 256 GB, Black"],
+      "the wallet is not the answer to an iphone question",
+    );
+    assert.match(calls[0]!, /q=iphone/, "the search is the product, not the sentence around it");
+    assert.match(calls[0]!, /sort_on=popular/, "the store's own popularity order");
+    assert.ok(
+      calls.some((call) => call.includes("f=brand%3Aapple%3A%3A%3Acategory%3Asmart-phones")),
+      calls.join("\n"),
+    );
+    assert.equal(pack.offers.length, 0, "nothing running is still the honest offer list");
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
+});
+
+test("a search that matches nothing refuses the catalogue's first page", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  try {
+    const fake = (async () =>
+      new Response(JSON.stringify({ items: [], page: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+    await assert.rejects(searchPack(base, "paper plane model", fake), /matched nothing/);
+    assert.equal(terms("paper plane model").length > 0, true);
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
+});
+
+test("a short change of subject is adopted only when the products found carry the words", () => {
+  const iphones = {
+    products: [{ brand: "Apple", name: "Apple iPhone 16 128 GB, Pink" }],
+  } as unknown as Pack;
+  const watches = {
+    products: [{ brand: "Apple", name: "Apple Watch Ultra 4 GPS + Cellular 49 mm Black Titanium Case" }],
+  } as unknown as Pack;
+  assert.equal(aboutTheWords(words("what about iphone"), watches), false);
+  assert.equal(aboutTheWords(words("what about iphone"), iphones), true);
+  assert.equal(aboutTheWords(words("8 feet"), watches), false, "a distance is not a kind of product");
 });

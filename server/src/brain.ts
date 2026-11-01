@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 import {
+  aboutTheWords,
   allowedNumbers,
   canonUnit,
   factsFor,
@@ -8,6 +9,7 @@ import {
   recommendedInches,
   searchPack,
   spellOut,
+  words,
   type Pack,
 } from "./pack.js";
 import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "./fal.js";
@@ -864,6 +866,9 @@ async function answer(
   // they sit from the TV, three turns running. So what the conversation is about is remembered,
   // and only replaced when new words actually find something.
   const about = (event.text ?? "").trim();
+  // Notes exist before the search: a search that matched nothing is as worth telling the model as
+  // a card field just filled.
+  const notes: string[] = [];
   // A command is not a product. Searching "recommend" returned a USB hub, which then became what
   // the conversation was about and was offered as the one thing to show.
   const isCommand =
@@ -880,14 +885,42 @@ async function answer(
   // and that became what the conversation was about, which put screens back in a washing machine
   // pack and left the home unassessable. A new customer clears it; nothing else needs to.
   if (!session.subject && about.length > 3 && !isCommand) {
-    const found = await searchPack(pack, about).catch(() => pack);
-    if (found !== pack) {
-      pack = found;
-      session.subject = about;
+    try {
+      const found = await searchPack(pack, about);
+      if (found !== pack) {
+        pack = found;
+        session.subject = about;
+      }
+    } catch {
+      // A miss is an answer, not a failure: the loose first page of the catalogue is whatever the
+      // store sorted first (a fridge, a television, resQ plans), and answering an iPhone question
+      // from it is how this associate was told about televisions instead.
+      notes.push(
+        `The catalogue search for ${JSON.stringify(about).slice(0, 70)} matched nothing. FACTS has no product for what they asked about. Do not name any other product instead: say you cannot see it in what we can search, point them to the shelf tag or the ASM, and set "unknown" true so a human finds out.`,
+      );
     }
-  } else if (session.subject) pack = await searchPack(pack, session.subject).catch(() => pack);
+  } else if (session.subject) {
+    // A few words naming something ("what about iphone") is a change of subject, not a fact for
+    // the card. The pack follows only when the catalogue answered with something that carries the
+    // words actually said — "8 feet" and "on the wall" must not drag the pack away. A miss keeps
+    // the conversation they were already having.
+    const named = about.length > 3 && !isCommand && about.split(/\s+/).length <= 4;
+    let changed = false;
+    if (named) {
+      try {
+        const found = await searchPack(pack, about);
+        if (found !== pack && aboutTheWords(words(about), found)) {
+          pack = found;
+          session.subject = about;
+          changed = true;
+        }
+      } catch {
+        // This turn's words matched nothing; the conversation keeps its subject.
+      }
+    }
+    if (!changed) pack = await searchPack(pack, session.subject).catch(() => pack);
+  }
   // What has just happened, for the model to answer around. Nothing in here is a question.
-  const notes: string[] = [];
   // Set once a home fact has been filed this turn. The product sheet must not win after that: it
   // carries a price, and "they sit 3 m away and want a Samsung" is the home, not a price request.
   let filed = false;
