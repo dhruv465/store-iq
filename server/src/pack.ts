@@ -184,11 +184,22 @@ const SERVICE = /resq|warranty|protection|insurance|installation/i;
  *  something ("paper plane" reached karaoke speakers), so the words have to be in what came
  *  back: this is what keeps a short "what about iphone" from adopting watches and "8 feet" from
  *  dragging a washing machine pack away. */
+/** Whether a product's words contain the word that was said, as a word rather than as letters.
+ *
+ *  A plain substring test made "son" — out of "a laptop for my son's college" — a match for every
+ *  Sony speaker in the shop, and those rows then scored as highly as the actual laptops and won
+ *  for being asked first. An English ending is still the same word, because the store writes
+ *  "Washing Machines" for "washing machine" and "Front Loading" for "front load" — but "sony" is
+ *  not an ending of "son", so the false match goes and the real ones stay. */
+function names(text: string, word: string): boolean {
+  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es|ing|ed)?\\b`).test(text);
+}
+
 export function aboutTheWords(said: string[], products: { brand: string; name: string }[]): boolean {
   const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word) && !UNIT.test(word));
   if (!kinds.length) return false;
   return products.some((product) =>
-    kinds.some((kind) => `${product.brand} ${product.name}`.toLowerCase().includes(kind)),
+    kinds.some((kind) => names(`${product.brand} ${product.name}`.toLowerCase(), kind)),
   );
 }
 
@@ -200,9 +211,9 @@ export function aboutTheWords(said: string[], products: { brand: string; name: s
  *  products they serve — q="smart watch" answered with a "smart-watch-accessories" shelf of
  *  straps — so they are never the kind the words name, unless the associate asked for one. */
 const ACCESSORY_SHELF =
-  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
+  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
 const ACCESSORY_WORD =
-  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
+  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
 
 export function categoryByWords(filters: Facet[], said: string[]): string | undefined {
   const brands = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).map((value) =>
@@ -341,7 +352,10 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
     return [
       accessory ? -1 : 0,
       ...(["kind", "spec", "unit"] as const).map(
-        (part) => new Set(wordsOf(part).filter((word) => text.includes(word))).size,
+        // A word, not letters: "son" must not score every Sony row. Specs and units stay a plain
+        // substring, because "85" is inside "85XR35M2" and that is the model the associate means.
+        (part) =>
+          new Set(wordsOf(part).filter((word) => (part === "kind" ? names(text, word) : text.includes(word)))).size,
       ),
     ];
   };

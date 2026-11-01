@@ -755,3 +755,22 @@ test("a short change of subject is adopted only when the products found carry th
   assert.equal(aboutTheWords(words("what about iphone"), iphones), true);
   assert.equal(aboutTheWords(words("8 feet"), watches), false, "a distance is not a kind of product");
 });
+
+test("a said word is matched as a word, so 'son' is not every Sony in the shop", async () => {
+  const { aboutTheWords } = await import("../server/src/pack.js");
+  const speakers = [{ brand: "Sony", name: "SRS ULT TOWER 5 Wireless Bluetooth Party Speaker" }];
+  const laptops = [{ brand: "Microsoft", name: "Surface 15 Windows Laptop" }];
+
+  // "a laptop for my son's college" reduces to laptop/son/college. The store answers q="laptop son"
+  // with nine Sony speakers, and a substring test scored them as highly as the real laptops — so
+  // the worse candidate won for being asked first, and the associate was offered a party speaker.
+  assert.equal(aboutTheWords(["laptop", "son", "college"], speakers), false, "Sony is not a son");
+  assert.equal(aboutTheWords(["laptop", "son", "college"], laptops), true);
+
+  // An English ending is the same word, which is the half that must keep working: the store writes
+  // "Washing Machines" where the associate types "washing machine", and "Front Loading" for "load".
+  assert.equal(aboutTheWords(["machine"], [{ brand: "Lloyd", name: "Top Load Washing Machines" }]), true);
+  assert.equal(aboutTheWords(["load"], [{ brand: "Lloyd", name: "Front Loading Washing Machine" }]), true);
+  // And a word that only shares a stem is still not a match.
+  assert.equal(aboutTheWords(["cool"], [{ brand: "Voltas", name: "Cooler 45 L" }]), false, "a cooler is not cool");
+});
