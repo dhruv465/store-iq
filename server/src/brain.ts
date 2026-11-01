@@ -909,7 +909,7 @@ async function answer(
     if (named) {
       try {
         const found = await searchPack(pack, about);
-        if (found !== pack && aboutTheWords(words(about), found)) {
+        if (found !== pack && aboutTheWords(words(about), found.products)) {
           pack = found;
           session.subject = about;
           changed = true;

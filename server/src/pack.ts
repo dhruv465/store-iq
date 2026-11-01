@@ -115,7 +115,7 @@ const searched = new Map<string, Pack>();
  *  later turn asked a washing machine customer about viewing distance. Two or three words of the
  *  thing itself is what the endpoint answers. */
 const FILLER =
-  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|asking|asked|ask|store|shop|shelf|aisle|counter|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range)\b/gi;
+  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|we|us|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|asking|asked|ask|store|shop|shelf|aisle|counter|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range)\b/gi;
 
 /** Two words the catalogue does not use for the thing the associate means. "ac" on its own
  *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */
@@ -143,6 +143,10 @@ const SAID_IN_HINDI: Record<string, string> = {
  *  question with Apple Watches. So the associate's word is mapped to the kind it is: a phone. */
 const KIND_OF: Record<string, string> = { iphone: "phone", ipad: "tablet", macbook: "laptop" };
 
+/** Units of measurement. An inch runs country-wide stock, not a kind: the TV refine for
+ *  "sony bravia 85 inch" handed back the most popular screens — Samsung 85s — and they were
+ *  adopted on the word "inch" alone. A unit never names what the product is. */
+const UNIT = /inch|inches|kg|gram|litre|liter|ton|gb|tb|mm|cm|watt|watts|star|feet|foot/;
 export function words(text: string): string[] {
   const lowered = text.toLowerCase();
   const named = Object.entries(SAID_IN_HINDI).find(([hindi]) => lowered.includes(hindi));
@@ -175,16 +179,89 @@ export function terms(text: string): string[] {
  *  are read, which is also where `resQ 0"` came from being offered as one of three televisions. */
 const SERVICE = /resq|warranty|protection|insurance|installation/i;
 
-/** Whether what the search found is actually the thing named. The store's own search ranks an
- *  accessory named after the product above the product, so the words have to be in what came
+/** Whether what was found is actually the thing named. The store's own search ranks an
+ *  accessory named after the product above the product, and it answers nearly any string with
+ *  something ("paper plane" reached karaoke speakers), so the words have to be in what came
  *  back: this is what keeps a short "what about iphone" from adopting watches and "8 feet" from
  *  dragging a washing machine pack away. */
-export function aboutTheWords(said: string[], found: Pack): boolean {
-  const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word));
+export function aboutTheWords(said: string[], products: { brand: string; name: string }[]): boolean {
+  const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word) && !UNIT.test(word));
   if (!kinds.length) return false;
-  return found.products.some((product) =>
+  return products.some((product) =>
     kinds.some((kind) => `${product.brand} ${product.name}`.toLowerCase().includes(kind)),
   );
+}
+
+/** What the associate's words call the kind, out of the store's own category facet values. A word
+ *  that names a brand ("apple", "noise") is not a kind — the brand facet knows it. And after
+ *  brands are removed the last word left is the head of what was said: "smart watch" is a watch,
+ *  even though "smart" also opens the store's smart-phones. */
+/** The accessory shelves the store keeps beside the products. Their facet counts sit above the
+ *  products they serve — q="smart watch" answered with a "smart-watch-accessories" shelf of
+ *  straps — so they are never the kind the words name, unless the associate asked for one. */
+const ACCESSORY_SHELF = /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable/;
+const ACCESSORY_WORD = /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable)/;
+
+export function categoryByWords(filters: Facet[], said: string[]): string | undefined {
+  const brands = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).map((value) =>
+    String(value?.value ?? "").toLowerCase(),
+  );
+  const of = (word: string) => KIND_OF[word] ?? word;
+  const kinds = [
+    ...new Set(
+      said
+        .map(of)
+        .filter(
+          (word) =>
+            word.length > 2 &&
+            !/^\d/.test(word) &&
+            !UNIT.test(word) &&
+            !brands.some((brand) => brand.includes(word) || word.includes(brand)),
+        ),
+    ),
+  ];
+  if (!kinds.length) return undefined;
+  const head = kinds[kinds.length - 1]!;
+  // Dash and space are the same separator as far as matching goes: the store writes
+  // "multi-function-inkjet-printers" for "printer".
+  const tidy = (text: string) => text.replace(/[^a-z0-9]+/g, " ").toLowerCase();
+  // The store's own facet counts put the accessory shelves above the products they serve —
+  // q="smart watch" answered with a "smart-watch-accessories" shelf of straps — so an accessory
+  // shelf is never the kind the words name, unless the associate asked for an accessory itself.
+  const wantsAccessory = said.some((word) => ACCESSORY_WORD.test(word));
+  const named =
+    filters
+      .find((facet) => facet.key?.name === "category")
+      ?.values?.filter(
+        (value) =>
+          value.value &&
+          !SERVICE.test(String(value.value)) &&
+          (wantsAccessory || !ACCESSORY_SHELF.test(String(value.value))),
+      )
+      .map((value) => {
+        const text = tidy(String(value.value));
+        const hits = kinds.reduce((total, kind) => total + (text.includes(kind) ? (kind === head ? 2 : 1) : 0), 0);
+        return { value, hits };
+      })
+      .filter((hit) => hit.hits > 0)
+      .sort((a, b) => b.hits - a.hits || (b.value.count ?? 0) - (a.value.count ?? 0))[0]?.value ?? undefined;
+  return named ? String(named.value) : undefined;
+}
+
+/** The brand facet values the associate's own words name — "sony" in "soundbar sony", "apple" in
+ *  "apple iphone". Whatever else the store's search suggests, these words are in the question. */
+export function namedBrands(filters: Facet[], said: string[]): string[] {
+  return (filters.find((facet) => facet.key?.name === "brand")?.values ?? [])
+    .filter((value) =>
+      value.value
+        ? said.some((word) => {
+            const text = String(value.value).toLowerCase();
+            const bare = (part: string) => part.replace(/[^a-z0-9]/g, "");
+            return text === word || (text.length > 1 && bare(text) === bare(word));
+          })
+        : false,
+    )
+    .map((value) => String(value.value).toLowerCase());
 }
 
 /** The narrowest filter the store's own facets support for this query.
@@ -198,28 +275,31 @@ export function narrow(filters: Facet[], items: number, said: string[] = []): st
     (filters.find((facet) => facet.key?.name === name)?.values ?? [])
       .filter((value) => value.value && !SERVICE.test(String(value.value)))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
-  // The words said and the kinds they name: "iphone" is a phone, and "phone" is inside the store's
-  // own category "smart-phones". Counts are not trusted for this pick — they are how many of the
-  // whole catalogue a category holds, and for q="iphone" that counted Apple Watches above the
-  // phones.
-  const kinds = [
-    ...new Set(
-      said.flatMap((word) => [word, KIND_OF[word] ?? word]).filter((word) => word.length > 2 && !/^\d/.test(word)),
-    ),
-  ];
+  // A category the words themselves name wins over the one with the biggest count: the counts are
+  // holdings of the whole catalogue, and for q="iphone" that counted Apple Watches above the
+  // phones. What nothing said names is the count's answer.
   const values = (filters.find((facet) => facet.key?.name === "category")?.values ?? []).filter(
     (value) => value.value && !SERVICE.test(String(value.value)),
   );
-  const named = values
-    .filter((value) => kinds.some((kind) => String(value.value).toLowerCase().includes(kind)))
-    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
-  const category = named ?? [...values].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
+  const wanted = categoryByWords(filters, said);
+  const named = wanted ? values.find((value) => String(value.value) === wanted) : undefined;
+  const category = named ?? top("category");
   if (!category) return undefined;
   // A brand joins the filter only when the query was about that brand. "sony" is 194 of 294 rows
   // and belongs; "washing machine" has no brand above a third of the rows and must not be
-  // narrowed to one, or we would answer it with whichever brand happens to stock the most.
-  const brand = top("brand");
-  const joined = brand && (brand.count ?? 0) * 2 >= items ? `brand:${brand.value}:::` : "";
+  // narrowed to one, or we would answer it with whichever brand happens to stock the most. What
+  // the associate named joins even when it is thin: "soundbar sony" — four of eleven — came back
+  // as the more popular JBLs, which answered a Sony question with someone else's products.
+  const brandValues = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).filter(
+    (value) => value.value && !SERVICE.test(String(value.value)),
+  );
+  brandValues.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  const topBrand = brandValues[0];
+  // Whatever the associate named joins even when it is thin in the shelf; absent that, the brand
+  // only joins when it is the majority — one that holds under half the rows is a guess.
+  const majority = topBrand && (topBrand.count ?? 0) * 2 >= items ? String(topBrand.value) : undefined;
+  const chosen = namedBrands(filters, said)[0] ?? majority;
+  const joined = chosen ? `brand:${chosen}:::` : "";
   return `${joined}category:${category.value}`;
 }
 
@@ -230,8 +310,14 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
   const hit = searched.get(asked);
   if (hit) return hit;
 
-  let items: Record<string, unknown>[] = [];
+  // A fuzzy storefront answers almost any string with something — "paper plane" reached karaoke
+  // speakers — so a candidate's rows are only adopted when the catalogue named a category after
+  // the words said, or the rows themselves carry them. The first rows the store hands over wait
+  // as the fallback until a later candidate ("printer" after "printer office") answers for real.
   const said = words(asked);
+  const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word) && !UNIT.test(word));
+  let won: Record<string, unknown>[] | undefined;
+  let fallback: Record<string, unknown>[] | undefined;
   for (const q of terms(asked)) {
     // `filters: true` is the reference's own default and costs nothing extra: the store returns
     // its brand and category facets for this query alongside the rows. `sort_on: popular` is the
@@ -243,26 +329,54 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
       request,
     );
     if (!found.items.length) continue;
-    items = found.items;
+    const wanted = namedBrands(found.filters, said);
+    // What the associate named as a brand has to stay in the answer: a refine that swallows it is
+    // the more popular other brand answering a Sony question, and stays just a suggestion.
+    const carrying = (rows: Record<string, unknown>[]) =>
+      !wanted.length ||
+      rows.some((row) => {
+        const text = adaptProduct(fromFdk(row)).product.brand.toLowerCase();
+        return wanted.every((brand) => text.includes(brand) || text.replace(/[^a-z0-9]/g, " ").includes(brand));
+      });
+    // How much of what the associate said lives in the first rows of a candidate — the rows the
+    // reply would actually be built from. The popular soundbar page held one Sony row too, but
+    // behind three JBLs: a Sony somewhere on the page is not the Sony answer. A refine is only
+    // taken when its first rows keep at least as much of what was said as the loose ones had.
+    const coverage = (rows: Record<string, unknown>[]) => {
+      if (!kinds.length) return 0;
+      const hits = new Set<string>();
+      for (const row of rows.slice(0, 3)) {
+        const product = adaptProduct(fromFdk(row)).product;
+        const text = `${product.brand} ${product.name}`.toLowerCase();
+        for (const kind of kinds) if (text.includes(kind)) hits.add(kind);
+      }
+      return hits.size;
+    };
+    let rows = found.items;
     const f = narrow(found.filters, Number(found.page.item_total) || found.items.length, said);
     if (f) {
       const refined = await getProducts(
         config,
-        {
-          f,
-          sort_on: "popular",
-          page_size: 12,
-          page_no: 1,
-          page_type: "number",
-        },
+        { f, sort_on: "popular", page_size: 12, page_no: 1, page_type: "number" },
         request,
       ).catch(() => null);
-      // Only when it answers. A filter that returns nothing is a worse answer than a loose query.
-      if (refined?.items.length) items = refined.items;
+      // Only when it answers with at least as much of the question: nothing at all, another
+      // brand, a narrower slice of the words said — each is a worse answer than the loose rows.
+      if (refined?.items.length && carrying(refined.items) && coverage(refined.items) >= coverage(rows))
+        rows = refined.items;
     }
-    break;
+    const adapted = rows.map((row) => adaptProduct(fromFdk(row)).product);
+    const fits = (categoryByWords(found.filters, said) !== undefined || aboutTheWords(said, adapted)) && carrying(rows);
+    if (fits) {
+      won = rows;
+      break;
+    }
+    fallback = rows;
   }
+  // What none of the candidates won: the store answered every one of them with empty pages.
+  const items = won ?? fallback ?? [];
   const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
+
   // Nothing found is said, not substituted: the loose base first page is a heap of whatever the
   // store sorted first (a fridge, a television, resQ warranty plans), and answering an iPhone
   // question from it is how the associate was told about televisions instead.

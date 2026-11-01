@@ -9,7 +9,16 @@ import {
   getStock,
   read,
 } from "../server/src/catalog.js";
-import { startingPack, searchPack, narrow, terms, words, aboutTheWords, type Pack } from "../server/src/pack.js";
+import {
+  startingPack,
+  searchPack,
+  narrow,
+  terms,
+  words,
+  aboutTheWords,
+  categoryByWords,
+  type Pack,
+} from "../server/src/pack.js";
 
 /** This talks to a production store. The tests below are the proof that it cannot write to one,
  *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
@@ -254,11 +263,101 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
   // Nothing to narrow to is not an error: the loose query's own rows stand.
   assert.equal(narrow([], 12), undefined);
   assert.equal(narrow([facet("category", [["extended-warranty", 9]])], 9), undefined);
+});
 
-  // "iphone" is the case that killed the count pick. The store's own facets for q=iphone put
-  // sports-fitness-watches (142) above smart-phones (117), and the count pick refined the search
-  // into Apple Watches. The kind said — iphone is a phone — is inside smart-phones, and that is
-  // the category that counts.
+test("the last word left after the brand names the kind, so a smart watch is not a phone", () => {
+  const facet = (name: string, values: [string, number][]) => ({
+    key: { name },
+    values: values.map(([value, count]) => ({ value, count })),
+  });
+  // "smart watch" is the case that proves the head: the store's own facet counts put
+  // smart-phones (970) above sports-fitness-watches (466), the word "smart" opens both, and the
+  // associate may have named the brand too ("smart watch noise"). What is said is a watch, and
+  // the brand the associate named joins even when it holds a small share of the rows.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["smart-phones", 970],
+          ["sports-fitness-watches", 466],
+          ["led-televisions", 194],
+          ["fitness-bands-trackers", 141],
+        ]),
+        facet("brand", [["noise", 210]]),
+      ],
+      3105,
+      ["smart", "watch", "noise"],
+    ),
+    "brand:noise:::category:sports-fitness-watches",
+  );
+  // "smart watch" without the brand reads the same way on the kind: watch is the head of the
+  // phrase, and no brand is said, so none is narrowed to even if one holds a third of the rows.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["smart-phones", 970],
+          ["sports-fitness-watches", 466],
+        ]),
+        facet("brand", [["fire-boltt", 180]]),
+      ],
+      3105,
+      ["smart", "watch"],
+    ),
+    "category:sports-fitness-watches",
+  );
+  // "soundbar sony" — Sony thin in the soundbar shelf — is still Sony's answer, not the more
+  // popular JBLs.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["tv-speakers-soundbars", 11],
+          ["led-televisions", 25],
+        ]),
+        facet("brand", [
+          ["jbl", 4],
+          ["sony", 3],
+        ]),
+      ],
+      38,
+      ["soundbar", "sony"],
+    ),
+    "brand:sony:::category:tv-speakers-soundbars",
+  );
+});
+
+test("an accessory shelf is not the kind named, until an accessory is asked for", () => {
+  const shelfFacet = (name: string, values: [string, number][]) => ({
+    key: { name },
+    values: values.map(([value, count]) => ({ value, count })),
+  });
+  // The store's own counts put the accessories shelf above the watches it serves: with the shelf
+  // counted, "smart watch" refined into a shelf of straps.
+  const shelf = shelfFacet("category", [
+    ["smart-watch-accessories", 2400],
+    ["smart-phones", 970],
+    ["sports-fitness-watches", 466],
+  ]);
+  assert.equal(
+    narrow([shelf], 3836, ["smart", "watch"]),
+    "category:sports-fitness-watches",
+    "the straps never answer a watch question by their shelf's big count",
+  );
+  // Asked for the accessory itself, the shelf is the right answer again.
+  assert.equal(narrow([shelf], 3836, ["strap", "smart", "watch"]), "category:smart-watch-accessories");
+  assert.equal(categoryByWords([shelf], ["smart", "watch", "strap"]), "smart-watch-accessories");
+});
+
+/** "iphone" is the case that killed the count pick. The store's own facets for q=iphone put
+ *  sports-fitness-watches (142) above smart-phones (117), and the count pick refined the search
+ *  into Apple Watches. The kind said — iphone is a phone — is inside smart-phones, and that is
+ *  the category that counts. */
+test("the kind a brand name is, said against the facets, reaches the f= filter", () => {
+  const facet = (name: string, values: [string, number][]) => ({
+    key: { name },
+    values: values.map(([value, count]) => ({ value, count })),
+  });
   assert.equal(
     narrow(
       [
@@ -409,13 +508,145 @@ test("a search that matches nothing refuses the catalogue's first page", async (
   }
 });
 
+/** The fuzzy storefront answers any string with something: the first candidate a sentence leaves
+ *  behind ("printer office") can be USB adapters while the product noun alone ("printer") stands
+ *  in the catalogue. The search has to keep trying. */
+/** The store refines a brand into a thin shelf by popularity: the loose "soundbar sony" answered
+ *  with Sony bars, the category page beneath it answered with the more popular JBLs. The refine
+ *  has to keep the brand the associate said — and the words, in the rows the reply is built
+ *  from. */
+test("a refine keeps the brand and the words the loose rows carried", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  const row = (uid: number, brand: string, name: string) => ({
+    uid,
+    name,
+    slug: `slug-${uid}`,
+    item_code: `CODE${uid}`,
+    brand: { name: brand },
+    price: { marked: { min: 9999 }, effective: { min: 8999 } },
+    sellable: true,
+  });
+  const sonyBars = {
+    items: [
+      row(1, "Sony", "Sony Bravia Theatre Bar 8 (HT-A8000) PRM 11.0 CH 495 Watt Soundbar"),
+      row(2, "Sony", "Sony Bravia Theatre Bar 9 (HT-A9000) PRM 13.0 CH 585 Watt Soundbar"),
+      row(3, "Sony", "Sony A7100 5.1 Channel Soundbar, Black"),
+    ],
+    page: { item_total: 15 },
+    filters: [{ key: { name: "category" }, values: [{ value: "tv-speakers-soundbars", count: 15 }] }],
+  };
+  // The store's own category page answers by popularity, and no Sony facet is on the loose
+  // response for this query — the refused refine is the only thing standing between the two.
+  const jblPage = {
+    items: [
+      row(4, "JBL", "JBL Sound Bar 2.1 Essential (440W) Soundbar with Dolby Digital"),
+      row(5, "JBL", "JBL 3.1 CH 440 W Soundbar, SB595"),
+      row(6, "Bose", "Bose Wireless Bluetooth Smart Ultra Soundbar, White"),
+    ],
+    page: { item_total: 200 },
+    filters: [{ key: { name: "category" }, values: [{ value: "tv-speakers-soundbars", count: 200 }] }],
+  };
+  try {
+    const fake = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      const body = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : u.searchParams.get("f")
+          ? jblPage
+          : sonyBars;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const pack = await searchPack(base, "soundbar sony", fake);
+    assert.deepEqual(
+      pack.products.map((product) => product.brand),
+      ["Sony", "Sony", "Sony"],
+      "the more popular other brand is not the answer to a Sony question",
+    );
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
+});
+
+test("a candidate whose rows do not carry the words said waits for the next one", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  try {
+    const calls: string[] = [];
+    const adapters = {
+      items: [
+        {
+          uid: 1,
+          name: "TP-Link UB500 Bluetooth 5.0 Nano USB Adapter for PC, 5.0",
+          slug: "tplink-ub500",
+          item_code: "TPL500",
+          brand: { name: "TP-Link" },
+          price: { marked: { min: 1299 }, effective: { min: 999 } },
+          sellable: true,
+        },
+      ],
+      page: { item_total: 7082 },
+      filters: [{ key: { name: "category" }, values: [{ value: "multi-utility-adapters", count: 7082 }] }],
+    };
+    const printers = {
+      items: [
+        {
+          uid: 2,
+          name: "HP DeskJet 2729 All-in-One Inkjet Printer",
+          slug: "hp-deskjet-2729",
+          item_code: "HPDJ2729",
+          brand: { name: "HP" },
+          price: { marked: { min: 8500 }, effective: { min: 6499 } },
+          sellable: true,
+        },
+      ],
+      page: { item_total: 68 },
+      filters: [
+        { key: { name: "category" }, values: [{ value: "multi-function-inkjet-printers", count: 68 }] },
+        { key: { name: "brand" }, values: [{ value: "hp", count: 21 }] },
+      ],
+    };
+    const fake = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      calls.push(u.searchParams.get("q") ?? `f=${u.searchParams.get("f")}`);
+      const q = u.searchParams.get("q");
+      const hit = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : u.searchParams.get("f")?.includes("printer") || q === "printer"
+          ? printers
+          : adapters;
+      return new Response(JSON.stringify(hit), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const pack = await searchPack(base, "printer for office", fake);
+    assert.deepEqual(
+      pack.products.map((product) => product.name),
+      ["HP DeskJet 2729 All-in-One Inkjet Printer"],
+      "the adapters the first candidate reached are not the answer",
+    );
+    assert.equal(calls[0], "printer office", "the sentence's own pair goes first");
+    assert.ok(calls.slice(1).includes("printer"), "the product noun alone follows it");
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
+});
+
 test("a short change of subject is adopted only when the products found carry the words", () => {
-  const iphones = {
-    products: [{ brand: "Apple", name: "Apple iPhone 16 128 GB, Pink" }],
-  } as unknown as Pack;
-  const watches = {
-    products: [{ brand: "Apple", name: "Apple Watch Ultra 4 GPS + Cellular 49 mm Black Titanium Case" }],
-  } as unknown as Pack;
+  const iphones = [{ brand: "Apple", name: "Apple iPhone 16 128 GB, Pink" }];
+  const watches = [{ brand: "Apple", name: "Apple Watch Ultra 4 GPS + Cellular 49 mm Black Titanium Case" }];
   assert.equal(aboutTheWords(words("what about iphone"), watches), false);
   assert.equal(aboutTheWords(words("what about iphone"), iphones), true);
   assert.equal(aboutTheWords(words("8 feet"), watches), false, "a distance is not a kind of product");
