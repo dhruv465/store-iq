@@ -102,15 +102,24 @@ export async function getProducts(
     page_type?: "cursor" | "number";
   } = {},
   request: typeof fetch = fetch,
-): Promise<{ items: Record<string, unknown>[]; page: Record<string, unknown> }> {
+): Promise<{ items: Record<string, unknown>[]; page: Record<string, unknown>; filters: Facet[] }> {
   const body = (await read(
     config,
     "/service/application/catalog/v1.0/products",
     { page_size: 12, page_type: "number", ...options },
     request,
-  )) as { items?: Record<string, unknown>[]; page?: Record<string, unknown> };
-  return { items: body.items ?? [], page: body.page ?? {} };
+  )) as { items?: Record<string, unknown>[]; page?: Record<string, unknown>; filters?: Facet[] };
+  return { items: body.items ?? [], page: body.page ?? {}, filters: body.filters ?? [] };
 }
+
+/** One entry of the response's documented `filters` block: the store's own facet, with every value
+ *  it holds for this query and how many rows carry it. Returned when `filters` is true, which the
+ *  reference gives as the default. This is the catalogue saying what it has, so it is the answer to
+ *  "which of the associate's words matter" — see `narrow()` in pack.ts. */
+export type Facet = {
+  key?: { name?: string; display?: string };
+  values?: { value?: unknown; count?: number; display?: string }[];
+};
 
 /** Catalog · getProductStockByIds. What is actually on the shelf, by SKU or item id, up to 50 at
  *  a time. A listing says what the chain sells; this says what this store can hand over today. */

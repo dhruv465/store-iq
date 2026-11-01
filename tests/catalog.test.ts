@@ -188,3 +188,70 @@ test("the server serves the live catalogue the moment the credentials are set", 
       else process.env[key] = saved[key];
   }
 });
+
+/** The `filters` block the v1.9.5 reference documents, in the shape the live store returns it:
+ *  the counts below are the real ones for q=sony and q=washing machine on 1 Nov 2026. */
+test("the store's own facets choose the filter, in the documented f= syntax", async () => {
+  const { narrow } = await import("../server/src/pack.js");
+  const facet = (name: string, values: [string, number][]) => ({
+    key: { name },
+    values: values.map(([value, count]) => ({ value, count })),
+  });
+
+  // "sony" returns a camera pouch first out of 294 rows. Its own category facet says 110 are
+  // televisions, and sony is 194 of the 294, so both join the filter with `:::` between them.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["led-televisions", 110],
+          ["gaming-controller", 22],
+        ]),
+        facet("brand", [
+          ["sony", 194],
+          ["tcl", 36],
+        ]),
+      ],
+      294,
+    ),
+    "brand:sony:::category:led-televisions",
+  );
+
+  // "washing machine": extended-warranty out-counts nothing here, but resq (74 of 241) is the top
+  // brand and is Reliance's service brand. A protection plan is not a product, and no real brand
+  // holds half the rows, so the category alone is the filter.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["extended-warranty", 74],
+          ["washing-machines", 164],
+        ]),
+        facet("brand", [
+          ["resq", 74],
+          ["lg", 39],
+        ]),
+      ],
+      241,
+    ),
+    "category:washing-machines",
+  );
+
+  // "fridge" is the case that proves the exclusion: 150 extended warranties against 122 fridges.
+  assert.equal(
+    narrow(
+      [
+        facet("category", [
+          ["extended-warranty", 150],
+          ["frost-free", 122],
+        ]),
+      ],
+      423,
+    ),
+    "category:frost-free",
+  );
+
+  // Nothing to narrow to is not an error: the loose query's own rows stand.
+  assert.equal(narrow([], 12), undefined);
+  assert.equal(narrow([facet("category", [["extended-warranty", 9]])], 9), undefined);
+});

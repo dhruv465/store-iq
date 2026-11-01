@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HomeCard } from "./types.js";
 import { adaptPack, adaptProduct, fromFdk, fromPromotion, running } from "./adapt.js";
-import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig } from "./catalog.js";
+import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig, type Facet } from "./catalog.js";
 
 export type Pack = {
   version: string;
@@ -156,6 +156,33 @@ export function terms(text: string): string[] {
   return [...new Set([said.slice(0, 2).join(" "), said[0] ?? "", said.slice(0, 3).join(" ")])].filter(Boolean);
 }
 
+/** resQ is Reliance's own service brand and extended-warranty its category. A protection plan is
+ *  not a product to put in front of a customer, and it out-counts the real thing on a plain query:
+ *  "fridge" returns 150 extended warranties against 122 refrigerators. Dropped before the counts
+ *  are read, which is also where `resQ 0"` came from being offered as one of three televisions. */
+const SERVICE = /resq|warranty|protection|insurance|installation/i;
+
+/** The narrowest filter the store's own facets support for this query.
+ *
+ *  The method reference documents `filters` on the same response and `f` as the way to use it:
+ *  `brand:Guerra:::l3_categories:Carter`, where `:::` is AND. So which of the associate's words
+ *  matter is not ours to guess — the catalogue answers it. "sony" lists a camera pouch first out
+ *  of 294 rows, and its own category facet says 110 of them are televisions. */
+export function narrow(filters: Facet[], items: number): string | undefined {
+  const top = (name: string) =>
+    (filters.find((facet) => facet.key?.name === name)?.values ?? [])
+      .filter((value) => value.value && !SERVICE.test(String(value.value)))
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
+  const category = top("category");
+  if (!category) return undefined;
+  // A brand joins the filter only when the query was about that brand. "sony" is 194 of 294 rows
+  // and belongs; "washing machine" has no brand above a third of the rows and must not be
+  // narrowed to one, or we would answer it with whichever brand happens to stock the most.
+  const brand = top("brand");
+  const named = brand && (brand.count ?? 0) * 2 >= items ? `brand:${brand.value}:::` : "";
+  return `${named}category:${category.value}`;
+}
+
 export async function searchPack(base: Pack, query: string, request: typeof fetch = fetch): Promise<Pack> {
   const config = catalogConfig();
   const asked = query.trim().toLowerCase().slice(0, 60);
@@ -165,8 +192,24 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
 
   let items: Record<string, unknown>[] = [];
   for (const q of terms(asked)) {
-    items = (await getProducts(config, { q, page_size: 12, page_no: 1, page_type: "number" }, request)).items;
-    if (items.length) break;
+    // `filters: true` is the reference's own default and costs nothing extra: the store returns
+    // its brand and category facets for this query alongside the rows.
+    const found = await getProducts(
+      config,
+      { q, filters: true, page_size: 12, page_no: 1, page_type: "number" },
+      request,
+    );
+    if (!found.items.length) continue;
+    items = found.items;
+    const f = narrow(found.filters, Number(found.page.item_total) || found.items.length);
+    if (f) {
+      const refined = await getProducts(config, { f, page_size: 12, page_no: 1, page_type: "number" }, request).catch(
+        () => null,
+      );
+      // Only when it answers. A filter that returns nothing is a worse answer than a loose query.
+      if (refined?.items.length) items = refined.items;
+    }
+    break;
   }
   const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
   if (!adapted.length) return base;
