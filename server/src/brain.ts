@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
-import { allowedNumbers, canonUnit, factsFor, pairsIn, recommendedInches, spellOut, type Pack } from "./pack.js";
+import {
+  allowedNumbers,
+  canonUnit,
+  factsFor,
+  pairsIn,
+  recommendedInches,
+  searchPack,
+  spellOut,
+  type Pack,
+} from "./pack.js";
 import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "./fal.js";
 import { recommendReply } from "./recommend.js";
 import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
@@ -827,6 +836,11 @@ async function answer(
   store?: Store,
 ): Promise<Reply> {
   if (event.name) session.associate = event.name;
+  // The catalogue is 8,383 products; the pack is whatever this conversation is about. Searched on
+  // the associate's own words, cached by query, and left exactly as it was when the catalogue is
+  // not configured or has nothing to say. A failure here must not cost them the turn: they are
+  // standing with a customer, and yesterday's pack answers better than an apology.
+  if (event.text) pack = await searchPack(pack, event.text).catch(() => pack);
   // What has just happened, for the model to answer around. Nothing in here is a question.
   const notes: string[] = [];
   // Set once a home fact has been filed this turn. The product sheet must not win after that: it

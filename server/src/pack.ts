@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HomeCard } from "./types.js";
-import { adaptPack, fromFdk, fromPromotion, running } from "./adapt.js";
+import { adaptPack, adaptProduct, fromFdk, fromPromotion, running } from "./adapt.js";
 import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig } from "./catalog.js";
 
 export type Pack = {
@@ -89,10 +89,56 @@ export async function livePack(
     ...base,
     version: `live-${new Date().toISOString().slice(0, 10)}`,
     products: items.map(fromFdk),
-    // The pack's own offers are kept when the store is running none: an empty offers list would
-    // quietly close the offer step rather than say there is nothing on.
-    offers: offers.size ? [...offers.values()] : base.offers,
+    // Never the pack's own offers once the live catalogue is on: they are a stub's, this channel
+    // runs neither of them, and an offer quoted that does not exist is the worst thing this
+    // product can do. An empty list is the honest answer.
+    offers: [...offers.values()],
   };
+}
+
+/** The catalogue, asked a question.
+ *
+ *  The store holds 8,383 products on the storefront surface and the panel counts 52,016 on the
+ *  channel. None of that can be loaded, and loading the first page of it is worse than useless:
+ *  it answered a television conversation with a refrigerator and a laptop. So the catalogue is
+ *  searched for what this conversation is actually about, and the promotions are fetched for what
+ *  the search returned rather than for whatever happened to be first.
+ *
+ *  Cached by query, because an associate asks about the same thing for several turns running and
+ *  a WhatsApp reply has five seconds to arrive. */
+const searched = new Map<string, Pack>();
+
+export async function searchPack(base: Pack, query: string, request: typeof fetch = fetch): Promise<Pack> {
+  const config = catalogConfig();
+  const asked = query.trim().toLowerCase().slice(0, 60);
+  if (!config || asked.length < 3) return base;
+  const hit = searched.get(asked);
+  if (hit) return hit;
+
+  const { items } = await getProducts(config, { q: asked, page_size: 12, page_no: 1, page_type: "number" }, request);
+  const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
+  if (!adapted.length) return base;
+
+  // Promotions for the three we would actually put in front of a customer, not for the first
+  // three of the catalogue: one television in twelve has one, so asking about the wrong three
+  // finds nothing and the pack falls back to offers this shop is not running.
+  const offers = new Map<string, Record<string, unknown>>();
+  for (const row of items.slice(0, 3)) {
+    const slug = (row as { slug?: string }).slug;
+    if (!slug) continue;
+    for (const promotion of await getPromotionOffers(config, { slug }, request)) {
+      const offer = fromPromotion(promotion);
+      if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
+    }
+  }
+  // No fallback to the pack's own offers. Those are a stub's HDFC discount and exchange bonus, and
+  // this channel runs neither: an associate told "HDFC 7.5% off" on a washing machine would be
+  // quoting an offer that does not exist. Nothing running is a true answer; the stub's is a lie.
+  const pack: Pack = { ...base, products: adapted, offers: [...offers.values()] };
+  // A handful of queries per shift; this is a cap against a loop, not a cache policy.
+  if (searched.size > 64) searched.clear();
+  searched.set(asked, pack);
+  return pack;
 }
 
 /** The pack the server serves: the live catalogue when it is configured, the file otherwise.

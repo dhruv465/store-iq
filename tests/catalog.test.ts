@@ -173,7 +173,9 @@ test("the server serves the live catalogue the moment the credentials are set", 
     // Everything the two methods do not carry stays from the file.
     assert.ok(live.pack.finance.length, "finance terms are ours");
     assert.ok(live.pack.charges.length, "so are the charges");
-    assert.ok(live.pack.offers.length, "and the pack's offers, when the store is running none");
+    // And NOT the pack's own offers. The stub's HDFC discount and exchange bonus are not running on
+    // this channel, and an offer quoted that does not exist is worse than no offer at all.
+    assert.deepEqual(live.pack.offers, [], "nothing running is the honest answer");
 
     // A bad key must not kill the number: say so and serve the file.
     const broken = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
