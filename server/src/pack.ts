@@ -115,7 +115,7 @@ const searched = new Map<string, Pack>();
  *  later turn asked a washing machine customer about viewing distance. Two or three words of the
  *  thing itself is what the endpoint answers. */
 const FILLER =
-  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske)\b/gi;
+  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any)\b/gi;
 
 /** Two words the catalogue does not use for the thing the associate means. "ac" on its own
  *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */
@@ -148,7 +148,8 @@ export function terms(text: string): string[] {
     .split(/\s+/)
     // Two letters, because "tv" is the word an associate actually types and dropping it left the
     // query as "hall", which matched desert coolers.
-    .filter((word) => word.length > 1 && !/^\d+$/.test(word));
+    // Numbers stay: "sony 85" is a better query than "sony", which returns camera pouches.
+    .filter((word) => word.length > 1);
   // Shortest first. The endpoint answers a product noun and returns nothing for a description:
   // "washing machine" finds machines, "fridge small" finds nothing at all.
   const said = words.map((word) => MEANS[word] ?? word);
@@ -173,14 +174,20 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
   // Promotions for the three we would actually put in front of a customer, not for the first
   // three of the catalogue: one television in twelve has one, so asking about the wrong three
   // finds nothing and the pack falls back to offers this shop is not running.
+  // Five, asked at once. The endpoint is per slug, so in series this was five round trips and a
+  // reply has five seconds to arrive; in parallel it costs what one costs. Three was too few: the
+  // Sony with the wall-mount offer came fourth in its own search.
   const offers = new Map<string, Record<string, unknown>>();
-  for (const row of items.slice(0, 3)) {
-    const slug = (row as { slug?: string }).slug;
-    if (!slug) continue;
-    for (const promotion of await getPromotionOffers(config, { slug }, request)) {
-      const offer = fromPromotion(promotion);
-      if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
-    }
+  const slugs = items
+    .slice(0, 5)
+    .map((row) => (row as { slug?: string }).slug)
+    .filter((slug): slug is string => !!slug);
+  const answered = await Promise.all(
+    slugs.map((slug) => getPromotionOffers(config, { slug }, request).catch(() => [])),
+  );
+  for (const promotion of answered.flat()) {
+    const offer = fromPromotion(promotion);
+    if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
   }
   // No fallback to the pack's own offers. Those are a stub's HDFC discount and exchange bonus, and
   // this channel runs neither: an associate told "HDFC 7.5% off" on a washing machine would be
