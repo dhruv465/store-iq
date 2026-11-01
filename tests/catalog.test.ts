@@ -82,14 +82,15 @@ test("a refusal never names the token", async () => {
   assert.doesNotMatch(problem.message, /app-token|app-id/, "an error is logged, and a logged credential is leaked");
 });
 
-test("the catalogue stays off unless all three settings are present", () => {
+test("the catalogue stays off until the application pair is present", () => {
   assert.equal(catalogConfig({} as never), null);
   assert.equal(catalogConfig({ CATALOG_HOST: "x" } as never), null);
   assert.equal(catalogConfig({ CATALOG_APPLICATION_ID: "y" } as never), null);
-  // The pair is enough: Jio Commerce is on Fynd's platform, and the application selects the sales
-  // channel. The method reference names no host because with the SDK you never type one.
+  // The pair is enough, and the host is Jio's own Fynd tenant, read off the partner panel at
+  // platform.jioretailer.com. Fynd's generic api.fynd.com answers 401 for a Reliance Digital pair,
+  // which is exactly what the first live attempt did.
   assert.deepEqual(catalogConfig({ CATALOG_APPLICATION_ID: "y", CATALOG_APPLICATION_TOKEN: "z" } as never), {
-    host: "https://api.fynd.com",
+    host: "https://api.jioretailer.com",
     applicationId: "y",
     applicationToken: "z",
   });
