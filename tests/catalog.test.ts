@@ -644,6 +644,110 @@ test("a candidate whose rows do not carry the words said waits for the next one"
   }
 });
 
+test("search prefers the exact product and keeps named brand out of accessory results", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    CATALOG_HOST: "https://api.example.com",
+    CATALOG_APPLICATION_ID: "app",
+    CATALOG_APPLICATION_TOKEN: "token",
+  });
+  const row = (uid: number, name: string, brand = "Lloyd") => ({
+    uid,
+    name,
+    slug: `slug-${uid}`,
+    item_code: `CODE${uid}`,
+    brand: { name: brand },
+    price: { marked: { min: 19999 }, effective: { min: 17999 } },
+    sellable: true,
+  });
+  try {
+    const fake = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      const q = u.searchParams.get("q");
+      const hit = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : q === "washing machine front"
+          ? {
+              items: [
+                row(2, "Lloyd Front Fully Automatic Washing Machine 8 Kg"),
+                row(3, "Lloyd Front Loading Washing Machine 8 Kg"),
+              ],
+              page: { item_total: 2 },
+            }
+          : {
+              items: [
+                row(1, "Lloyd Top Load Washing Machine 8 Kg"),
+                row(2, "Lloyd Front Fully Automatic Washing Machine 8 Kg"),
+              ],
+              page: { item_total: 2 },
+            };
+      return new Response(JSON.stringify(hit), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const pack = await searchPack(base, "washing machine front load", fake);
+    assert.equal(pack.products[0]!.name, "Lloyd Front Loading Washing Machine 8 Kg");
+
+    const sonySearch = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      const q = u.searchParams.get("q");
+      const rows =
+        q === "sony 85" || q === "sony 85 inch"
+          ? [
+              row(4, "Sony Bravia Theatre Quad Home Theatre", "Sony"),
+              row(5, "TCL 85 inch Mini LED TV", "TCL"),
+              row(6, "Sony Bravia 85 inch TV", "Sony"),
+            ]
+          : [row(4, "Sony Bravia Theatre Quad Home Theatre", "Sony")];
+      return new Response(
+        JSON.stringify(u.pathname.includes("available-promotions") ? { available_promotions: [] } : { items: rows }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+    const sony = await searchPack(base, "sony 85 inch", sonySearch);
+    assert.equal(sony.products[0]!.name, "Sony Bravia 85 inch TV");
+    assert.ok(sony.products.every((product) => product.brand === "Sony"));
+
+    const cameraSearch = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      const result = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : {
+            items: [
+              row(7, "Sony Camera Pouch for Sony Camcorder", "Sony"),
+              row(8, "Sony Alpha Mirrorless Digital Camera", "Sony"),
+            ],
+          };
+      return new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const camera = await searchPack(base, "camera sony", cameraSearch);
+    assert.equal(camera.products[0]!.name, "Sony Alpha Mirrorless Digital Camera");
+
+    const laptopSearch = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      const result = u.pathname.includes("available-promotions")
+        ? { available_promotions: [] }
+        : u.searchParams.has("f")
+          ? {
+              items: [row(11, "Asus TUF Gaming Laptop", "Asus"), row(12, "Samsung Standard Laptop", "Samsung")],
+            }
+          : {
+              items: [
+                row(9, "Asus Backpack for TUF Gaming Laptop", "Asus"),
+                row(10, "Dell Alienware Gaming Laptop", "Dell"),
+              ],
+              filters: [{ key: { name: "category" }, values: [{ value: "premium-laptops", count: 2 }] }],
+            };
+      return new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const laptop = await searchPack(base, "gaming laptop", laptopSearch);
+    assert.equal(laptop.products[0]!.name, "Dell Alienware Gaming Laptop");
+  } finally {
+    for (const key of ["CATALOG_HOST", "CATALOG_APPLICATION_ID", "CATALOG_APPLICATION_TOKEN"])
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+  }
+});
+
 test("a short change of subject is adopted only when the products found carry the words", () => {
   const iphones = [{ brand: "Apple", name: "Apple iPhone 16 128 GB, Pink" }];
   const watches = [{ brand: "Apple", name: "Apple Watch Ultra 4 GPS + Cellular 49 mm Black Titanium Case" }];

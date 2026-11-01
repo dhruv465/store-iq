@@ -199,8 +199,10 @@ export function aboutTheWords(said: string[], products: { brand: string; name: s
 /** The accessory shelves the store keeps beside the products. Their facet counts sit above the
  *  products they serve — q="smart watch" answered with a "smart-watch-accessories" shelf of
  *  straps — so they are never the kind the words name, unless the associate asked for one. */
-const ACCESSORY_SHELF = /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable/;
-const ACCESSORY_WORD = /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable)/;
+const ACCESSORY_SHELF =
+  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
+const ACCESSORY_WORD =
+  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
 
 export function categoryByWords(filters: Facet[], said: string[]): string | undefined {
   const brands = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).map((value) =>
@@ -315,9 +317,39 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
   // the words said, or the rows themselves carry them. The first rows the store hands over wait
   // as the fallback until a later candidate ("printer" after "printer office") answers for real.
   const said = words(asked);
-  const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word) && !UNIT.test(word));
   let won: Record<string, unknown>[] | undefined;
   let fallback: Record<string, unknown>[] | undefined;
+  let wonScore: number[] = [-2, -1, -1, -1];
+  const wordsOf = (part: "kind" | "spec" | "unit") =>
+    said.filter((word) =>
+      part === "kind"
+        ? word.length > 2 && !/^\d/.test(word) && !UNIT.test(word)
+        : part === "spec"
+          ? /^\d/.test(word)
+          : UNIT.test(word),
+    );
+  const beats = (next: number[], best: number[]) => {
+    for (const [i, part] of next.entries()) if (part !== best[i]) return part > (best[i] ?? -1);
+    return false;
+  };
+  const rowScore = (row: Record<string, unknown>) => {
+    const product = adaptProduct(fromFdk(row)).product;
+    const text = `${product.brand} ${product.name}`.toLowerCase();
+    const accessory =
+      !said.some((word) => ACCESSORY_WORD.test(word)) &&
+      ACCESSORY_SHELF.test(`${product.name} ${product.categories.join(" ")}`.toLowerCase());
+    return [
+      accessory ? -1 : 0,
+      ...(["kind", "spec", "unit"] as const).map(
+        (part) => new Set(wordsOf(part).filter((word) => text.includes(word))).size,
+      ),
+    ];
+  };
+  const score = (rows: Record<string, unknown>[]) =>
+    rows
+      .slice(0, 12)
+      .map(rowScore)
+      .reduce((best, next) => (beats(next, best) ? next : best), [-2, -1, -1, -1]);
   for (const q of terms(asked)) {
     // `filters: true` is the reference's own default and costs nothing extra: the store returns
     // its brand and category facets for this query alongside the rows. `sort_on: popular` is the
@@ -329,30 +361,25 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
       request,
     );
     if (!found.items.length) continue;
-    const wanted = namedBrands(found.filters, said);
+    const facets = namedBrands(found.filters, said);
+    const wanted =
+      facets.length > 0
+        ? facets
+        : [...new Set(found.items.map((row) => adaptProduct(fromFdk(row)).product.brand.toLowerCase()))].filter(
+            (brand) => said.some((word) => brand.replace(/[^a-z0-9]/g, "") === word.replace(/[^a-z0-9]/g, "")),
+          );
     // What the associate named as a brand has to stay in the answer: a refine that swallows it is
     // the more popular other brand answering a Sony question, and stays just a suggestion.
-    const carrying = (rows: Record<string, unknown>[]) =>
-      !wanted.length ||
-      rows.some((row) => {
-        const text = adaptProduct(fromFdk(row)).product.brand.toLowerCase();
-        return wanted.every((brand) => text.includes(brand) || text.replace(/[^a-z0-9]/g, " ").includes(brand));
-      });
-    // How much of what the associate said lives in the first rows of a candidate — the rows the
-    // reply would actually be built from. The popular soundbar page held one Sony row too, but
-    // behind three JBLs: a Sony somewhere on the page is not the Sony answer. A refine is only
-    // taken when its first rows keep at least as much of what was said as the loose ones had.
-    const coverage = (rows: Record<string, unknown>[]) => {
-      if (!kinds.length) return 0;
-      const hits = new Set<string>();
-      for (const row of rows.slice(0, 3)) {
-        const product = adaptProduct(fromFdk(row)).product;
-        const text = `${product.brand} ${product.name}`.toLowerCase();
-        for (const kind of kinds) if (text.includes(kind)) hits.add(kind);
-      }
-      return hits.size;
-    };
-    let rows = found.items;
+    const brandRows = (rows: Record<string, unknown>[]) =>
+      wanted.length
+        ? rows.filter((row) => {
+            const text = adaptProduct(fromFdk(row)).product.brand.toLowerCase();
+            return wanted.every((brand) => text.includes(brand) || text.replace(/[^a-z0-9]/g, " ").includes(brand));
+          })
+        : rows;
+    const carrying = (rows: Record<string, unknown>[]) => !wanted.length || rows.length > 0;
+    // Score one product at a time: a Sony speaker plus another brand's 85-inch TV is not a Sony TV.
+    let rows = brandRows(found.items);
     const f = narrow(found.filters, Number(found.page.item_total) || found.items.length, said);
     if (f) {
       const refined = await getProducts(
@@ -360,21 +387,29 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
         { f, sort_on: "popular", page_size: 12, page_no: 1, page_type: "number" },
         request,
       ).catch(() => null);
-      // Only when it answers with at least as much of the question: nothing at all, another
-      // brand, a narrower slice of the words said — each is a worse answer than the loose rows.
-      if (refined?.items.length && carrying(refined.items) && coverage(refined.items) >= coverage(rows))
-        rows = refined.items;
+      // Popularity-sorted refinements replace search order only when they improve the match.
+      const refinedRows = refined ? brandRows(refined.items) : [];
+      if (refinedRows.length && carrying(refinedRows) && beats(score(refinedRows), score(rows))) rows = refinedRows;
     }
     const adapted = rows.map((row) => adaptProduct(fromFdk(row)).product);
     const fits = (categoryByWords(found.filters, said) !== undefined || aboutTheWords(said, adapted)) && carrying(rows);
-    if (fits) {
-      won = rows;
-      break;
+    if (!fits) {
+      fallback = rows;
+      continue;
     }
-    fallback = rows;
+    // Try every candidate; prefer the one product carrying the most of what was said, kinds first.
+    const candidateScore = score(rows);
+    if (beats(candidateScore, wonScore)) {
+      wonScore = candidateScore;
+      won = rows;
+    }
   }
   // What none of the candidates won: the store answered every one of them with empty pages.
-  const items = won ?? fallback ?? [];
+  const items = [...(won ?? fallback ?? [])].sort((a, b) => {
+    const first = rowScore(a);
+    const second = rowScore(b);
+    return beats(second, first) ? 1 : beats(first, second) ? -1 : 0;
+  });
   const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
 
   // Nothing found is said, not substituted: the loose base first page is a heap of whatever the
