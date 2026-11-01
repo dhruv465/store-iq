@@ -115,7 +115,7 @@ const searched = new Map<string, Pack>();
  *  later turn asked a washing machine customer about viewing distance. Two or three words of the
  *  thing itself is what the endpoint answers. */
 const FILLER =
-  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any)\b/gi;
+  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range)\b/gi;
 
 /** Two words the catalogue does not use for the thing the associate means. "ac" on its own
  *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */

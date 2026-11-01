@@ -81,8 +81,14 @@ export function asksWhatWeHave(text: string): boolean {
 export function inStockReply(pack: Pack, card: HomeCard, lang: Lang, assessed: boolean): Reply {
   const here = pack.products.filter((product) => product.stock_units > 0);
   if (!here.length) return { text: t(lang, "rec.nostock") };
+  // A screen says its size and panel; everything else says what it is. The live catalogue has
+  // washing machines in it, and this listed them as `Foxsky 0" LED`.
   const listed = here
-    .map((product) => `${product.brand} ${product.size_inch}" ${product.panel}`)
+    .map((product) =>
+      product.size_inch > 0
+        ? `${product.brand} ${product.size_inch}" ${product.panel}`
+        : `${product.brand} ${product.name.replace(product.brand, "").trim().slice(0, 28)}`,
+    )
     .slice(0, 6)
     .join(" · ");
   return {

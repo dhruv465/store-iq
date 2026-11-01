@@ -61,7 +61,14 @@ function inr(amount: number): string {
 export function productReply(product: Product, lang: Lang, assessed: boolean): Reply {
   const lines = [
     `${product.name} · ${inr(product.price_rupees)} · ${product.stock_units > 0 ? t(lang, "p.stock", { n: product.stock_units }) : t(lang, "p.out")}`,
-    `${t(lang, "p.strong", { v: product.good_for.join(", ") })} ${t(lang, "p.weak", { v: product.weak_for.join(", ") })}`,
+    // A live catalogue lists what a thing is good at and never what it is weak at, so the weak
+    // half is dropped rather than printed as "Weak: ." on every real product.
+    [
+      product.good_for.length ? t(lang, "p.strong", { v: product.good_for.slice(0, 4).join(", ") }) : "",
+      product.weak_for.length ? t(lang, "p.weak", { v: product.weak_for.join(", ") }) : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     t(lang, "p.show", { v: cueFor(product, lang) }),
   ];
   return {
