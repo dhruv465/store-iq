@@ -71,5 +71,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   the Reliance Digital sales channel.
 - Money is written `Rs 54,990`, never `₹`.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
+- **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything
+  from `.env`. Check presence only — `grep -c '^NAME=.\+' .env` — and edit the file with a script
+  that echoes nothing. Ask the user to paste a new value rather than reading the old one. A key that
+  reaches a transcript is a key that has to be rotated.
 - Never commit `.env`, `web/dist`, `web/node_modules`, `data/runtime/`.
 - The branch `fal-assets` is parked by instruction. Leave it.
