@@ -40,7 +40,9 @@ export type CatalogConfig = {
  *  is what selects the sales channel — Reliance Digital. That is why the method reference names no
  *  host: with the SDK you never type one, and `api.fynd.com` is the FDK client's own default.
  *  CATALOG_HOST stays as an override for the day that is not true. */
-const DEFAULT_HOST = "https://api.fynd.com";
+// Jio's own Fynd tenant, read off the partner panel at platform.jioretailer.com on 1 Nov 2026.
+// Fynd's generic api.fynd.com answers 401 for a Reliance Digital application pair.
+const DEFAULT_HOST = "https://api.jioretailer.com";
 
 export function catalogConfig(env = process.env): CatalogConfig | null {
   const applicationId = env.CATALOG_APPLICATION_ID?.trim();

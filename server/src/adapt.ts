@@ -76,12 +76,16 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
     sku: text(need("sku")) ?? "",
     brand: text(need("brand")) ?? "",
     name: text(need("name")) ?? "",
-    size_inch: figure(need("size_inch")) ?? 0,
+    // Not required: the live catalogue sells washing machines and phones, and a screen size is a
+    // fact about televisions. Zero means "no screen", which is what needsSizing() reads to decide
+    // whether the viewing distance is worth asking about.
+    size_inch: figure(pick(row, FIELDS.size_inch!)) ?? 0,
     panel: text(pick(row, FIELDS.panel!)) ?? "LED",
     mrp_rupees: mrp ?? 0,
     price_rupees: price ?? 0,
     stock_units: Math.trunc(figure(need("stock_units")) ?? 0),
     specs,
+    categories: list(row, ["categories", "category", "department", "l3_categories"]),
     good_for: list(row, ["good_for", "best_for", "strengths"]),
     weak_for: list(row, ["weak_for", "not_for", "limitations"]),
     // Without a cue the demonstrate step has nothing to show, and it is 2 of the judges' 14.

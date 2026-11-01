@@ -81,8 +81,17 @@ const RULES: Rule[] = [
 /** Ranked options for this home. Never more than three, never an out-of-stock product. */
 export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
   const target = targetInches(card);
+  // Three options have to be three of the same kind of thing. On the live catalogue the top three
+  // were an LG television, a Samsung television and a 15.6" Asus laptop, each explaining itself by
+  // how close its size was to the one the distance suggests. Size cannot tell a screen from a
+  // screen; the catalogue's own category can, so the best match sets the kind and the other two
+  // have to share it. No category is named here — a washing machine conversation works the same.
+  const kind = (product: { categories?: string[] }): string => product.categories?.[0]?.toLowerCase() ?? "";
   const scored = pack.products
     .filter((product) => product.stock_units > 0)
+    // A screen is being sized here, so only things with a screen are candidates. The live
+    // catalogue offered 'resQ 0"' as one of three televisions: it is a service plan.
+    .filter((product) => target === null || product.size_inch > 0)
     .map((product) => {
       let score = 0;
       let best: { weight: number; reason: string; key: string } | null = null;
@@ -138,7 +147,9 @@ export function rank(pack: Pack, card: HomeCard, lang: Lang = "en"): Option[] {
       a.product.price_rupees - b.product.price_rupees ||
       a.product.sku.localeCompare(b.product.sku),
   );
-  return scored.slice(0, 3);
+  // The best match sets the kind, and the other two have to share it.
+  const leader = scored[0] && kind(scored[0].product);
+  return (leader ? scored.filter((option) => kind(option.product) === leader) : scored).slice(0, 3);
 }
 
 /** "One reason each" means one reason EACH. Where the same reason fits two options, the duplicate is

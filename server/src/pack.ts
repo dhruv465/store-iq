@@ -32,6 +32,9 @@ export type Product = {
   price_rupees: number;
   stock_units: number;
   specs: Record<string, number | string>;
+  /** What the catalogue calls it. Empty for a pack that does not say, which is every pack we
+   *  wrote by hand; the live catalogue says it on every row. */
+  categories: string[];
   good_for: string[];
   weak_for: string[];
   /** Section 6.5: the difference to show the customer, not just the reason to say.
