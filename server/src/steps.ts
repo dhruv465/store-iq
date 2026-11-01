@@ -40,6 +40,9 @@ export function cardSummary(session: Session): Reply {
   if (card.site_constraints?.length) parts.push(card.site_constraints.join(", "));
   if (has("internet")) parts.push(String(card.internet));
   if (typeof card.budget_rupees === "number") parts.push(t(lang, "budget.of", { v: card.budget_rupees }));
+  // What this product needed that a television did not, in the words the model filed it under.
+  // Not translated: these are the associate's own words coming back, like a free-text room is.
+  for (const [name, said] of Object.entries(card.facts ?? {})) parts.push(`${name}: ${said}`);
   return {
     text: [
       parts.length

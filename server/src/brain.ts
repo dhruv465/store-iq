@@ -102,6 +102,18 @@ const schema = {
         internet: { type: "STRING", nullable: true },
         budget_rupees: { type: "NUMBER", nullable: true },
         start_level: { type: "STRING", nullable: true },
+        // A television's home has nine named fields. Everything else this product needs goes
+        // here, named by the model: capacity, loading type, covered balcony, water pressure.
+        facts: {
+          type: "ARRAY",
+          nullable: true,
+          description: "anything that matters for THIS product and has no field above",
+          items: {
+            type: "OBJECT",
+            required: ["name", "value"],
+            properties: { name: { type: "STRING" }, value: { type: "STRING" } },
+          },
+        },
       },
     },
     shortlist: {
@@ -355,6 +367,8 @@ export function isAssessed(card: Session["card"], sizing = true): boolean {
     "internet",
     "budget_rupees",
   ].filter((key) => stated((card as Record<string, unknown>)[key]));
+  // A fact the model had to name itself counts as much as one we thought of in advance.
+  filled.push(...Object.keys(card.facts ?? {}));
   // How far they sit is what sizes the screen, so "not sure" there leaves the home unassessed —
   // where a screen is what is being sold.
   const hasDistance = typeof card.distance_m === "number" || typeof card.distance_feet === "number";
@@ -604,7 +618,11 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string, not
   const card = session.card as Record<string, unknown>;
   // Feet or metres, it is one fact: listing "distance_feet" as blank after they said three metres
   // is how you ask somebody the same thing twice.
+  // A television's blanks are not a washing machine's: asking after the mount and the set-top box
+  // is noise once the thing being sold has no screen. The generic half is always worth having.
+  const screenGaps = ["distance", "light", "mount", "content", "devices"];
   const gaps = ["room", "distance", "light", "mount", "content", "devices", "family", "internet", "budget_rupees"]
+    .filter((field) => needsSizing(pack, session) || !screenGaps.includes(field))
     .filter((field) =>
       field === "distance" ? !stated(card.distance_feet) && !stated(card.distance_m) : !stated(card[field]),
     )
@@ -651,6 +669,7 @@ export function startInteraction(session: Session): void {
   session.interaction_id = randomUUID();
   session.interaction_started = new Date().toISOString();
   session.card = {};
+  delete session.subject;
   session.card_confirmed = false;
   session.assessed = false;
   session.demonstrated = false;
@@ -840,7 +859,33 @@ async function answer(
   // the associate's own words, cached by query, and left exactly as it was when the catalogue is
   // not configured or has nothing to say. A failure here must not cost them the turn: they are
   // standing with a customer, and yesterday's pack answers better than an apology.
-  if (event.text) pack = await searchPack(pack, event.text).catch(() => pack);
+  // A tap carries no words, and three taps in a row were enough to lose the conversation: the
+  // pack fell back to the four stub televisions and a washing machine customer was asked how far
+  // they sit from the TV, three turns running. So what the conversation is about is remembered,
+  // and only replaced when new words actually find something.
+  const about = (event.text ?? "").trim();
+  // A command is not a product. Searching "recommend" returned a USB hub, which then became what
+  // the conversation was about and was offered as the one thing to show.
+  const isCommand =
+    wantsRecommend(about, undefined) ||
+    wantsFinance(about, undefined) ||
+    wantsBrief(about, undefined) ||
+    wantsNewCustomer(about, undefined) ||
+    wantsFollowThrough(about, undefined) ||
+    wantsVisitLog(about, undefined) ||
+    wantsExpert(about, undefined) ||
+    wantsManagerView(about, undefined);
+  // Searched once per customer, not once per sentence. Every substantive turn used to re-search
+  // on its own words — "hot water tap is there, they wash cottons daily" found whatever it found,
+  // and that became what the conversation was about, which put screens back in a washing machine
+  // pack and left the home unassessable. A new customer clears it; nothing else needs to.
+  if (!session.subject && about.length > 3 && !isCommand) {
+    const found = await searchPack(pack, about).catch(() => pack);
+    if (found !== pack) {
+      pack = found;
+      session.subject = about;
+    }
+  } else if (session.subject) pack = await searchPack(pack, session.subject).catch(() => pack);
   // What has just happened, for the model to answer around. Nothing in here is a question.
   const notes: string[] = [];
   // Set once a home fact has been filed this turn. The product sheet must not win after that: it
@@ -1077,8 +1122,17 @@ async function answer(
   const decision = readJson<Decision>(text);
 
   // Merge the card before the gate: this turn's answers count towards being assessed.
+  const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
+  if (Array.isArray(extra))
+    for (const fact of extra)
+      if (fact?.name && fact?.value)
+        session.card.facts = {
+          ...session.card.facts,
+          [String(fact.name).slice(0, 40)]: String(fact.value).slice(0, 80),
+        };
   for (const [field, value] of Object.entries(decision.card ?? {}))
-    if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
+    if (field === "facts") continue;
+    else if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
       (session.card as Record<string, unknown>)[field] = value;
   session.shortlist = (decision.shortlist ?? [])
     .filter((sku) => pack.products.some((product) => product.sku === sku))
@@ -1101,6 +1155,9 @@ async function answer(
     typeof session.card.distance_feet === "number" ? `${session.card.distance_feet} feet` : "",
     typeof session.card.distance_m === "number" ? `${session.card.distance_m} metre` : "",
     typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
+    // Anything the model filed under its own name is still something the associate said. The
+    // budget went in as a fact rather than budget_rupees, and quoting it back was refused.
+    ...Object.values(session.card.facts ?? {}),
   ].filter(Boolean);
   const said = [event.text, event.action, ...told].filter(Boolean).join(" ");
   // A manager who does not know the answer finds out. The question goes to the named expert and

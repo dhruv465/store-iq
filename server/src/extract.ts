@@ -164,6 +164,10 @@ export function extractCard(text: string): Partial<HomeCard> {
 /** Human-readable list of what was just understood, for the "Noted:" line. */
 export function describe(card: Partial<HomeCard>): string {
   return Object.entries(card)
-    .map(([field, value]) => `${field.replace(/_/g, " ")} = ${Array.isArray(value) ? value.join(", ") : value}`)
+    .flatMap(([field, value]) =>
+      field === "facts"
+        ? Object.entries((value ?? {}) as Record<string, string>).map(([name, said]) => `${name} = ${said}`)
+        : [`${field.replace(/_/g, " ")} = ${Array.isArray(value) ? value.join(", ") : value}`],
+    )
     .join("; ");
 }

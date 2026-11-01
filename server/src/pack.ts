@@ -108,6 +108,53 @@ export async function livePack(
  *  a WhatsApp reply has five seconds to arrive. */
 const searched = new Map<string, Pack>();
 
+/** What to ask the catalogue for, out of what the associate said.
+ *
+ *  `q` does not take a sentence: "customer wants a washing machine, family of four, balcony is
+ *  small" matched nothing at all, so the pack silently stayed the four stub televisions and every
+ *  later turn asked a washing machine customer about viewing distance. Two or three words of the
+ *  thing itself is what the endpoint answers. */
+const FILLER =
+  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske)\b/gi;
+
+/** Two words the catalogue does not use for the thing the associate means. "ac" on its own
+ *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */
+const MEANS: Record<string, string> = { ac: "air conditioner", washer: "washing machine" };
+
+/** The catalogue is written in English and the associate is not always. Nine words, because a
+ *  Devanagari sentence otherwise reduces to nothing and the pack silently stays the stub's. */
+const SAID_IN_HINDI: Record<string, string> = {
+  टीवी: "tv",
+  "टीवी।": "tv",
+  फ्रिज: "fridge",
+  फ़्रिज: "fridge",
+  रेफ्रिजरेटर: "refrigerator",
+  वाशिंग: "washing machine",
+  मशीन: "washing machine",
+  एसी: "ac",
+  कूलर: "cooler",
+  लैपटॉप: "laptop",
+  मोबाइल: "mobile",
+  फोन: "mobile",
+};
+
+export function terms(text: string): string[] {
+  const named = Object.entries(SAID_IN_HINDI).find(([hindi]) => text.includes(hindi));
+  if (named) return [named[1]];
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(FILLER, " ")
+    .split(/\s+/)
+    // Two letters, because "tv" is the word an associate actually types and dropping it left the
+    // query as "hall", which matched desert coolers.
+    .filter((word) => word.length > 1 && !/^\d+$/.test(word));
+  // Shortest first. The endpoint answers a product noun and returns nothing for a description:
+  // "washing machine" finds machines, "fridge small" finds nothing at all.
+  const said = words.map((word) => MEANS[word] ?? word);
+  return [...new Set([said.slice(0, 2).join(" "), said[0] ?? "", said.slice(0, 3).join(" ")])].filter(Boolean);
+}
+
 export async function searchPack(base: Pack, query: string, request: typeof fetch = fetch): Promise<Pack> {
   const config = catalogConfig();
   const asked = query.trim().toLowerCase().slice(0, 60);
@@ -115,7 +162,11 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
   const hit = searched.get(asked);
   if (hit) return hit;
 
-  const { items } = await getProducts(config, { q: asked, page_size: 12, page_no: 1, page_type: "number" }, request);
+  let items: Record<string, unknown>[] = [];
+  for (const q of terms(asked)) {
+    items = (await getProducts(config, { q, page_size: 12, page_no: 1, page_type: "number" }, request)).items;
+    if (items.length) break;
+  }
   const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
   if (!adapted.length) return base;
 
