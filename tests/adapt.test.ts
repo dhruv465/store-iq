@@ -212,3 +212,30 @@ test("a live promotion is read for what it does, not for its reference", () => {
     "10% off on HDFC cards",
   );
 });
+
+test("the cue is the highlight worth standing in front of", () => {
+  // The first highlight on a real Sony is "Apps Supported : Prime Video,Netflix,YouTube,Apple
+  // TV,Google TV" — a specification, not a thing to show. Fewest commas wins, then shortest.
+  const { product } = adaptProduct(
+    fromFdk({
+      ...fdkRow,
+      highlights: [
+        "Apps Supported : Prime Video,Netflix,YouTube,Apple TV,Google TV",
+        "Refresh Rate: 120 Hz",
+        "Resolution: 4K Ultra HD (3840 x 2160)",
+      ],
+      attributes: { power_consumption: "421.25 W" },
+    }),
+  );
+  assert.equal(product.demo_cue, "Show them Refresh Rate: 120 Hz, beside the one next to it.");
+  // The shop's own words, so its figures are quotable; and the running cost is arithmetic again.
+  assert.equal(product.energy.typical_watts, 421.25);
+  assert.ok(product.energy.units_per_year_4h_day > 0);
+  // Who the catalogue says it is for joins what it is good for.
+  const washer = adaptProduct(
+    fromFdk({ ...fdkRow, highlights: ["Top Loading"], attributes: { "recommended-for": "Large Families" } }),
+  ).product;
+  assert.ok(washer.good_for.includes("Large Families"));
+  // No highlights at all leaves the pack's own fallback cue rather than an empty one.
+  assert.match(adaptProduct(fromFdk({ ...fdkRow, highlights: [] })).product.demo_cue, /beside the set next to it/);
+});

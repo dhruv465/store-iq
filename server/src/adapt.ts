@@ -129,6 +129,16 @@ function inches(name: unknown): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
+/** The highlight worth standing in front of. The first one is often a list — "Apps Supported :
+ *  Prime Video,Netflix,YouTube,Apple TV,Google TV" — which is a specification, not a thing to
+ *  show. Fewest commas wins, then the shortest: "TV Operating System: Google TV". */
+function showable(highlights: unknown): string | undefined {
+  const lines = (Array.isArray(highlights) ? highlights : [])
+    .map((line) => String(line).replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 3 && line.length < 90);
+  return lines.sort((a, b) => (a.split(",").length - b.split(",").length) * 100 + (a.length - b.length))[0];
+}
+
 export function fromFdk(row: Record<string, any>): Record<string, unknown> {
   const price = row.price ?? {};
   const attributes = (row.attributes ?? {}) as Record<string, unknown>;
@@ -144,7 +154,19 @@ export function fromFdk(row: Record<string, any>): Record<string, unknown> {
     mrp_rupees: price.marked?.min ?? price.marked?.max,
     price_rupees: price.effective?.min ?? price.selling?.min ?? price.effective?.max,
     stock_units: row.sellable === false ? 0 : 1,
-    good_for: Array.isArray(row.highlights) ? row.highlights : undefined,
+    // The shop's own highlights, plus who it says the thing is for — a washing machine carries
+    // `recommended-for: Large Families`, which is the family question answered by the catalogue.
+    good_for: [...(Array.isArray(row.highlights) ? row.highlights : []), attributes["recommended-for"]]
+      .filter(Boolean)
+      .map(String),
+    // Section 6.5 wants a difference to SHOW, and no catalogue has one. The nearest honest thing
+    // is the shop's own first highlight — "Resolution: 4K Ultra HD", "5 Star Rating" — put in
+    // front of the set beside it. Written by the merchandiser, not by us, and not a figure.
+    ...(showable(row.highlights)
+      ? { demo_cue: `Show them ${showable(row.highlights)}, beside the one next to it.` }
+      : {}),
+    // "421.25 W" on a television, which is what the running-cost answer is arithmetic over.
+    typical_watts: figure(attributes.power_consumption ?? attributes["power-consumption"]),
     // Two things the listing carries outside the attributes bag that an associate is asked about
     // on the floor, so they belong with the specs the answers are drawn from.
     specs: {
