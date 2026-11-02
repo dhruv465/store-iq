@@ -1,6 +1,6 @@
 import { offerAmount, type Pack, type Product } from "./pack.js";
 import { isAssessed, stated } from "./brain.js";
-import type { HomeCard, Reply, Session, Step } from "./types.js";
+import type { Reply, Session, Step } from "./types.js";
 import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
 
@@ -74,8 +74,9 @@ export function cardSummary(session: Session): Reply {
   };
 }
 
-const BRIEF_WORDS = /^\s*(brief|shift|start shift|today|aaj|shuru)\b/i;
-const REVIEW_WORDS = /^\s*(review|score|how did i do|kaisa raha)\b/i;
+// The whole message, not its first word: "review of the Sony" is about a Sony.
+const BRIEF_WORDS = /^\s*(brief|today'?s brief|shift|start shift|shift brief|aaj|shuru)\s*[.!?]*\s*$/i;
+const REVIEW_WORDS = /^\s*(review|score|how did i do|kaisa raha)\s*[.!?]*\s*$/i;
 
 export function wantsBrief(text: string | undefined, action: string | undefined): boolean {
   return action === "brief" || (!!text && BRIEF_WORDS.test(text));
@@ -86,8 +87,9 @@ export function wantsReview(text: string | undefined, action: string | undefined
 }
 
 /** Before the shift: today's stock, the changed offers, one short video and one question. */
-export function shiftBrief(pack: Pack): Reply {
+export function shiftBrief(pack: Pack, lang: Lang = "en"): Reply {
   const brief = pack.shift_brief ?? {};
+  if (!Object.keys(brief).length) return { text: t(lang, "brief.none") };
   const stock: string[] = Array.isArray(brief.stock_changes) ? brief.stock_changes : [];
   const offers: string[] = Array.isArray(brief.offer_changes) ? brief.offer_changes : [];
   const video = brief.video ?? {};
@@ -213,22 +215,7 @@ export function reviewReply(session: Session): Reply {
   };
 }
 
-/** The questions are the manager's, not a list.
- *
- *  There were six of them here, in order, with their buttons: distance, light, mount, content,
- *  devices, family. They were written when the free tier allowed twenty requests a day, and they
- *  are why this felt like a form with a chat window around it — and they could only ever be about
- *  a television, so a washing machine was asked its viewing distance. The code still files what it
- *  reads and still holds every gate; what to ask next is now answered by the model, which can see
- *  the card, the catalogue and the last six turns. */
-
-const RECOMMEND_WORDS = /\b(three options|3 options|recommend|options to show|kaunsa|which ones?)\b/i;
-
-export function wantsRecommend(text: string | undefined, action: string | undefined): boolean {
-  return action === "recommend" || (!!text && RECOMMEND_WORDS.test(text));
-}
-
-const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|consent|summary bhejo)\b/i;
+const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|consent|summary bhejo)\s*[.!?]*\s*$/i;
 
 export function wantsFollowThrough(text: string | undefined, action: string | undefined): boolean {
   return action === "follow_through" || (!!text && FOLLOW_WORDS.test(text));
@@ -285,9 +272,6 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   // The offer gate holds here too: no MRP saving, offer figure or net total until the home is
   // assessed and a difference has been demonstrated — the same test the model is held to.
   const gateOpen = isAssessed(session.card) && session.demonstrated;
-  // One accessory the card says this home would use. The follow-through's own add tap brings the
-  // next draft, so the proposal clears itself as soon as they take it.
-  const suggested = proposeAccessory(pack, session.card, selection);
 
   if (!session.consent)
     return {
@@ -303,24 +287,14 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
               }),
             ]
           : []),
-        ...(suggested
-          ? [
-              t(session.language, "acc.line", {
-                title: suggested.title,
-                v: suggested.price_rupees.toLocaleString("en-IN"),
-                for: suggested.for,
-              }),
-            ]
-          : []),
         // "Tap once they agree" is what the buttons already say, so the last line carries the
         // reason instead and the whole close fits the floor's three.
         `↳ ${t(session.language, "why.consent")}`,
       ].join("\n"),
       buttons: [
-        ...(suggested ? [{ id: `add:${suggested.id}`, title: suggested.title.slice(0, 20) }] : []),
         { id: "consent:yes", title: t(session.language, "btn.agreed") },
         { id: "consent:no", title: t(session.language, "btn.declined") },
-      ].slice(0, 3),
+      ],
     };
 
   // The store visits watched an install fail because nobody asked about the wall first, and watched
@@ -359,76 +333,7 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
       t(session.language, "ft.task", { owner: associate }),
       `↳ ${t(session.language, "ft.verify", { owner: associate })}`,
     ].join("\n"),
-    buttons: [{ id: "finance", title: t(session.language, "btn.emi") }],
   };
-}
-
-export type FinanceOption = {
-  id: string;
-  title: string;
-  months: number;
-  monthly: number;
-  fullCost: number;
-  exact: boolean;
-  note?: string;
-};
-
-/** Section 6 asks for finance in one sentence with its full cost, which is arithmetic over the
- *  pack's own terms, so it is computed here and never generated.
- *
- *  A no-cost term is exact: the instalments add up to the price and the only extra is the
- *  processing fee. An interest-bearing term is the bank's calculation, not ours — the standard
- *  reducing-balance instalment is what every bank quotes, but the exact figure is theirs, so it is
- *  given as "about" rather than stated as fact. */
-export function financeOptions(pack: Pack, total: number): FinanceOption[] {
-  return (pack.finance ?? [])
-    .filter((term) => Number(term.months) > 0)
-    .map((term) => {
-      const months = Number(term.months);
-      const rate = Number(term.interest_percent ?? 0) / 100 / 12;
-      const fee = Number(term.processing_fee_rupees ?? 0);
-      const monthly = rate
-        ? Math.round((total * rate * (1 + rate) ** months) / ((1 + rate) ** months - 1))
-        : Math.round(total / months);
-      return {
-        id: String(term.id),
-        title: String(term.title),
-        months,
-        monthly,
-        fullCost: monthly * months + fee,
-        exact: !rate,
-        ...(term.note ? { note: String(term.note) } : {}),
-      };
-    });
-}
-
-/** One line per term: what they pay a month, and what it costs in all. */
-export function financeReply(pack: Pack, total: number, lang: Lang): Reply {
-  const options = financeOptions(pack, total);
-  if (!options.length) return { text: t(lang, "fin.none") };
-  const money = (value: number): string => value.toLocaleString("en-IN");
-  return {
-    text: [
-      ...options.map((option) =>
-        t(lang, option.exact ? "fin.exact" : "fin.about", {
-          title: option.title,
-          monthly: money(option.monthly),
-          months: option.months,
-          full: money(option.fullCost),
-        }),
-      ),
-      // The point of saying the full cost is the term that costs the most, not the cheapest one.
-      t(lang, "fin.reason", { v: money(Math.max(...options.map((option) => option.fullCost)) - total) }),
-    ]
-      .join("\n")
-      .slice(0, 1000),
-  };
-}
-
-const FINANCE_WORDS = /\b(emi|finance|instal?ments?|monthly|per month|kist|kitna mahina|mahine)\b/i;
-
-export function wantsFinance(text: string | undefined, action: string | undefined): boolean {
-  return action === "finance" || (!!text && FINANCE_WORDS.test(text));
 }
 
 /** What the installer will need on site, from the charges the customer is actually paying for. */
@@ -475,43 +380,6 @@ export function netPayable(pack: Pack, product: Product, total: number): number 
     0,
     total - applicableOffers(pack, product).reduce((sum, offer) => sum + offerAmount(product, offer), 0),
   );
-}
-
-/** The one accessory this home would actually use, read off the pack's own for-line next to what
- *  the card says. One suggestion only — the associate decides what to pitch, so nothing is added
- *  without a tap, and what they already took never comes back around. */
-export function proposeAccessory(
-  pack: Pack,
-  card: HomeCard,
-  selection: Session["selection"],
-): Pack["accessories"][number] | null {
-  const hay = [
-    ...(card.content ?? []),
-    ...(card.devices ?? []),
-    ...(card.priorities ?? []),
-    ...(card.site_constraints ?? []),
-    card.room ?? "",
-    card.space ?? "",
-    card.family ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-  const people = Number(String(card.family ?? "").match(/(\d+)\s*(people|members|persons)/)?.[1] ?? 0);
-  for (const accessory of pack.accessories ?? []) {
-    // A selection always carries an accessories array in practice; guard it anyway, because this
-    // throwing would take down the whole close rather than skip one accessory.
-    if (selection?.accessories?.includes(accessory.id)) continue;
-    const forWhat = String(accessory.for ?? "").toLowerCase();
-    if (/ps5|console|gaming/i.test(forWhat) && /ps5|console|gaming/i.test(hay)) return accessory;
-    if (/unstable|voltage|supply/i.test(forWhat) && /unstable|voltage|supply|inverter|generator/i.test(hay))
-      return accessory;
-    if (
-      /large|open|\bhalls?\b/i.test(forWhat) &&
-      (/large|open|\bbig\b/i.test(hay) || people > 4 || /more than four/i.test(hay))
-    )
-      return accessory;
-  }
-  return null;
 }
 
 /** The pack's offers with the net payable, as lines an associate can read straight out, or nothing

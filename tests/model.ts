@@ -23,7 +23,6 @@ export function manager(
             demonstrated: false,
             lines: ['Ask: "What matters most to them?"'],
             buttons: [],
-            reason: "the manager's own question",
             unknown: false,
             ...(queue.length > 1 ? queue.shift() : queue[0]),
           };

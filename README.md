@@ -28,8 +28,8 @@ curl -s localhost:3000/try -H 'content-type: application/json' \
 | --- | --- |
 | `server/src/webhook.ts` | Verifies Meta's HMAC over the original bytes, persists to the inbox, returns 200 |
 | `server/src/worker.ts` | Leased inbox/outbox loops, instant acknowledgement for voice and photo, send-once |
-| `server/src/brain.ts` | One Gemini call per turn carrying the voice note or photo inline, then the deterministic guards |
-| `server/src/pack.ts` | The data pack: the only source of prices, offers, stock, finance and specs |
+| `server/src/brain.ts` | The turn: one model request for the search, one for the reply from what the store returned, then the guards |
+| `server/src/pack.ts` | The live catalogue search, what the model is given, and every figure it is allowed to say |
 | `server/src/db.ts` | PGlite: inbox, outbox, associate session with compare-and-set |
 
 ## What stops a reply reaching the wrong person
@@ -69,13 +69,12 @@ now" twice on a real phone before this.
 
 ## What never reaches the model
 
-Anything that states a figure. The brief, the product sheet, the itemised total, the finance terms,
-the card read-back and the review are facts about the pack and the session, so they are answered in
-`steps.ts` before any request is spent: **0 to 7 ms** instead of ~2.4 s, no quota, and no figure can
-be invented. They keep working with the API quota exhausted, which is how they were verified.
+Taps and whole-message commands: the reset, consent, the itemised total, the card read-back, the
+brief and the review, answered in `steps.ts` before any request is spent. A sentence that merely
+starts like one ("today's price of iPhone 17") is a question, and goes to the model.
 
-The questions are not among them. The model asks: the code files what it reads from the words and
-tells it what was just saved and what is still blank on the card.
+Everything about a product is written by the model from what the store returned this turn, and every
+figure in it is then checked against that. There are no written questions: the model asks.
 
 The self-score uses the judges' scale: two marks per step of section 2, 14 in all. A step the model
 *claims* does not score — `assess` needs four home facts on the card and `translate` needs the
@@ -85,15 +84,15 @@ demonstrated flag, or the mark is withheld.
 
 Three rules are enforced in code, not asked of the model:
 
-1. **No invented figures.** Every money amount, percentage and spec number in a reply must exist in the data pack, be derivable from it (price + charge, price − offer, price ÷ months) or have been said by the associate. Anything else is replaced with "that figure is not in today's data pack".
-2. **The offer stays shut.** Offers, discounts, exchange and finance cannot be mentioned until the home is assessed (four home facts, including viewing distance) **and** a spec has been demonstrated. Otherwise the reply says so, with its reason and no figure.
-3. **Floor shape.** At most two lines plus one reason line, at most three buttons, every answer carries its reason.
+1. **No invented figures.** Every money amount, percentage and spec number in a reply must exist in what the catalogue returned this turn, be derivable from it (price + charge, price − offer, price ÷ months) or have been said by the associate. The model is told what it got wrong and gets one retry; a figure refused twice does not go out.
+2. **The offer stays shut.** Offers, discounts, exchange and finance are not volunteered until four things are known about what the customer needs **and** a spec has been demonstrated, unless the associate asks outright, when they get the real answer. A line that leaks one is dropped and the rest of the reply stays.
+3. **Floor shape.** At most three lines, at most three buttons. A button the model wrote says its own title when tapped, and is dropped rather than cut if it does not fit.
 
 ## Data pack
 
 `data/pack.json` is a stub written to unblock the build: TV SKUs, offers, finance, charges, label
-lines, myths and install requirements. It is the only source of prices, offers, stock, finance and
-specs — nothing else in the build may state a figure.
+lines, myths and install requirements. It is only served with no catalogue credentials, for
+development and tests. With credentials it is never read.
 
 ### Swapping in the real catalogue
 
@@ -106,44 +105,39 @@ inside the value (`"55 inch"`, `"144Hz"`, `"₹54,990.00"`) and spaced or capita
 npm run pack:check -- /path/to/their-catalogue.json
 ```
 
-It prints what loaded, what it had to default and why that matters, every row it cannot serve with
-the field to add and where to add it, and then runs one real recommendation off it so the answer is
-proven rather than assumed. Work down the list until it says **Servable**, then:
+It prints what loaded and every row it cannot serve, with the field to add and where to add it.
+Work down the list until it says **Servable**, then:
 
 ```bash
 PACK_PATH=/path/to/their-catalogue.json   # a file, or an https feed
 PACK_TOKEN=...                            # only if the feed needs a bearer token
 ```
 
-and restart. A field they name differently is one entry in `FIELDS` or `SPECS`; a field they do not
-have at all is reported as defaulted, which tells you which ranking rule can no longer fire.
+and restart. A field they name differently is one entry in `FIELDS` or `SPECS`.
 
 ### The live Jio Commerce catalogue
 
 Put `CATALOG_APPLICATION_ID` and `CATALOG_APPLICATION_TOKEN` in `.env` and restart. Those two are
 the whole credential: Jio Commerce runs on Fynd's platform, so the host is Fynd's and the
 application pair selects the Reliance Digital sales channel — which is why the method reference
-names no host. `CATALOG_HOST` overrides it if that ever stops being true. That is the whole switch: the server builds its pack from the store instead of
-`data/pack.json`, and the startup line says which it served. If the credentials are wrong it says
-so and serves the file, because an associate with a customer in front of them needs an answer more
-than they need our configuration to be right.
+names no host. `CATALOG_HOST` overrides it if that ever stops being true. That is the whole switch.
 
-Finance terms, charges, labels, myths and install requirements stay from `data/pack.json`: no
-endpoint this product may call carries them. Stock is read once, at startup.
+Nothing is loaded at startup but a count, because a shop with 8,000 products cannot be held in a
+prompt. Each turn, the model turns what was said into one search (`q`, `sort_on`, `page_no`, a price
+ceiling and the kind of thing it is), `searchPack()` runs it through `getProducts` and
+`getPromotionOffers` with the parameters the FDK documents, and the model writes the reply from the
+rows. A row's own offers (`_custom_meta`: the bank offer, the offer line, pre-order) go with it. A
+search that finds nothing is told to the model as nothing. If the store does not answer it is logged,
+the model says it cannot check this second, and the number stays up. No file data is substituted.
 
 To see what the store answers before the number serves it:
 
 ```bash
-npm run pack:check -- live
+npm run pack:check -- live "iphone 18 pro"
 ```
 
-reads the real store through the two methods the judges' FDK reference v1.9.5 documents —
-`getProducts` for the catalogue and `getPromotionOffers` for what is running on each product — and
-prints the keys the first row actually uses, the promotions still inside their `valid_till`, and
-then the same servability report as above. It is a read and nothing else: `server/src/catalog.ts`
-can issue a GET to a short list of `/service/application/` paths and has no write code in it at
-all. Finance terms, charges, labels, myths and install requirements stay from `data/pack.json`,
-because no endpoint this product is allowed to call carries them.
+It is a read and nothing else: `server/src/catalog.ts` can issue a GET to a short list of
+`/service/application/` paths and has no write code in it at all.
 
 ## Logging a store visit
 

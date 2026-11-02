@@ -54,7 +54,7 @@ test("the card is read back in the brief's I heard shape, with a correction butt
 
 test("an empty card asks rather than inventing a summary", () => {
   const reply = cardSummary(newSession("919820000001"));
-  assert.match(reply.text, /nothing on this home yet/);
+  assert.match(reply.text, /Nothing noted about this customer yet/);
   assert.equal(reply.buttons, undefined);
 });
 
@@ -65,7 +65,7 @@ test("confirming the card records the assess step and tells the manager so", () 
   assert.equal(deterministic(event, session, pack, notes), null);
   assert.equal(session.card_confirmed, true);
   assert.ok(session.steps_done.includes("assess"));
-  assert.match(notes.join(" "), /confirmed the home card/);
+  assert.match(notes.join(" "), /just confirmed/);
 });
 
 test("asking to fix the card clears the confirmation", () => {

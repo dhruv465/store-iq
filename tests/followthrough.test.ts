@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { financeOptions, financeReply, followThrough, itemisedTotal } from "../server/src/steps.js";
+import { followThrough, itemisedTotal } from "../server/src/steps.js";
 import { deterministic } from "../server/src/brain.js";
 import { pricedEarly } from "../server/src/db.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
@@ -89,7 +89,7 @@ test("once the site is confirmed, the owner and the check-back are handed over",
   const reply = tap(session, "site:ok")!;
   assert.equal(session.site_checked, true);
   assert.match(reply.text, new RegExp(`Task: follow up this order · owner ${ASSOCIATE}`));
-  assert.match(reply.text, /after install, check it switches on and the apps work/);
+  assert.match(reply.text, /check back with them that it is working/);
 });
 
 test("an order with no installation charge goes straight through", () => {
@@ -98,7 +98,7 @@ test("an order with no installation charge goes straight through", () => {
   tap(session, "add:TV-DELIVERY");
   const reply = tap(session, "consent:yes")!;
   assert.doesNotMatch(reply.text, /Before I book the installer/, "delivery alone needs no site survey");
-  assert.match(reply.text, /after install, check it switches on/);
+  assert.match(reply.text, /check back with them/);
 });
 
 test("declining consent sends nothing", () => {
@@ -120,7 +120,7 @@ test("changing the selection withdraws consent", () => {
 
 test("a product or accessory outside the pack is refused", () => {
   const session = newSession("919820000001");
-  assert.match(tap(session, "select:MADE-UP")!.text, /not in today's data pack/);
+  assert.match(tap(session, "select:MADE-UP")!.text, /dropped off this search/);
   tap(session, "select:TCL-55C6KS");
   assert.match(tap(session, "add:ACC-MADE-UP")!.text, /not in today's data pack/);
 });
@@ -131,48 +131,4 @@ test("a price quoted before the home is known is recorded against the conversati
   assert.equal(pricedEarly(session, { text: 'Ask: "How far will you sit from the TV?"' }), false);
   session.assessed = true;
   assert.equal(pricedEarly(session, { text: "Total Rs 56,489." }), false, "after the home, a price is the job");
-});
-
-test("finance is computed from the pack's own terms, with the full cost", () => {
-  const [noCost, standard] = financeOptions(pack, 62990);
-  assert.equal(noCost!.monthly, 6999);
-  assert.equal(noCost!.fullCost, 6999 * 9 + 299);
-  assert.equal(noCost!.exact, true);
-  assert.equal(standard!.monthly, 3930);
-  assert.equal(standard!.fullCost, 3930 * 18 + 299);
-  assert.equal(standard!.exact, false, "the bank sets the exact figure, so it is not stated as fact");
-});
-
-test("the finance line names the worst full cost, not the friendliest one", () => {
-  const text = financeReply(pack, 62990, "en").text;
-  assert.match(text, /Rs 6,999 a month for 9 months, Rs 63,290 in all/);
-  assert.match(text, /about Rs 3,930 a month/);
-  assert.match(text, /the bank sets the exact instalment/);
-  assert.match(text, /costs up to Rs 8,049 more than today/);
-});
-
-test("finance waits for the home and the demonstration, like every other money answer", () => {
-  const session = newSession("919820000001");
-  tap(session, "select:TCL-55C6KS");
-  const notes: string[] = [];
-  const early = deterministic(
-    { id: "f1", phone: session.phone, modality: "text", text: "what is the EMI" },
-    session,
-    pack,
-    notes,
-  );
-  assert.equal(early, null);
-  assert.match(notes.join(" "), /before the home is known/);
-  assert.doesNotMatch(notes.join(" "), /\d{4}/, "no figure before the gate opens");
-
-  session.card = { distance_m: 3, light: "bright", mount: "wall", content: ["cricket"] };
-  session.card_confirmed = true;
-  session.demonstrated = true;
-  const open = deterministic(
-    { id: "f2", phone: session.phone, modality: "text", text: "what is the EMI" },
-    session,
-    pack,
-  )!;
-  assert.match(open.text, /No-cost EMI 9 months: Rs 6,110 a month/);
-  assert.ok(session.steps_done.includes("complete"));
 });

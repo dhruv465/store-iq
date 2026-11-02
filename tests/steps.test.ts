@@ -100,13 +100,15 @@ test("the review names the score, what was covered and one thing to try", () => 
   assert.match(reviewReply(session).text, /Covered: validate 2\./);
 });
 
-test("brief and review are recognised by word or by tap, in Hinglish too", () => {
+test("brief and review are a whole message or a tap, in Hinglish too", () => {
   assert.equal(wantsBrief("brief", undefined), true);
-  assert.equal(wantsBrief("aaj ka kya hai", undefined), true);
+  assert.equal(wantsBrief("aaj", undefined), true);
+  assert.equal(wantsBrief("today's price of iPhone 17", undefined), false, "a sentence is a question");
   assert.equal(wantsBrief(undefined, "brief"), true);
   assert.equal(wantsBrief("customer wants a TV", undefined), false);
   assert.equal(wantsReview("review", undefined), true);
   assert.equal(wantsReview("kaisa raha", undefined), true);
+  assert.equal(wantsReview("review of the Sony 55 inch", undefined), false, "a sentence is a question");
   assert.equal(wantsReview("recommend three options", undefined), false);
 });
 
@@ -128,7 +130,6 @@ test('"Not sure" is recorded but never read back as a fact about the home', () =
     light: "bright afternoon sun",
     mount: "wall",
     content: ["cricket"],
-    family: "4 people",
   };
   const text = cardSummary(session).text;
   assert.doesNotMatch(text, /not stated/, "the floor saw: sits not stated m away");

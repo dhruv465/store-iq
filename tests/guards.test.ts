@@ -1,12 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allowedNumbers, loadPack, recommendedInches } from "../server/src/pack.js";
+import { allowedNumbers, loadPack } from "../server/src/pack.js";
 import {
-  applyAction,
   isAssessed,
-  languageOf,
   moneySafe,
-  needsSizing,
   decide,
   numbersIn,
   offerExpert,
@@ -43,7 +40,7 @@ test("a figure the associate said themselves is allowed back", () => {
   assert.deepEqual(unsupportedNumbers("₹45000 is below every TV here.", allowed, "budget is 45000"), []);
 });
 
-test("the reply is capped at two lines plus a reason and three buttons", () => {
+test("the reply is capped at three lines and three buttons", () => {
   const reply = render({
     step: "complete",
     card: {},
@@ -56,14 +53,20 @@ test("the reply is capped at two lines plus a reason and three buttons", () => {
       { id: "c", title: "C" },
       { id: "d", title: "D" },
     ],
-    reason: "because the room decides",
   });
-  assert.equal(reply.text.split("\n").length, 3);
-  assert.ok(reply.text.endsWith("↳ because the room decides"));
+  assert.equal(reply.text, "one\ntwo\nthree");
   assert.equal(reply.buttons?.length, 3);
 });
 
 test("duplicate buttons are dropped", () => {
+  const button = (id: string, title: string) => ({ id, title });
+  const reply = (buttons: { id: string; title: string }[]) =>
+    render({ step: "assess", card: {}, shortlist: [], demonstrated: false, lines: ["ask"], buttons });
+  assert.equal(reply([button("", "Gaming"), button("", "Gaming")]).buttons?.length, 1);
+  assert.equal(reply([button("select:A", "Black"), button("select:A", "Silver")]).buttons?.length, 1);
+});
+
+test("a button the model wrote says its own title, and only ids the code acts on survive", () => {
   const reply = render({
     step: "assess",
     card: {},
@@ -71,57 +74,49 @@ test("duplicate buttons are dropped", () => {
     demonstrated: false,
     lines: ["ask"],
     buttons: [
-      { id: "a", title: "A" },
-      { id: "a", title: "B" },
+      { id: "card:start_level", title: "Gaming" },
+      { id: "select:IP18-256_S", title: "Silver" },
+      { id: "select:H9", title: "Haier 9 Kg Front Load (Rs 39,970)" },
     ],
-    reason: "r",
   });
-  assert.equal(reply.buttons?.length, 1);
+  assert.deepEqual(reply.buttons, [
+    { id: "say:Gaming", title: "Gaming" },
+    { id: "select:IP18-256_S", title: "Silver" },
+    { id: "select:H9", title: "Haier 9 Kg Front" },
+  ]);
 });
 
-test("assessed needs four home facts including the viewing distance", () => {
-  assert.equal(isAssessed({ room: "hall", light: "bright", mount: "wall" }), false);
-  assert.equal(isAssessed({ distance_feet: 8, light: "bright", mount: "wall" }), false);
-  assert.equal(isAssessed({ distance_feet: 8, light: "bright", mount: "wall", content: ["cricket"] }), true);
+test("a title that says something is never cut into something else: the button goes", () => {
+  const reply = render({
+    step: "assess",
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: ["ask"],
+    buttons: [
+      { id: "", title: "What will they use it for?" },
+      { id: "", title: "(Rs 3,999)" },
+      { id: "", title: "Any offers on it?" },
+    ],
+  });
+  assert.deepEqual(reply.buttons, [{ id: "say:Any offers on it?", title: "Any offers on it?" }]);
 });
 
-test("the viewing distance is only required where there is a screen", () => {
-  const home = { room: "hall", light: "bright", mount: "wall", content: ["cricket"] };
-  assert.equal(isAssessed(home), false);
-  assert.equal(isAssessed(home, false), true);
-  assert.equal(needsSizing(pack), true, "this pack sells televisions");
-  const washing = { ...pack, products: pack.products.map((product) => ({ ...product, size_inch: 0 })) };
-  assert.equal(needsSizing(washing), false);
+test("a reply with no real next step sends no buttons at all", () => {
+  const reply = render({
+    step: "complete",
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: ["It is Rs 1,64,900."],
+    buttons: [],
+  });
+  assert.equal(reply.buttons, undefined);
 });
 
-test("the 4K size rule of thumb matches the floor answer", () => {
-  assert.equal(recommendedInches(8), 60);
-  assert.equal(recommendedInches(6), 45);
-});
-
-test("a tapped card button fills the card without the model's help", () => {
-  const session = newSession("919999999999");
-  assert.equal(applyAction(session, "card:content:sports"), "content = sports");
-  assert.deepEqual(session.card.content, ["sports"]);
-  applyAction(session, "card:content:ott");
-  assert.deepEqual(session.card.content, ["sports", "ott"]);
-  assert.equal(applyAction(session, "card:distance_feet:8"), "distance_feet = 8");
-  assert.equal(session.card.distance_feet, 8);
-});
-
-test("a plain button or a bad field changes nothing", () => {
-  const session = newSession("919999999999");
-  assert.equal(applyAction(session, "show_options"), undefined);
-  assert.equal(applyAction(session, "card:price_i_invented:1"), undefined);
-  assert.equal(applyAction(session, "card:distance_feet:nonsense"), undefined);
-  assert.deepEqual(session.card, {});
-});
-
-test("the reply language follows the associate's script, not the topic", () => {
-  assert.equal(languageOf("customer wants a TV for the hall"), "en");
-  assert.equal(languageOf("ग्राहक को हॉल के लिए टीवी चाहिए"), "hi");
-  assert.equal(languageOf("customer ko hall ke liye TV chahiye"), "en");
-  assert.equal(languageOf(undefined), "en");
+test("assessed is four things the customer said, whatever the product is", () => {
+  assert.equal(isAssessed({ room: "hall", family: "4 people", budget_rupees: 60000 }), false);
+  assert.equal(isAssessed({ facts: { use: "gaming", camera: "yes", battery: "long", storage: "256" } }), true);
 });
 
 test("the offer gate catches a quoted deal, plural wording included", () => {
@@ -177,25 +172,10 @@ test("the recommend step keeps all three options", () => {
       "Sony at Rs 62,990 — best for OTT",
     ],
     buttons: [],
-    reason: "three sized for 8 feet",
   });
   assert.equal(reply.text.split("\n").length, 3);
   assert.ok(reply.text.includes("Sony"));
   assert.ok(!reply.text.includes("↳"));
-});
-
-test("every other step still shows the reason line", () => {
-  const reply = render({
-    step: "assess",
-    card: {},
-    shortlist: [],
-    demonstrated: false,
-    lines: ["Ask how far they sit.", "Then ask about the light."],
-    buttons: [],
-    reason: "the room decides the size",
-  });
-  assert.equal(reply.text.split("\n").length, 3);
-  assert.ok(reply.text.endsWith("↳ the room decides the size"));
 });
 
 test("every product carries a demonstration cue, as section 6.5 requires", () => {
@@ -311,23 +291,6 @@ test("a gate is not a refusal to answer: asked outright, the offer is given", ()
   assert.equal(askedAboutOffers("is there a discount on this"), true);
   assert.equal(askedAboutOffers("customer wants a washing machine"), false, "no offer word, no opening");
   assert.equal(askedAboutOffers(undefined), false, "a tap carries no words");
-});
-
-test("a viewing distance is not a fact about a phone", async () => {
-  const { fieldApplies } = await import("../server/src/brain.js");
-  const phones = { products: [{ size_inch: 0, stock_units: 1 }] } as never;
-  const screens = { products: [{ size_inch: 55, stock_units: 1 }] } as never;
-  // The iPhone conversation was asked how far they would sit and what room it was for. Telling the
-  // model not to was not enough — it filled them anyway — so they are dropped on the way in.
-  for (const field of ["distance_feet", "distance_m", "mount", "light"]) {
-    assert.equal(fieldApplies(field, phones), false, `${field} means nothing without a screen`);
-    assert.equal(fieldApplies(field, screens), true, `${field} is the whole point of a television`);
-  }
-  // What a customer uses a thing for applies to anything on the floor.
-  for (const field of ["content", "family", "budget_rupees", "room"]) {
-    assert.equal(fieldApplies(field, phones), true, field);
-    assert.equal(fieldApplies(field, screens), true, field);
-  }
 });
 
 test("saying there is no offer is not opening one", () => {

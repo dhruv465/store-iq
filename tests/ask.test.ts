@@ -2,70 +2,32 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
 import { decide } from "../server/src/brain.js";
-import { asksWhatWeHave, inStockReply, intentOf } from "../server/src/ask.js";
+import { isGreeting } from "../server/src/ask.js";
+import { wantsExpert, wantsManagerView } from "../server/src/extras.js";
 import { manager } from "./model.js";
 import { newSession, type Event } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
-const dead: typeof fetch = () => Promise.reject(Error("this must be answered from the pack"));
+const dead: typeof fetch = () => Promise.reject(Error("a greeting is not worth a model request"));
 const said = (text: string): Event => ({ id: `a${Math.random()}`, phone: "919820000001", modality: "text", text });
 
-test("a question about the shop is told apart from a description of the customer", () => {
-  for (const asking of [
-    "what TVs do we have in stock",
-    "which models are available",
-    "do we have the LG",
-    "is the Sony good for a dark room",
-    "kaunsa model hai",
-    "any 65 inch?",
+test("a hello is a hello, in any script and with a manager's address on it", () => {
+  for (const hello of ["hi", "Hello!", "namaste", "good morning", "नमस्ते", "नमस्कार", "हाय", "नमस्ते।", "हॅलो"])
+    assert.equal(isGreeting(hello), true, hello);
+  for (const hello of ["namaste sir", "hi boss", "hello bhai", "namaste ji", "हाय सर"])
+    assert.equal(isGreeting(hello), true, hello);
+  for (const not of [
+    "नमस्ते, ग्राहक हॉल के लिए टीवी चाहता है",
+    "hit the 65 inch target",
+    "sir what do we have in 65 inch",
   ])
-    assert.equal(intentOf(asking), "question", asking);
-
-  for (const describing of [
-    "customer sits 3 m away",
-    "they watch cricket and have a PS5",
-    "do they have WiFi at home?",
-    "his budget is 60000",
-    "hall, four people, bright window",
-  ])
-    assert.equal(intentOf(describing), "customer", describing);
-
-  for (const greeting of ["hi", "Hello!", "namaste", "good morning"])
-    assert.equal(intentOf(greeting), "greeting", greeting);
-});
-
-test("a question about a product does not become a fact about the customer's home", async () => {
-  const session = newSession("919820000001");
-  const reply = await decide(said("is the Sony good for a dark room"), session, pack, dead);
-  assert.deepEqual(session.card, {}, "it used to file light = dim");
-  assert.match(reply.text, /Sony Bravia/, "and it answers about the set instead");
-});
-
-test("what we have is answered without leading on price", async () => {
-  const session = newSession("919820000001");
-  const reply = await decide(said("what TVs do we have in stock today"), session, pack, dead);
-  assert.match(reply.text, /On the floor today/);
-  assert.match(reply.text, /Sony 55" LED/);
-  assert.doesNotMatch(reply.text, /Rs ?[\d,]{4,}/, "no prices before the home is known");
-  assert.match(reply.text, /the home comes before the price/);
-});
-
-test("once the home is known, the same question points at the three that fit", () => {
-  const assessed = inStockReply(pack, { distance_m: 3 }, "en", true);
-  assert.match(assessed.text, /three options|narrow/i);
-  assert.deepEqual(
-    assessed.buttons?.map((button) => button.id),
-    ["recommend"],
-  );
-  assert.doesNotMatch(assessed.text, /Rs ?[\d,]{4,}/);
+    assert.equal(isGreeting(not), false, not);
 });
 
 test("saying hello is answered, not turned into a questionnaire", async () => {
   const session = newSession("919820000001");
   const reply = await decide(said("hi"), session, pack, dead);
-  assert.doesNotMatch(reply.text, /How far will you sit/, "it used to open with the distance question");
   assert.match(reply.text, /what's happening/i);
-  assert.doesNotMatch(reply.text, /say brief|ask me about any set/i);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
     ["brief", "new_customer"],
@@ -73,55 +35,133 @@ test("saying hello is answered, not turned into a questionnaire", async () => {
   assert.deepEqual(session.card, {});
 });
 
-test("a description still fills the card, and the manager is told what was filed", async () => {
-  const session = newSession("919820000001");
-  const model = manager({ lines: ['Ask: "Where does the sun hit that wall?"'] });
-  const reply = await decide(said("customer sits 3 m away in the hall with four people"), session, pack, model.fetch);
-  assert.equal(session.card.distance_m, 3);
-  assert.equal(session.card.room, "hall");
-  assert.equal(session.card.family, "4 people");
-  assert.match(model.prompts[0]!, /JUST NOW/);
-  assert.match(model.prompts[0]!, /sits 3 m away/);
-  assert.match(reply.text, /sun hit that wall/);
+test("a brief button is only offered when there is a brief", async () => {
+  const reply = await decide(said("hi"), newSession("919820000001"), { ...pack, shift_brief: {} }, dead);
+  assert.deepEqual(
+    reply.buttons?.map((button) => button.id),
+    ["new_customer"],
+  );
 });
 
-test("asking what we have is not confused with asking about one set", () => {
-  assert.equal(asksWhatWeHave("what do we have in stock"), true);
-  assert.equal(asksWhatWeHave("which models are available"), true);
-  assert.equal(asksWhatWeHave("is the Sony any good"), false);
-});
-
-test("a hello in Devanagari is a hello", () => {
-  for (const hello of ["नमस्ते", "नमस्कार", "हाय", "नमस्ते।", "हॅलो"]) assert.equal(intentOf(hello), "greeting", hello);
-  assert.notEqual(intentOf("नमस्ते, ग्राहक हॉल के लिए टीवी चाहता है"), "greeting");
-  assert.notEqual(intentOf("hit the 65 inch target"), "greeting");
-});
-
-test("an associate relaying a customer's question is asking, not describing", async () => {
-  for (const relayed of [
-    "customer is asking what warranty comes with the TCL",
-    "he wants to know if the Sony has HDMI 2.1",
-    "customer asked about the exchange offer",
-    "what do I tell him about delivery",
-    "grahak pooch raha hai ki kitne din lagenge",
-  ])
-    assert.equal(intentOf(relayed), "question", relayed);
-
-  assert.equal(intentOf("customer wants a TV for the hall"), "customer");
-
-  const session = newSession("919820000001");
-  await decide(said("customer is asking what warranty comes with the TCL"), session, pack, dead).catch(() => null);
-  assert.deepEqual(session.card, {}, "it used to file priorities = warranty");
-});
-
-test("an associate addresses their manager, and it is still a greeting or a question", () => {
-  for (const hello of ["namaste sir", "hi boss", "hello bhai", "namaste ji", "हाय सर"])
-    assert.equal(intentOf(hello), "greeting", hello);
+test("a question that merely starts like a command goes to the model", async () => {
+  // Each of these used to be answered by a fixed reply about something else: the manager's table,
+  // an empty home card, the shift brief, the score.
   for (const question of [
-    "boss kitne ka target hai aaj",
-    "sir what do we have in 65 inch",
-    "bhai kaunsa TV lena chahiye",
-  ])
-    assert.equal(intentOf(question), "question", question);
-  assert.equal(intentOf("sir the customer sits 8 feet away"), "customer");
+    "today's price of iPhone 17?",
+    "what do you have in Samsung phones?",
+    "review of the Sony 85 inch",
+    "brief me on the iPhone 18 Pro",
+    "is the expert model any good",
+    "what is the summary of this phone's features",
+  ]) {
+    const model = manager({ lines: ["answered"] });
+    const reply = await decide(said(question), newSession("919820000001"), pack, model.fetch);
+    assert.equal(model.calls, 1, question);
+    assert.match(reply.text, /answered/, question);
+  }
+  assert.equal(wantsManagerView("today's price of iPhone 17?", undefined), false);
+  assert.equal(wantsExpert("is the expert model any good", undefined), false);
+  assert.equal(wantsExpert("ask an expert", undefined), true);
+});
+
+test("nothing the model did not say reaches the card from a question", async () => {
+  const session = newSession("919820000001");
+  await decide(said("is the Sony good for a dark room"), session, pack, manager({ lines: ["Yes."] }).fetch);
+  assert.deepEqual(session.card, {}, "it used to file light = dim");
+});
+
+test("a decided customer is not read a card back, whatever the model filed", async () => {
+  const session = newSession("919820000001");
+  session.card = { facts: { a: "1", b: "2", c: "3", d: "4" } };
+  const reply = await decide(
+    said("I want to buy an iPhone 18 Pro 256 GB"),
+    session,
+    pack,
+    manager({ step: "complete", lines: ["Which colour?"] }).fetch,
+  );
+  assert.doesNotMatch(reply.text, /I heard/);
+  assert.match(reply.text, /Which colour/);
+});
+
+test("an answer is never replaced by a card read-back, however much is on the card", async () => {
+  const session = newSession("919820000001");
+  session.card = { facts: { a: "1", b: "2", c: "3", d: "4" } };
+  const reply = await decide(
+    said("does it have a heater"),
+    session,
+    pack,
+    manager({ step: "recommend", lines: ["It is not listed."] }).fetch,
+  );
+  assert.doesNotMatch(reply.text, /I heard/);
+  assert.match(reply.text, /not listed/);
+});
+
+test("the card is there when it is asked for", async () => {
+  const session = newSession("919820000001");
+  session.card = { room: "hall" };
+  const reply = await decide(said("card"), session, pack, dead);
+  assert.match(reply.text, /I heard/);
+});
+
+test("a select button for a product that is not there is dropped", async () => {
+  const reply = await decide(
+    said("which one"),
+    newSession("919820000001"),
+    pack,
+    manager({
+      lines: ["Which one?"],
+      buttons: [
+        { id: "select:TCL-55C6KS", title: "TCL" },
+        { id: "select:MADE-UP", title: "Invented" },
+      ],
+    }).fetch,
+  );
+  assert.deepEqual(reply.buttons, [{ id: "select:TCL-55C6KS", title: "TCL" }]);
+});
+
+test("tapping a button the model wrote is treated as typing its title", async () => {
+  const model = manager({ lines: ["Then the Pro."] });
+  const session = newSession("919820000001");
+  await decide(
+    { id: "t1", phone: session.phone, modality: "interactive", action: "say:Gaming" },
+    session,
+    pack,
+    model.fetch,
+  );
+  assert.match(model.prompts[0]!, /said: Gaming/);
+  assert.equal(session.history[0]!.text, "Gaming");
+});
+
+test("a figure the model gets wrong gets one retry, and what it refuses twice does not go out", async () => {
+  const twice = manager({ lines: ["It is Rs 12,345."] });
+  const refused = await decide(said("how much"), newSession("919820000001"), pack, twice.fetch);
+  assert.equal(twice.calls, 2);
+  assert.doesNotMatch(refused.text, /12,345\.$/m, "the figure is only named as refused");
+  assert.match(refused.text, /not in the catalogue data/);
+
+  const fixed = manager([{ lines: ["It is Rs 12,345."] }, { lines: ["It is Rs 54,990."] }]);
+  const answer = await decide(said("how much"), newSession("919820000001"), pack, fixed.fetch);
+  assert.match(fixed.prompts[1]!, /You wrote 12345/);
+  assert.match(answer.text, /Rs 54,990/);
+});
+
+test("offers the model volunteers go, the price it was asked for stays", async () => {
+  const reply = await decide(
+    said("how much is the TCL"),
+    newSession("919820000001"),
+    pack,
+    manager({ lines: ["The TCL is Rs 54,990.", "The HDFC offer is 7.5%, capped at Rs 8000."] }).fetch,
+  );
+  assert.match(reply.text, /54,990/);
+  assert.doesNotMatch(reply.text, /HDFC/);
+});
+
+test("asked outright, the same offer is given", async () => {
+  const reply = await decide(
+    said("any offer on the TCL"),
+    newSession("919820000001"),
+    pack,
+    manager({ lines: ["The HDFC offer is 7.5%, capped at Rs 8000."] }).fetch,
+  );
+  assert.match(reply.text, /HDFC/);
 });

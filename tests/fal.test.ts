@@ -70,7 +70,7 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
   try {
     const { fetch: fake, calls } = spy(
       '```json\n{"step":"assess","card":{},"shortlist":[],"demonstrated":false,' +
-        '"lines":["Ask: \\"Which room is it for?\\""],"buttons":[],"reason":"the room sizes it","unknown":false}\n```',
+        '"lines":["Ask: \\"Which room is it for?\\""],"buttons":[],"unknown":false}\n```',
     );
     const session = newSession("919820000001");
     const event: Event = { id: "f1", phone: session.phone, modality: "text", text: "customer wants a TV" };
@@ -79,7 +79,6 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
     assert.match(calls[0]!.url, /fal\.run/);
     assert.doesNotMatch(calls[0]!.url, /googleapis/, "no GEMINI_API_KEY is set and none is needed");
     assert.match(reply.text, /Ask: "\*Which room is it for\?\*"/);
-    assert.match(reply.text, /_↳ the room sizes it_/);
   } finally {
     if (saved.fal === undefined) delete process.env.FAL_KEY;
     else process.env.FAL_KEY = saved.fal;

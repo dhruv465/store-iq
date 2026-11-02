@@ -16,7 +16,6 @@ const wordy = (): ReturnType<typeof manager> =>
       { id: "d", title: "Four" },
       { id: "e", title: "Five" },
     ],
-    reason: "a reason of its own",
   });
 
 const WALK: ({ text: string } | { action: string })[] = [
@@ -36,8 +35,6 @@ const WALK: ({ text: string } | { action: string })[] = [
   { text: "review" },
 ];
 
-const REASON_INSIDE_THE_LINE = /Show:|दिखाइए:|दाखवा:/;
-
 const content = (text: string): string[] => text.split("\n").filter((line) => line.trim());
 
 test("every reply on a whole conversation obeys the floor's three lines and three buttons", async () => {
@@ -49,7 +46,6 @@ test("every reply on a whole conversation obeys the floor's three lines and thre
     const what = `turn ${index + 1} (${JSON.stringify(turn)}): ${reply.text}`;
     assert.ok(lines.length <= 3, `more than three lines — ${what}`);
     assert.ok((reply.buttons ?? []).length <= 3, `more than three buttons — ${what}`);
-    assert.ok(reply.text.includes("↳") || REASON_INSIDE_THE_LINE.test(reply.text), `no reason in the answer — ${what}`);
   }
 });
 
@@ -84,20 +80,9 @@ test("a blank line is not a line", () => {
   assert.equal(floor({ text: "one\n\n\ntwo" }).text, "one\n\ntwo");
 });
 
-test("a reason with nothing to do is not an answer", () => {
-  const reply = render({
-    step: "assess",
-    card: {},
-    shortlist: [],
-    demonstrated: false,
-    lines: [],
-    buttons: [],
-    reason: "the viewing distance is the most important factor",
-  });
-  const lines = reply.text.split("\n");
-  assert.equal(lines.length, 2);
-  assert.doesNotMatch(lines[0]!, /^↳/, "something to do comes first");
-  assert.match(lines[1]!, /^↳/);
+test("a model that wrote nothing still tells the associate something", () => {
+  const reply = render({ step: "assess", card: {}, shortlist: [], demonstrated: false, lines: [], buttons: [] });
+  assert.ok(reply.text.length > 0);
 });
 
 test("WhatsApp's own formatting, and nothing it would render as litter", () => {
@@ -110,17 +95,27 @@ test("WhatsApp's own formatting, and nothing it would render as litter", () => {
   assert.equal(one("Right?"), "Right?");
 });
 
-test("the prompt names the sizes the shop can actually hand over", async () => {
+test("the prompt carries no list of what is still to be asked", async () => {
   const session = newSession("919820000009");
-  session.card = { distance_feet: 6 };
   const model = manager({ lines: ["x"] });
   await decide(
-    { id: "s1", phone: session.phone, modality: "text", text: "they sit 6 feet away" } as Event,
+    { id: "s1", phone: session.phone, modality: "text", text: "customer wants a phone" } as Event,
     session,
     pack,
     model.fetch,
   );
   const sent = model.prompts.join(" ");
-  assert.match(sent, /In stock today, in inches: 55, 65/);
-  assert.match(sent, /Never name a size that is not on that list/);
+  assert.doesNotMatch(sent, /STILL BLANK|In stock today, in inches/);
+  assert.doesNotMatch(sent, /stock_units/, "a yes or no, and it came back as 1 in stock");
+});
+
+test("a doubt the customer raised reaches the manager's report, in the model's words", async () => {
+  const session = newSession("919820000009");
+  await decide(
+    { id: "o1", phone: session.phone, modality: "text", text: "customer says it is too costly" } as Event,
+    session,
+    pack,
+    manager({ lines: ['Ask: "Which part feels high?"'], objection: "too costly" }).fetch,
+  );
+  assert.deepEqual(session.objections, ["too costly"]);
 });

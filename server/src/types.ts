@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Lang } from "./i18n.js";
+import type { Search } from "./pack.js";
 /** Section 4 of the developer brief, A to I, in order. "demonstrate" lives inside recommend, which is
  *  how the brief names that stage, and shows up as the demonstration cue on each option. */
 export const STEPS = [
@@ -17,10 +18,8 @@ export type Step = (typeof STEPS)[number];
 
 /** What the associate has learned about the customer's home. Store IQ never guesses wealth or level. */
 export type HomeCard = {
-  /** Everything this product needs that a television did not. The named fields below are a
-   *  television's home; a washing machine's is a covered balcony, a daily wash and 8 kg, and a
-   *  card that cannot hold those can never be assessed — which left recommend, complete and close
-   *  unreachable for anything but a TV. */
+  /** What this customer said they need from this kind of product, named by the model. Most of the
+   *  named fields below were a television's; only the budget is still asked of the model. */
   facts?: Record<string, string>;
   room?: string;
   /** The brief's own example asks in metres; feet stays for an associate who answers in feet. */
@@ -79,9 +78,9 @@ export type Session = {
   /** The site was checked with the customer before the installer was booked. The store visits found
    *  an installer who came and left because the wall needed a hole nobody had asked about. */
   site_checked?: boolean;
-  /** What this conversation is about, in the associate's own words, kept so a tap does not lose
-   *  it. The whole session state is one jsonb column, so this costs no migration. */
-  subject?: string;
+  /** The catalogue search this conversation is on, kept so a tap or a follow-up stays on the same
+   *  products. The whole session state is one jsonb column, so this costs no migration. */
+  search?: Search;
   /** Customer objections / claims validated during this interaction. */
   objections?: string[];
   /** Bounded conversation memory; the full log lives in the database. */

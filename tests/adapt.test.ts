@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { adaptPack, adaptProduct, figure, fromFdk, fromPromotion, running } from "../server/src/adapt.js";
-import { rank } from "../server/src/recommend.js";
-import type { Pack } from "../server/src/pack.js";
 
 const vendorRow = {
   "Article Code": "RD-TCL-55C6",
@@ -41,13 +39,6 @@ test("a vendor row with its own headers becomes a product we can serve", () => {
   assert.equal(product.specs.hdmi_21_ports, 2);
   assert.deepEqual(product.good_for, ["bright living room", "PS5 gaming", "cricket"]);
   assert.equal(product.energy.units_per_year_4h_day, 190);
-});
-
-test("the ranking reasons about a vendor row exactly as it does about ours", () => {
-  const { pack } = adaptPack({ products: [vendorRow] } as never);
-  const options = rank(pack as Pack, { distance_m: 3, light: "bright afternoon sun", devices: ["PS5"] });
-  assert.equal(options[0]?.product.sku, "RD-TCL-55C6");
-  assert.match(options[0]!.reason, /144 Hz and 2 HDMI 2.1 for the console/);
 });
 
 test("a row that cannot be served says which row, which field, and where to fix it", () => {
@@ -113,13 +104,6 @@ test("a product from the live catalogue becomes one we can serve", () => {
   assert.deepEqual(product.good_for, ["bright living room", "OTT", "news"]);
   assert.equal(product.specs.peak_nits, 400);
   assert.equal(product.specs.refresh_hz, 60, '"60Hz" is read as a number');
-});
-
-test("the ranking reasons about a live catalogue row exactly as it does about ours", () => {
-  const { pack } = adaptPack({ products: [fromFdk(fdkRow)] } as never);
-  const options = rank(pack as Pack, { distance_m: 2.5, light: "bright afternoon sun", content: ["news"] });
-  assert.equal(options[0]?.product.sku, "SON-K55S30");
-  assert.ok(options[0]!.reason.length > 0, "and gives a reason from its own figures");
 });
 
 test("a product the shop cannot sell today is out of stock, not absent", () => {
@@ -195,24 +179,60 @@ test("a live promotion is read for what it does, not for its reference", () => {
   );
 });
 
-test("the cue is the highlight worth standing in front of", () => {
+test("the listing's power figure and who it is for come through, and no cue is made up", () => {
   const { product } = adaptProduct(
     fromFdk({
       ...fdkRow,
-      highlights: [
-        "Apps Supported : Prime Video,Netflix,YouTube,Apple TV,Google TV",
-        "Refresh Rate: 120 Hz",
-        "Resolution: 4K Ultra HD (3840 x 2160)",
-      ],
-      attributes: { power_consumption: "421.25 W" },
+      highlights: ["Top Loading"],
+      attributes: { power_consumption: "421.25 W", "recommended-for": "Large Families" },
     }),
   );
-  assert.equal(product.demo_cue, "Show them Refresh Rate: 120 Hz, beside the one next to it.");
   assert.equal(product.energy.typical_watts, 421.25);
-  assert.ok(product.energy.units_per_year_4h_day > 0);
-  const washer = adaptProduct(
-    fromFdk({ ...fdkRow, highlights: ["Top Loading"], attributes: { "recommended-for": "Large Families" } }),
-  ).product;
-  assert.ok(washer.good_for.includes("Large Families"));
-  assert.match(adaptProduct(fromFdk({ ...fdkRow, highlights: [] })).product.demo_cue, /beside the set next to it/);
+  assert.ok(product.good_for.includes("Large Families"));
+  assert.equal(product.demo_cue, "", "a sentence the store never wrote is not a fact");
+  assert.equal(adaptProduct(fromFdk({ name: "x", price: {} })).product.panel, "", "a phone has no LED panel");
+});
+
+test("a row's own offers come out of _custom_meta, with figures the guard can check", () => {
+  const specs = (meta: { key: string; value: string }[], extra = {}): Record<string, unknown> =>
+    adaptProduct(fromFdk({ ...fdkRow, _custom_meta: meta, ...extra })).product.specs;
+
+  const phone = specs(
+    [
+      {
+        key: "pg_offer",
+        value: JSON.stringify({ bank: "ICICI BANK NO COST EMI", subtitle: "26315.46/6", discount: "7007.24" }),
+      },
+      { key: "Tag1", value: "12.5% Upto 10,000 HDFC/ICICI CC*" },
+      { key: "Tag2", value: "PRE_ORDER" },
+    ],
+    { discount: "42% OFF" },
+  );
+  assert.equal(
+    phone.bank_offer,
+    "ICICI BANK NO COST EMI: 6 months at Rs 26315 a month, Rs 157890 in all, saves Rs 7007",
+  );
+  assert.equal(phone.offer_tag, "12.5% Upto 10,000 HDFC/ICICI CC*");
+  assert.equal(phone.status, "pre order");
+  assert.equal(phone.discount, "42% OFF");
+
+  const flat = specs([{ key: "pg_offer", value: JSON.stringify({ bank: "IDFC", subtitle: "", discount: "15000" }) }]);
+  assert.equal(flat.bank_offer, "IDFC card: saves Rs 15000");
+
+  const none = specs([
+    { key: "pg_offer", value: "not json" },
+    { key: "Tag1", value: "NONE" },
+  ]);
+  assert.equal(none.bank_offer, undefined);
+  assert.equal(none.offer_tag, undefined);
+});
+
+test("the contact details on every row are not specs", () => {
+  const { product } = adaptProduct(
+    fromFdk({
+      ...fdkRow,
+      attributes: { "customer-care-number": "1800", "manufacturer-address": "x", "net-quantity": "1", ram: "8 GB" },
+    }),
+  );
+  assert.deepEqual(Object.keys(product.specs).sort(), ["ram", "rating"]);
 });

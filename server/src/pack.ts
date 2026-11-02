@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HomeCard } from "./types.js";
 import { adaptPack, adaptProduct, fromFdk, fromPromotion, running } from "./adapt.js";
-import { catalogConfig, getProducts, getPromotionOffers, type CatalogConfig, type Facet } from "./catalog.js";
+import { catalogConfig, getProducts, getPromotionOffers, type Facet } from "./catalog.js";
 
 export type Pack = {
   version: string;
@@ -21,6 +21,8 @@ export type Pack = {
    *  it the claim's own words are counted, the way myths are. */
   objections?: { claim: string; when?: string; confirm: string; correct: string }[];
   install_requirements: Record<string, string[]>;
+  /** What was searched to get these products and how many more the store holds. Live only. */
+  search?: Search & { total: number; has_next: boolean };
 };
 export type Product = {
   sku: string;
@@ -58,435 +60,208 @@ export async function readSource(source: string): Promise<string> {
   return response.text();
 }
 
-/** The live store, read-only, in the shape the rest of this reads.
- *
- *  getProducts for the catalogue, getPromotionOffers for what is running on the few we would
- *  actually recommend — the endpoint is per slug, so this is not a crawl. Everything those two
- *  methods do not carry — finance terms, charges, myths, labels, install requirements — stays from
- *  `base`, which is data/pack.json, because no endpoint this product may call has them.
- *
- *  shortcut: read once, at startup. Stock moves during a shift and this will not notice until the
- *  server restarts. Add a refresh when the floor is live all day rather than for a demo. */
-export async function livePack(
-  config: CatalogConfig,
-  base: Record<string, any>,
-  request: typeof fetch = fetch,
-): Promise<Record<string, any>> {
-  // No search term: the associate can be asked about anything the store sells, so the catalogue
-  // comes as the catalogue. What bounds the prompt is factsFor, not what we fetch.
-  const { items } = await getProducts(config, { page_size: 24, page_no: 1, page_type: "number" }, request);
-  if (!items.length) throw Error("The catalogue answered with no products");
-  const offers = new Map<string, Record<string, unknown>>();
-  for (const row of items.slice(0, 5)) {
-    const slug = (row as { slug?: string }).slug;
-    if (!slug) continue;
-    for (const promotion of await getPromotionOffers(config, { slug }, request)) {
-      const offer = fromPromotion(promotion);
-      if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
-    }
-  }
-  return {
-    ...base,
-    version: `live-${new Date().toISOString().slice(0, 10)}`,
-    products: items.map(fromFdk),
-    // Never the pack's own offers once the live catalogue is on: they are a stub's, this channel
-    // runs neither of them, and an offer quoted that does not exist is the worst thing this
-    // product can do. An empty list is the honest answer.
-    offers: [...offers.values()],
-  };
-}
-
-/** The catalogue, asked a question.
- *
- *  The store holds 8,383 products on the storefront surface and the panel counts 52,016 on the
- *  channel. None of that can be loaded, and loading the first page of it is worse than useless:
- *  it answered a television conversation with a refrigerator and a laptop. So the catalogue is
- *  searched for what this conversation is actually about, and the promotions are fetched for what
- *  the search returned rather than for whatever happened to be first.
- *
- *  Cached by query, because an associate asks about the same thing for several turns running and
- *  a WhatsApp reply has five seconds to arrive. */
-const searched = new Map<string, Pack>();
-
-/** What to ask the catalogue for, out of what the associate said.
- *
- *  `q` does not take a sentence: "customer wants a washing machine, family of four, balcony is
- *  small" matched nothing at all, so the pack silently stayed the four stub televisions and every
- *  later turn asked a washing machine customer about viewing distance. Two or three words of the
- *  thing itself is what the endpoint answers. */
-const FILLER =
-  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|we|us|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|asking|asked|ask|store|shop|shelf|aisle|counter|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range|hello|helo|hi|hey|hii|hiii|namaste|namaskar|morning|afternoon|evening|thanks|thank|thankyou|ok|okay|okey|yes|yeah|yep|no|nope|sure|fine|great|cool|sorry|welcome|speak|speaking|talk|english|hindi|marathi|language|you|your|yours|we|us|i|am|it|its|here|right|now|still|also|just|only|been|being|be)\b/gi;
-
-/** Two words the catalogue does not use for the thing the associate means. "ac" on its own
- *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */
-const MEANS: Record<string, string> = {
-  ac: "air conditioner",
-  washer: "washing machine",
-  tvs: "tv",
-  televisions: "television",
+/** One search of the store, in the parameters of FDK getProducts. `kind` is not a parameter: it is
+ *  what the thing is ("phone"), which is how an iPhone is told from the cases named after it. */
+export type Search = {
+  q: string;
+  kind?: string;
+  sort_on?: "popular" | "latest" | "price_asc" | "price_dsc" | "discount_asc" | "discount_dsc";
+  max_price?: number;
+  page_no?: number;
 };
 
-/** The catalogue is written in English and the associate is not always. Nine words, because a
- *  Devanagari sentence otherwise reduces to nothing and the pack silently stays the stub's. */
-const SAID_IN_HINDI: Record<string, string> = {
-  टीवी: "tv",
-  "टीवी।": "tv",
-  फ्रिज: "fridge",
-  फ़्रिज: "fridge",
-  रेफ्रिजरेटर: "refrigerator",
-  वाशिंग: "washing machine",
-  मशीन: "washing machine",
-  एसी: "ac",
-  कूलर: "cooler",
-  लैपटॉप: "laptop",
-  मोबाइल: "mobile",
-  फोन: "mobile",
+const SORTS = ["popular", "latest", "price_asc", "price_dsc", "discount_asc", "discount_dsc"];
+
+/** What the model said to search, checked before any of it reaches the store. */
+export function readSearch(raw: unknown): Search | null {
+  const said = (raw ?? {}) as Record<string, unknown>;
+  const q = typeof said.q === "string" ? said.q.trim().slice(0, 80) : "";
+  if (q.length < 2) return null;
+  const search: Search = { q };
+  if (typeof said.kind === "string" && said.kind.trim()) search.kind = said.kind.trim().toLowerCase().slice(0, 40);
+  if (SORTS.includes(String(said.sort_on))) search.sort_on = said.sort_on as NonNullable<Search["sort_on"]>;
+  if (typeof said.max_price === "number" && said.max_price > 0) search.max_price = Math.round(said.max_price);
+  if (Number.isInteger(said.page_no) && (said.page_no as number) > 1) search.page_no = said.page_no as number;
+  return search;
+}
+
+/** Everything that does not come from the store is empty, on purpose: the file pack's finance
+ *  terms, charges, myths and brief are a television stub, and this channel has none of them. */
+const LIVE_PACK: Pack = {
+  version: "live",
+  store: { id: "", name: "Reliance Digital", city: "" },
+  shift_brief: {},
+  products: [],
+  offers: [],
+  finance: [],
+  charges: [],
+  accessories: [],
+  experts: [],
+  electricity: { tariff_rupees_per_unit: 0, note: "" },
+  labels: [],
+  myths: [],
+  objections: [],
+  install_requirements: {},
 };
 
-/** A brand the associate names, written the way the catalogue writes the kind. "iphone" shares no
- *  token with the store's own category "smart-phones", and the count-based pick answered an iPhone
- *  question with Apple Watches. So the associate's word is mapped to the kind it is: a phone. */
-// "tv" is what an associate types and the store files under led-televisions.
-const KIND_OF: Record<string, string> = { iphone: "phone", ipad: "tablet", macbook: "laptop", tv: "television" };
-
-/** Units of measurement. An inch runs country-wide stock, not a kind: the TV refine for
- *  "sony bravia 85 inch" handed back the most popular screens — Samsung 85s — and they were
- *  adopted on the word "inch" alone. A unit never names what the product is. */
-const UNIT = /inch|inches|kg|gram|litre|liter|ton|gb|tb|mm|cm|watt|watts|star|feet|foot/;
-export function words(text: string): string[] {
-  const lowered = text.toLowerCase();
-  const named = Object.entries(SAID_IN_HINDI).find(([hindi]) => lowered.includes(hindi));
-  if (named) return [named[1]];
-  return [
-    ...new Set(
-      lowered
-        .replace(/[^a-z0-9\s]/g, " ")
-        .replace(FILLER, " ")
-        .split(/\s+/)
-        // Two letters, because "tv" is the word an associate actually types and dropping it left the
-        // query as "hall", which matched desert coolers.
-        // Numbers stay: "sony 85" is a better query than "sony", which returns camera pouches.
-        .filter((word) => word.length > 1)
-        .map((word) => MEANS[word] ?? word),
-    ),
-  ];
-}
-
-export function terms(text: string): string[] {
-  const said = words(text);
-  // Shortest first. The endpoint answers a product noun and returns nothing for a description:
-  // "washing machine" finds machines, "fridge small" finds nothing at all.
-  return [...new Set([said.slice(0, 2).join(" "), said[0] ?? "", said.slice(0, 3).join(" ")])].filter(Boolean);
-}
-
-/** resQ is Reliance's own service brand and extended-warranty its category. A protection plan is
- *  not a product to put in front of a customer, and it out-counts the real thing on a plain query:
- *  "fridge" returns 150 extended warranties against 122 refrigerators. Dropped before the counts
- *  are read, which is also where `resQ 0"` came from being offered as one of three televisions. */
+/** resQ is Reliance's own service brand and extended-warranty its category. "fridge" returns 150
+ *  extended warranties against 122 refrigerators, so they are dropped unless asked for. Read off
+ *  the brand and category, because a real washing machine's name can say "2 Years Warranty". */
 const SERVICE = /resq|warranty|protection|insurance|installation/i;
 
-/** Whether what was found is actually the thing named. The store's own search ranks an
- *  accessory named after the product above the product, and it answers nearly any string with
- *  something ("paper plane" reached karaoke speakers), so the words have to be in what came
- *  back: this is what keeps a short "what about iphone" from adopting watches and "8 feet" from
- *  dragging a washing machine pack away. */
-/** Whether a product's words contain the word that was said, as a word rather than as letters.
- *
- *  A plain substring test made "son" — out of "a laptop for my son's college" — a match for every
- *  Sony speaker in the shop, and those rows then scored as highly as the actual laptops and won
- *  for being asked first. An English ending is still the same word, because the store writes
- *  "Washing Machines" for "washing machine" and "Front Loading" for "front load" — but "sony" is
- *  not an ending of "son", so the false match goes and the real ones stay. */
-function names(text: string, word: string): boolean {
-  // Both sides lose the plural, not just the product's: the associate types "phones" and the
-  // catalogue writes "Mobile Phone", so a one-sided test matched neither the phone nor the
-  // category and a telephoto lens was handed over as the most popular phone in the shop.
-  const stem = word.length > 3 ? word.replace(/s$/, "") : word;
-  return new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es|ing|ed)?\\b`).test(text);
+type Row = Record<string, any>;
+const categoriesOf = (row: Row): string => (row.categories ?? []).map((category: Row) => category?.name).join(" ");
+const isService = (row: Row): boolean => SERVICE.test(`${row.brand?.name} ${categoriesOf(row)}`);
+
+/** The kind as a pattern over words, with its plural: "phone" is not inside "iPhone". */
+function kindPattern(kind: string): RegExp {
+  const stem = kind.replace(/s$/, "").replace(/[^a-z0-9]+/gi, "[\\s-]*");
+  return new RegExp(`\\b${stem}(s|es)?\\b`, "i");
 }
 
-export function aboutTheWords(said: string[], products: { brand: string; name: string }[]): boolean {
-  const kinds = said.filter((word) => word.length > 1 && !/^\d/.test(word) && !UNIT.test(word));
-  if (!kinds.length) return false;
-  return products.some((product) =>
-    kinds.some((kind) => names(`${product.brand} ${product.name}`.toLowerCase(), kind)),
+/** A category IS this kind when its last word is it. "smart-phones" and "LED Televisions" are;
+ *  "phone-cases" and "Television Mounts & Stands" are for one, and "Headphones" is not a phone. */
+function shelfIs(category: string, kind: string): boolean {
+  return new RegExp(`(?:^|[\\s-])${kindPattern(kind).source.replace(/\\b/g, "")}$`, "i").test(category);
+}
+
+/** Whether this row is that kind of thing, by its own name or its own category. What comes after
+ *  "for" is what it serves: a "Trolley for Washing Machine" is a trolley. */
+export function carriesKind(row: Row, kind: string): boolean {
+  return (
+    kindPattern(kind).test(String(row.name).split(/\b(?:for|compatible with|fits)\b/i)[0]!) ||
+    (row.categories ?? []).some((category: Row) => shelfIs(String(category?.name), kind))
   );
 }
 
-/** What the associate's words call the kind, out of the store's own category facet values. A word
- *  that names a brand ("apple", "noise") is not a kind — the brand facet knows it. And after
- *  brands are removed the last word left is the head of what was said: "smart watch" is a watch,
- *  even though "smart" also opens the store's smart-phones. */
-/** The accessory shelves the store keeps beside the products. Their facet counts sit above the
- *  products they serve — q="smart watch" answered with a "smart-watch-accessories" shelf of
- *  straps — so they are never the kind the words name, unless the associate asked for one. */
-const ACCESSORY_SHELF =
-  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|power.?bank|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
-const ACCESSORY_WORD =
-  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|power.?bank|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
-
-export function categoryByWords(filters: Facet[], said: string[]): string | undefined {
-  const brands = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).map((value) =>
-    String(value?.value ?? "").toLowerCase(),
-  );
-  const of = (word: string) => KIND_OF[word] ?? word;
-  const kinds = [
-    ...new Set(
-      said
-        .map(of)
-        .filter(
-          (word) =>
-            word.length > 1 &&
-            !/^\d/.test(word) &&
-            !UNIT.test(word) &&
-            !brands.some((brand) => brand.includes(word) || word.includes(brand)),
-        ),
-    ),
-  ];
-  if (!kinds.length) return undefined;
-  const head = kinds[kinds.length - 1]!;
-  // Dash and space are the same separator as far as matching goes: the store writes
-  // "multi-function-inkjet-printers" for "printer".
-  const tidy = (text: string) => text.replace(/[^a-z0-9]+/g, " ").toLowerCase();
-  // The store's own facet counts put the accessory shelves above the products they serve —
-  // q="smart watch" answered with a "smart-watch-accessories" shelf of straps — so an accessory
-  // shelf is never the kind the words name, unless the associate asked for an accessory itself.
-  const wantsAccessory = said.some((word) => ACCESSORY_WORD.test(word));
-  const named =
-    filters
-      .find((facet) => facet.key?.name === "category")
-      ?.values?.filter(
-        (value) =>
-          value.value &&
-          !SERVICE.test(String(value.value)) &&
-          (wantsAccessory || !ACCESSORY_SHELF.test(String(value.value))),
-      )
-      .map((value) => {
-        const text = tidy(String(value.value));
-        const hits = kinds.reduce((total, kind) => total + (text.includes(kind) ? (kind === head ? 2 : 1) : 0), 0);
-        return { value, hits };
-      })
-      .filter((hit) => hit.hits > 0)
-      .sort((a, b) => b.hits - a.hits || (b.value.count ?? 0) - (a.value.count ?? 0))[0]?.value ?? undefined;
-  return named ? String(named.value) : undefined;
+/** The store's own shelves for this kind, out of the category facet it returned with the rows. */
+export function shelvesOf(filters: Facet[], kind: string): string[] {
+  return (filters.find((facet) => facet.key?.name === "category")?.values ?? [])
+    .map((value) => String(value.value ?? ""))
+    .filter((value) => value && !SERVICE.test(value) && shelfIs(value, kind));
 }
 
-/** The brand facet values the associate's own words name — "sony" in "soundbar sony", "apple" in
- *  "apple iphone". Whatever else the store's search suggests, these words are in the question. */
-export function namedBrands(filters: Facet[], said: string[]): string[] {
-  return (filters.find((facet) => facet.key?.name === "brand")?.values ?? [])
-    .filter((value) =>
-      value.value
-        ? said.some((word) => {
-            const text = String(value.value).toLowerCase();
-            const bare = (part: string) => part.replace(/[^a-z0-9]/g, "");
-            return text === word || (text.length > 1 && bare(text) === bare(word));
-          })
-        : false,
-    )
-    .map((value) => String(value.value).toLowerCase());
-}
+/** The price filter, in the facet's own `query_format`. */
+const priceFilter = (max: number): string => `min_price_effective:[1,INR TO ${max},INR]`;
 
-/** The narrowest filter the store's own facets support for this query.
- *
- *  The method reference documents `filters` on the same response and `f` as the way to use it:
- *  `brand:Guerra:::l3_categories:Carter`, where `:::` is AND. So which of the associate's words
- *  matter is not ours to guess — the catalogue answers it. "sony" lists a camera pouch first out
- *  of 294 rows, and its own category facet says 110 of them are televisions. */
-export function narrow(filters: Facet[], items: number, said: string[] = []): string | undefined {
-  const top = (name: string) =>
-    (filters.find((facet) => facet.key?.name === name)?.values ?? [])
-      .filter((value) => value.value && !SERVICE.test(String(value.value)))
-      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
-  // A category the words themselves name wins over the one with the biggest count: the counts are
-  // holdings of the whole catalogue, and for q="iphone" that counted Apple Watches above the
-  // phones. What nothing said names is the count's answer.
-  const values = (filters.find((facet) => facet.key?.name === "category")?.values ?? []).filter(
-    (value) => value.value && !SERVICE.test(String(value.value)),
-  );
-  const wanted = categoryByWords(filters, said);
-  const named = wanted ? values.find((value) => String(value.value) === wanted) : undefined;
-  const category = named ?? top("category");
-  if (!category) return undefined;
-  // A brand joins the filter only when the query was about that brand. "sony" is 194 of 294 rows
-  // and belongs; "washing machine" has no brand above a third of the rows and must not be
-  // narrowed to one, or we would answer it with whichever brand happens to stock the most. What
-  // the associate named joins even when it is thin: "soundbar sony" — four of eleven — came back
-  // as the more popular JBLs, which answered a Sony question with someone else's products.
-  const brandValues = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).filter(
-    (value) => value.value && !SERVICE.test(String(value.value)),
-  );
-  brandValues.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  const topBrand = brandValues[0];
-  // Whatever the associate named joins even when it is thin in the shelf; absent that, the brand
-  // only joins when it is the majority — one that holds under half the rows is a guess.
-  const majority = topBrand && (topBrand.count ?? 0) * 2 >= items ? String(topBrand.value) : undefined;
-  const chosen = namedBrands(filters, said)[0] ?? majority;
-  const joined = chosen ? `brand:${chosen}:::` : "";
-  return `${joined}category:${category.value}`;
-}
+/** Prices move, so a remembered search is good for one conversation, not for the day. */
+const FRESH_MS = 5 * 60_000;
+const searched = new Map<string, { at: number; pack: Pack }>();
 
-export async function searchPack(base: Pack, query: string, request: typeof fetch = fetch): Promise<Pack> {
+/** The live catalogue, asked for what this turn is about. Rows are the store's own answer: a miss
+ *  comes back as no products, which the model is told, and a failure throws. */
+export async function searchPack(base: Pack, search: Search, request: typeof fetch = fetch): Promise<Pack> {
   const config = catalogConfig();
-  const asked = query.trim().toLowerCase().slice(0, 60);
-  if (!config || asked.length < 3) return base;
-  const hit = searched.get(asked);
-  if (hit) return hit;
+  if (!config) return base;
+  const key = JSON.stringify(search);
+  const hit = searched.get(key);
+  if (hit && Date.now() - hit.at < FRESH_MS) return hit.pack;
 
-  // A fuzzy storefront answers almost any string with something — "paper plane" reached karaoke
-  // speakers — so a candidate's rows are only adopted when the catalogue named a category after
-  // the words said, or the rows themselves carry them. The first rows the store hands over wait
-  // for a later candidate ("printer" after "printer office") to answer for real.
-  const said = words(asked);
-  let won: Record<string, unknown>[] | undefined;
-  let wonScore: number[] = [-2, -1, -1, -1];
-  const wordsOf = (part: "kind" | "spec" | "unit") =>
-    said.filter((word) =>
-      part === "kind"
-        ? word.length > 1 && !/^\d/.test(word) && !UNIT.test(word)
-        : part === "spec"
-          ? /^\d/.test(word)
-          : UNIT.test(word),
-    );
-  const beats = (next: number[], best: number[]) => {
-    for (const [i, part] of next.entries()) if (part !== best[i]) return part > (best[i] ?? -1);
-    return false;
+  // A sort is over more rows, because it is checked against the words below.
+  const sorted = !!search.sort_on && search.sort_on !== "popular";
+  const params = {
+    q: search.q,
+    sort_on: search.sort_on ?? "popular",
+    page_size: sorted ? 48 : 12,
+    page_no: search.page_no ?? 1,
+    page_type: "number" as const,
   };
-  const rowScore = (row: Record<string, unknown>) => {
-    const product = adaptProduct(fromFdk(row)).product;
-    const text = `${product.brand} ${product.name}`.toLowerCase();
-    const accessory =
-      !said.some((word) => ACCESSORY_WORD.test(word)) &&
-      ACCESSORY_SHELF.test(`${product.name} ${product.categories.join(" ")}`.toLowerCase());
-    return [
-      accessory ? -1 : 0,
-      ...(["kind", "spec", "unit"] as const).map(
-        // A word, not letters: "son" must not score every Sony row. Specs and units stay a plain
-        // substring, because "85" is inside "85XR35M2" and that is the model the associate means.
-        (part) =>
-          new Set(wordsOf(part).filter((word) => (part === "kind" ? names(text, word) : text.includes(word)))).size,
-      ),
-    ];
-  };
-  const score = (rows: Record<string, unknown>[]) =>
-    rows
-      .slice(0, 12)
-      .map(rowScore)
-      .reduce((best, next) => (beats(next, best) ? next : best), [-2, -1, -1, -1]);
-  for (const q of terms(asked)) {
-    // `filters: true` is the reference's own default and costs nothing extra: the store returns
-    // its brand and category facets for this query alongside the rows. `sort_on: popular` is the
-    // response's own sort list and the only documented order that puts the product above the
-    // accessories named after it: a plain q="iphone" ranked Apple wallets above the iPhone 15s.
-    const found = await getProducts(
-      config,
-      { q, sort_on: "popular", filters: true, page_size: 12, page_no: 1, page_type: "number" },
-      request,
-    );
-    if (!found.items.length) continue;
-    const facets = namedBrands(found.filters, said);
-    const wanted =
-      facets.length > 0
-        ? facets
-        : [...new Set(found.items.map((row) => adaptProduct(fromFdk(row)).product.brand.toLowerCase()))].filter(
-            (brand) => said.some((word) => brand.replace(/[^a-z0-9]/g, "") === word.replace(/[^a-z0-9]/g, "")),
-          );
-    // What the associate named as a brand has to stay in the answer: a refine that swallows it is
-    // the more popular other brand answering a Sony question, and stays just a suggestion.
-    const brandRows = (rows: Record<string, unknown>[]) =>
-      wanted.length
-        ? rows.filter((row) => {
-            const text = adaptProduct(fromFdk(row)).product.brand.toLowerCase();
-            return wanted.every((brand) => text.includes(brand) || text.replace(/[^a-z0-9]/g, " ").includes(brand));
-          })
-        : rows;
-    const carrying = (rows: Record<string, unknown>[]) => !wanted.length || rows.length > 0;
-    // Score one product at a time: a Sony speaker plus another brand's 85-inch TV is not a Sony TV.
-    let rows = brandRows(found.items);
-    const f = narrow(found.filters, Number(found.page.item_total) || found.items.length, said);
-    if (f) {
-      const refined = await getProducts(
-        config,
-        { f, sort_on: "popular", page_size: 12, page_no: 1, page_type: "number" },
-        request,
-      ).catch(() => null);
-      // Popularity-sorted refinements replace search order only when they improve the match.
-      const refinedRows = refined ? brandRows(refined.items) : [];
-      if (refinedRows.length && carrying(refinedRows) && beats(score(refinedRows), score(rows))) rows = refinedRows;
-    }
-    const adapted = rows.map((row) => adaptProduct(fromFdk(row)).product);
-    const fits = (categoryByWords(found.filters, said) !== undefined || aboutTheWords(said, adapted)) && carrying(rows);
-    if (!fits) continue;
-    // Try every candidate; prefer the one product carrying the most of what was said, kinds first.
-    const candidateScore = score(rows);
-    if (beats(candidateScore, wonScore)) {
-      wonScore = candidateScore;
-      won = rows;
+  const price = search.max_price ? priceFilter(search.max_price) : undefined;
+  const filter = price ? { f: price } : {};
+  const found = await getProducts(config, { ...params, filters: true, ...filter }, request);
+  const keep = (rows: Row[]): Row[] => (SERVICE.test(search.q) ? rows : rows.filter((row) => !isService(row)));
+  let rows = keep(found.items);
+  let page = found.page;
+  if (sorted) {
+    // The store's sort ranks everything its loose search touched: the cheapest "oled tv" is a 24 inch
+    // LED, and the biggest discount on "iphone 18 pro" is a case. Rows that carry every word win; if
+    // none do, the most relevant rows are used instead, and a price order is applied to them here.
+    const said = search.q.toLowerCase().split(/\s+/);
+    const named = (list: Row[]): Row[] =>
+      list.filter((row) => said.every((word) => String(row.name).toLowerCase().includes(word)));
+    if (named(rows).length) rows = named(rows);
+    else {
+      const relevant = await getProducts(config, { ...params, sort_on: "popular", ...filter }, request);
+      const pool = keep(relevant.items);
+      const up = search.sort_on === "price_asc" ? 1 : search.sort_on === "price_dsc" ? -1 : 0;
+      const cost = (row: Row): number => Number(row.price?.effective?.min) || 0;
+      rows = (named(pool).length ? named(pool) : pool).sort((a, b) => (cost(a) - cost(b)) * up);
+      page = relevant.page;
     }
   }
-  // No fallback to the loose rows. They were kept only in case a later candidate answered for
-  // real; when none does, they are a heap of whatever the store matched on a word that was never
-  // a product. "Hello" returned four Asus laptops, became what the conversation was about, and
-  // every later question — phones, televisions, the iPhone 18 Pro this shop actually stocks — was
-  // answered "I only have details on laptops today". Nothing found has to be said, not substituted.
-  const items = [...(won ?? [])].sort((a, b) => {
-    const first = rowScore(a);
-    const second = rowScore(b);
-    return beats(second, first) ? 1 : beats(first, second) ? -1 : 0;
-  });
-  const adapted = items.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
+  const kind = search.kind;
+  if (kind) {
+    // "iphone 18 pro" comes back as cases and straps named after the phone. When most of what came
+    // back is not the thing asked for, the same words are asked again on the store's own shelf for it.
+    if (rows.filter((row) => carriesKind(row, kind)).length * 2 < rows.length) {
+      const shelves = shelvesOf(found.filters, kind);
+      if (shelves.length) {
+        const f = [`category:${shelves.join("||")}`, ...(price ? [price] : [])].join(":::");
+        const narrowed = await getProducts(config, { ...params, f, filters: false }, request);
+        if (narrowed.items.length) {
+          rows = keep(narrowed.items);
+          page = narrowed.page;
+        }
+      }
+    }
+    const carrying = rows.filter((row) => carriesKind(row, kind));
+    if (carrying.length) rows = carrying;
+  }
+  rows = rows.slice(0, 12);
+  const products = rows.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
 
-  // Nothing found is said, not substituted: the loose base first page is a heap of whatever the
-  // store sorted first (a fridge, a television, resQ warranty plans), and answering an iPhone
-  // question from it is how the associate was told about televisions instead.
-  if (!adapted.length) throw Error(`The catalogue matched nothing for ${JSON.stringify(asked)}`);
-
-  // Promotions for the three we would actually put in front of a customer, not for the first
-  // three of the catalogue: one television in twelve has one, so asking about the wrong three
-  // finds nothing and the pack falls back to offers this shop is not running.
-  // Five, asked at once. The endpoint is per slug, so in series this was five round trips and a
-  // reply has five seconds to arrive; in parallel it costs what one costs. Three was too few: the
-  // Sony with the wall-mount offer came fourth in its own search.
+  // getPromotionOffers is per slug, so the first five are asked at once. Each offer says which
+  // product it is on: one television in twelve has one, and it is not an offer on the rest.
   const offers = new Map<string, Record<string, unknown>>();
-  const slugs = items
-    .slice(0, 5)
-    .map((row) => (row as { slug?: string }).slug)
-    .filter((slug): slug is string => !!slug);
   const answered = await Promise.all(
-    slugs.map((slug) => getPromotionOffers(config, { slug }, request).catch(() => [])),
+    rows
+      .slice(0, 5)
+      .filter((row) => row.slug)
+      .map(async (row) => ({
+        name: String(row.name),
+        promotions: await getPromotionOffers(config, { slug: row.slug }, request).catch(() => []),
+      })),
   );
-  for (const promotion of answered.flat()) {
-    const offer = fromPromotion(promotion);
-    if (running(offer)) offers.set(String(offer.id ?? offer.title), offer);
-  }
-  // No fallback to the pack's own offers. Those are a stub's HDFC discount and exchange bonus, and
-  // this channel runs neither: an associate told "HDFC 7.5% off" on a washing machine would be
-  // quoting an offer that does not exist. Nothing running is a true answer; the stub's is a lie.
-  const pack: Pack = { ...base, products: adapted, offers: [...offers.values()] };
-  // A handful of queries per shift; this is a cap against a loop, not a cache policy.
+  for (const { name, promotions } of answered)
+    for (const promotion of promotions) {
+      const offer = fromPromotion(promotion);
+      if (!running(offer)) continue;
+      const id = String(offer.id ?? offer.title);
+      offers.set(id, { ...offer, on: [...((offers.get(id)?.on as string[]) ?? []), name] });
+    }
+
+  const pack: Pack = {
+    ...base,
+    products,
+    offers: [...offers.values()],
+    search: { ...search, total: Number(page.item_total) || 0, has_next: !!page.has_next },
+  };
+  // A cap against a loop, not a cache policy.
   if (searched.size > 64) searched.clear();
-  searched.set(asked, pack);
+  searched.set(key, { at: Date.now(), pack });
   return pack;
 }
 
-/** The pack the server serves: the live catalogue when it is configured, the file otherwise.
+/** The pack the server serves. With the catalogue configured that is no products at all, because
+ *  each turn searches for its own. The file is only for running without catalogue credentials: its
+ *  four televisions and their prices are a stub and must never reach an associate as today's data.
  *
- *  A bad key must not kill the number. It says so loudly and serves the file, because an associate
- *  with a customer in front of them needs an answer more than they need our configuration to be
- *  right. */
+ *  A bad key must not kill the number, so it says so loudly and keeps serving; every turn asks the
+ *  store again, and the model is told when the store did not answer. */
 export async function startingPack(request: typeof fetch = fetch): Promise<{ pack: Pack; source: string }> {
   const config = catalogConfig();
   const file = process.env.PACK_PATH || "data/pack.json";
   if (!config) return { pack: await loadPack(file), source: file };
   try {
-    const { pack, problems } = adaptPack(
-      (await livePack(config, JSON.parse(await readSource(file)), request)) as never,
+    const { page } = await getProducts(
+      config,
+      { page_size: 1, page_no: 1, page_type: "number", filters: false },
+      request,
     );
-    if (problems.length) throw Error(problems.join("; "));
-    return { pack, source: `live catalogue · ${pack.products.length} products` };
+    return { pack: LIVE_PACK, source: `live catalogue · ${Number(page.item_total) || 0} products` };
   } catch (error) {
-    console.error(`Live catalogue unusable, serving ${file}: ${error instanceof Error ? error.message : "unknown"}`);
-    return { pack: await loadPack(file), source: `${file} (live catalogue failed)` };
+    console.error(`Live catalogue unusable: ${error instanceof Error ? error.message : "unknown"}`);
+    return { pack: LIVE_PACK, source: "live catalogue failed, retrying every turn" };
   }
 }
 
@@ -670,7 +445,9 @@ export function allowedNumbers(pack: Pack): Set<number | string> {
     }
     // Figures inside prose, such as the "2 PM sunlight" label line, are quotable too.
     else if (typeof value === "string") {
-      for (const token of value.matchAll(/\d+(?:\.\d+)?/g)) allowed.add(Number(token[0]));
+      // "10,000" is ten thousand, not a 10 and a 0: the store's offer lines write it that way.
+      for (const token of value.matchAll(/\d{1,3}(?:,\d{2,3})*,\d{3}(?:\.\d+)?|\d+(?:\.\d+)?/g))
+        allowed.add(Number(token[0].replaceAll(",", "")));
       for (const pair of pairsIn(value)) allowed.add(pair);
     } else if (Array.isArray(value)) value.forEach((entry) => walk(entry, key));
     else if (value && typeof value === "object") for (const [name, entry] of Object.entries(value)) walk(entry, name);
@@ -687,6 +464,7 @@ export function allowedNumbers(pack: Pack): Set<number | string> {
     s: pack.store,
     a: pack.accessories,
     e: pack.electricity,
+    t: pack.search?.total,
   });
   // Derived totals an answer may legitimately state.
   for (const product of pack.products) {
@@ -736,34 +514,31 @@ export function allowedNumbers(pack: Pack): Set<number | string> {
   return allowed;
 }
 
-/** Facts for this home only, so the model never sees the whole catalogue as fair game. */
-export function factsFor(pack: Pack, card: HomeCard, shortlist: string[]): string {
-  const picked = shortlist.length ? pack.products.filter((product) => shortlist.includes(product.sku)) : pack.products;
-  const sized = card.distance_feet
-    ? picked.filter((product) => Math.abs(product.size_inch - recommendedInches(card.distance_feet!)) <= 12)
-    : picked;
-  // A real catalogue is thousands of lines and this goes into every prompt. The shortlist and the
-  // distance filter first; this is the backstop that keeps a turn affordable when neither has
-  // narrowed anything yet.
-  // shortcut: the first twelve, not the twelve that matter. Search the catalogue per conversation
-  // when the pack stops being one category.
+/** What the model is given: what the store returned for this turn, and how much more it holds.
+ *  stock_units is left out because the listing only says yes or no, and a 1 here came back as
+ *  "1 in stock"; a screen size and a panel are in the name where they mean anything. */
+export function factsFor(pack: Pack): string {
+  const skip = new Set(["stock_units", "size_inch", "panel", "energy", "weak_for"]);
+  // Twelve rows with every spec is 10,000 tokens a turn, and the later ones are the same thing in
+  // another colour. So the first six are in full, and the rest say what tells them apart.
+  const offerSpecs = /^(discount|offer_tag|status|bank_offer)$/;
   return JSON.stringify({
-    store: pack.store,
-    products: (sized.length ? sized : picked)
-      .slice(0, 12)
-      .map((product) => ({ ...product, in_stock: product.stock_units > 0 })),
+    ...(pack.search ? { search: pack.search } : {}),
+    products: pack.products.slice(0, 12).map((product, index) => ({
+      ...Object.fromEntries(Object.entries(product).filter(([key, value]) => !skip.has(key) && value !== "")),
+      good_for: product.good_for.slice(0, index < 6 ? 8 : 0),
+      specs:
+        index < 6
+          ? product.specs
+          : Object.fromEntries(Object.entries(product.specs).filter(([key]) => offerSpecs.test(key))),
+      in_stock: product.stock_units > 0,
+    })),
     offers: pack.offers,
-    finance: pack.finance,
-    charges: pack.charges,
-    accessories: pack.accessories,
-    electricity: pack.electricity,
-    labels: pack.labels,
-    myths: pack.myths,
-    install_requirements: pack.install_requirements,
+    // Only a file pack has these: the live one is empty, and an empty list is not worth the tokens.
+    ...Object.fromEntries(
+      (["finance", "charges", "accessories", "labels", "myths", "install_requirements"] as const)
+        .filter((key) => Object.keys(pack[key] ?? {}).length)
+        .map((key) => [key, pack[key]]),
+    ),
   });
-}
-
-/** Industry rule of thumb for 4K: screen diagonal is about 1.6 times the viewing distance. */
-export function recommendedInches(distanceFeet: number): number {
-  return Math.round((distanceFeet * 12) / 1.6);
 }

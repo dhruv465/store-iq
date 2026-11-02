@@ -77,10 +77,9 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
     brand: text(need("brand")) ?? "",
     name: text(need("name")) ?? "",
     // Not required: the live catalogue sells washing machines and phones, and a screen size is a
-    // fact about televisions. Zero means "no screen", which is what needsSizing() reads to decide
-    // whether the viewing distance is worth asking about.
+    // fact about televisions. Zero means "no screen".
     size_inch: figure(pick(row, FIELDS.size_inch!)) ?? 0,
-    panel: text(pick(row, FIELDS.panel!)) ?? "LED",
+    panel: text(pick(row, FIELDS.panel!)) ?? "",
     mrp_rupees: mrp ?? 0,
     price_rupees: price ?? 0,
     stock_units: Math.trunc(figure(need("stock_units")) ?? 0),
@@ -88,9 +87,7 @@ export function adaptProduct(row: Record<string, unknown>): { product: Product; 
     categories: list(row, ["categories", "category", "department", "l3_categories"]),
     good_for: list(row, ["good_for", "best_for", "strengths"]),
     weak_for: list(row, ["weak_for", "not_for", "limitations"]),
-    // Without a cue the demonstrate step has nothing to show, and it is 2 of the judges' 14.
-    demo_cue:
-      text(pick(row, ["demo_cue", "demo", "demonstration"])) ?? "Show it beside the set next to it, on the same scene.",
+    demo_cue: text(pick(row, ["demo_cue", "demo", "demonstration"])) ?? "",
     energy: {
       typical_watts: watts ?? 0,
       standby_watts: figure((row.energy as any)?.standby_watts) ?? 0,
@@ -129,15 +126,46 @@ function inches(name: unknown): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-/** The highlight worth standing in front of. The first one is often a list — "Apps Supported :
- *  Prime Video,Netflix,YouTube,Apple TV,Google TV" — which is a specification, not a thing to
- *  show. Fewest commas wins, then the shortest: "TV Operating System: Google TV". */
-function showable(highlights: unknown): string | undefined {
-  const lines = (Array.isArray(highlights) ? highlights : [])
-    .map((line) => String(line).replace(/\s+/g, " ").trim())
-    .filter((line) => line.length > 3 && line.length < 90);
-  return lines.sort((a, b) => (a.split(",").length - b.split(",").length) * 100 + (a.length - b.length))[0];
+/** What a row says about its own offers, in `_custom_meta`. Figures are rounded, because the
+ *  guard checks a reply's numbers against these and nobody says "Rs 26315.46".
+ *
+ *  pg_offer is the bank's. Its subtitle is "<monthly>/<months>", and monthly x months + discount
+ *  comes to the price on every row checked, so that is what it means. Tag1 is the store's own
+ *  offer line ("12.5% Upto 10,000 HDFC/ICICI CC*"), Tag2 its status ("PRE_ORDER"). */
+function rowOffers(row: Record<string, any>): Record<string, string> {
+  const meta = new Map<string, string>(
+    (Array.isArray(row._custom_meta) ? row._custom_meta : []).map((entry: any) => [entry?.key, String(entry?.value)]),
+  );
+  const said = (key: string): string | undefined => {
+    const value = meta.get(key);
+    return value && value !== "NONE" && value !== "null" ? value : undefined;
+  };
+  const found: Record<string, string> = {};
+  if (typeof row.discount === "string" && row.discount.trim()) found.discount = row.discount.trim();
+  if (said("Tag1")) found.offer_tag = said("Tag1")!;
+  if (said("Tag2")) found.status = said("Tag2")!.replace(/_/g, " ").toLowerCase();
+  try {
+    const bank = JSON.parse(said("pg_offer") ?? "null") as {
+      bank?: string;
+      subtitle?: string;
+      discount?: string;
+    } | null;
+    const saving = Math.round(Number(bank?.discount) || 0);
+    const emi = String(bank?.subtitle ?? "").match(/^([\d.]+)\/(\d+)$/);
+    if (bank?.bank && emi) {
+      const monthly = Math.round(Number(emi[1]));
+      const months = Number(emi[2]);
+      found.bank_offer = `${bank.bank}: ${months} months at Rs ${monthly} a month, Rs ${monthly * months} in all, saves Rs ${saving}`;
+    } else if (bank?.bank && saving) found.bank_offer = `${bank.bank} card: saves Rs ${saving}`;
+  } catch {
+    // A pg_offer that is not JSON is not an offer anyone can quote.
+  }
+  return found;
 }
+
+/** The customer-care address and phone are on every row. They are not product facts, and contact
+ *  details off this platform are not ours to hand out. */
+const NOT_SPECS = /^(customer-care|manufacturer|importer|packer|marketed|price-zmr|primary_color_hex|net-quantity)/;
 
 export function fromFdk(row: Record<string, any>): Record<string, unknown> {
   const price = row.price ?? {};
@@ -154,23 +182,17 @@ export function fromFdk(row: Record<string, any>): Record<string, unknown> {
     mrp_rupees: price.marked?.min ?? price.marked?.max,
     price_rupees: price.effective?.min ?? price.selling?.min ?? price.effective?.max,
     stock_units: row.sellable === false ? 0 : 1,
-    // The shop's own highlights, plus who it says the thing is for — a washing machine carries
-    // `recommended-for: Large Families`, which is the family question answered by the catalogue.
+    // The shop's own highlights, plus who it says the thing is for: `recommended-for: Large Families`.
     good_for: [...(Array.isArray(row.highlights) ? row.highlights : []), attributes["recommended-for"]]
       .filter(Boolean)
       .map(String),
-    // Section 6.5 wants a difference to SHOW, and no catalogue has one. The nearest honest thing
-    // is the shop's own first highlight — "Resolution: 4K Ultra HD", "5 Star Rating" — put in
-    // front of the set beside it. Written by the merchandiser, not by us, and not a figure.
-    ...(showable(row.highlights)
-      ? { demo_cue: `Show them ${showable(row.highlights)}, beside the one next to it.` }
-      : {}),
     // "421.25 W" on a television, which is what the running-cost answer is arithmetic over.
     typical_watts: figure(attributes.power_consumption ?? attributes["power-consumption"]),
     // Two things the listing carries outside the attributes bag that an associate is asked about
     // on the floor, so they belong with the specs the answers are drawn from.
     specs: {
-      ...attributes,
+      ...Object.fromEntries(Object.entries(attributes).filter(([key]) => !NOT_SPECS.test(key))),
+      ...rowOffers(row),
       ...(row.country_of_origin ? { country_of_origin: row.country_of_origin } : {}),
       ...(typeof row.rating === "number" ? { rating: row.rating } : {}),
     },

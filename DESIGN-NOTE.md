@@ -23,40 +23,35 @@ number.
 3. **Nothing is sent without consent.** The summary waits for a tap, and changing the product
    withdraws consent again.
 
-## The model talks; the code owns every figure
+## The model talks; the code checks every figure
 
-The manager answers in its own words and asks whatever this customer makes worth asking. There is
-no written list of questions: one existed, six in order with their buttons, and a written list can
-only ever be about a television.
+The associate says what they want in their own words. The model turns that into one search of the
+live store, the store's rows are all the model is given, and the model writes the reply. There is no
+written list of questions and no written product sheet: both were written about a television, and
+both answered about one when the customer wanted an iPhone.
 
-Everything that states a number is composed in code, in **1–15 ms**: the product sheet, a claim or
-objection matched to the pack's own confirm/correct pair, three options ranked by scored rules over
-distance, light, console, sport and sound, the itemised total, the net payable after offers, the
-saving off MRP, the finance terms, the brief and the score. A figure with a unit is checked as a
-pair in all three languages, so `2 year` passes and `1 year` does not, however many 1s the pack
-holds. That division is the design: the model is never the source of a figure, the code is never
-the source of a question.
+Every figure in a reply is then checked against what the store returned this turn. A figure with a
+unit is checked as a pair in all three languages, so `2 year` passes and `1 year` does not, however
+many 1s the data holds. A refused figure gets one retry that names it; what is refused twice does not
+go out. That division is the design: the model writes, the store is the source, the code refuses.
 
-A model is needed for two things: a **voice note** phrased beyond the extractor, and the **text on
-a label photo** — and there it only reads the tag, in one small call. The answer is then written
-from the pack, so a misread model number cannot become an invented price.
+What the code still composes, in **1–15 ms**, is what is a tap or arithmetic: the consent draft, the
+itemised total, the card read-back, the brief and the score.
 
-## The close, in the pack's own figures
+## The close, on real offers
 
-The visits found we open with price and then have nothing left to say. So the close says what an
-associate usually improvises, each line a fact from the pack: the net payable with the saving off
-MRP; one accessory the card justifies, taken by tap and never offered twice; the three objections
-that lose the sale, answered in the same confirm-then-correct shape as a spec myth, in English,
-Hinglish and Devanagari; and an option over the budget kept on the card with the gap stated. With
-the home unknown, none of these lines exist.
+The visits found we open with price and then have nothing left to say. Real offers come with each
+row: the bank's no-cost EMI and its saving, the offer line, a free gift from the promotion. They stay
+out of the reply until the associate asks or a difference has been shown. Nothing reaches a customer
+without a tap.
 
 ## Built for the floor
 
-At most three lines and three buttons, enforced in the renderer rather than asked of a prompt. Every
-answer carries its reason. The associate is handed words to say — `Ask: "How far will you sit from
-the TV?"` — never instructions about selling, and Store IQ never addresses the customer. Replies go
-only to numbers that messaged first, inside Meta's 24-hour window. The home card is
-interaction-scoped, so the next customer never inherits the last one's home. The associate sets the
+At most three lines and three buttons, enforced in the renderer rather than asked of a prompt. The
+associate is handed words to say — `Ask: "Which colour would you like?"` — never instructions about
+selling, and Store IQ never addresses the customer. Replies go
+only to numbers that messaged first, inside Meta's 24-hour window. What is noted about a
+customer is interaction-scoped, so the next customer never inherits the last one's. The associate sets the
 starting level; nothing is inferred from appearance.
 
 ## Extra points

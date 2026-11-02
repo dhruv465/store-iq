@@ -46,34 +46,12 @@ test("the review score speaks the associate's language", () => {
 
 test("a missing phrase falls back to English rather than breaking", () => {
   assert.equal(t("mr", "a.key.that.does.not.exist"), "a.key.that.does.not.exist");
-  assert.equal(t("hi", "rec.show"), "दिखाइए");
+  assert.match(t("hi", "guard.figure"), /[\u0900-\u097F]/);
 });
 
 test("figures and product names are never translated", () => {
   assert.match(t("hi", "ft.read", { name: "TCL 55 inch C6K", total: "56,988" }), /TCL 55 inch C6K/);
   assert.match(t("mr", "ft.read", { name: "TCL 55 inch C6K", total: "56,988" }), /Rs 56,988/);
-});
-
-test("a Hindi sentence fills the card without a model", async () => {
-  const { extractCard } = await import("../server/src/extract.js");
-  const card = extractCard("ग्राहक को हॉल के लिए टीवी चाहिए, तीन मीटर दूर बैठते हैं, चार लोग हैं, क्रिकेट देखते हैं");
-  assert.equal(card.room, "hall");
-  assert.equal(card.distance_m, 3);
-  assert.equal(card.family, "4 people");
-  assert.deepEqual(card.content, ["cricket"]);
-});
-
-test("a Marathi sentence fills the card too", async () => {
-  const { extractCard } = await import("../server/src/extract.js");
-  const card = extractCard("दिवाणखान्यात भिंतीवर लावायचा आहे, खूप ऊन येतं, चार माणसं आहेत");
-  assert.equal(card.mount, "wall");
-  assert.equal(card.light, "bright afternoon sun");
-  assert.equal(card.family, "4 people");
-});
-
-test("Devanagari with nothing in it still yields nothing", async () => {
-  const { extractCard } = await import("../server/src/extract.js");
-  assert.deepEqual(extractCard("नमस्ते"), {});
 });
 
 test("card values are spoken in the associate's language, not just the frame", async () => {
@@ -106,22 +84,6 @@ test("free-text card values pass through rather than being mistranslated", async
   session.language = "hi";
   session.card = { room: "hall", distance_m: 3, replacing: "old plasma from 2011", content: ["cricket"] };
   assert.match(cardSummary(session).text, /old plasma from 2011/);
-});
-
-test("a demonstration cue is spoken in the associate's language when the pack has one", async () => {
-  const { loadPack } = await import("../server/src/pack.js");
-  const { cueFor, recommendReply } = await import("../server/src/recommend.js");
-  const pack = await loadPack("data/pack.json");
-  const tcl = pack.products.find((p) => p.sku === "TCL-55C6KS")!;
-  assert.match(cueFor(tcl, "hi"), /क्रिकेट क्लिप/);
-  assert.match(cueFor(tcl, "mr"), /चेंडू स्पष्ट/);
-  assert.match(cueFor(tcl, "en"), /Cricket clip/);
-  const { demo_cue_hi: _dropped, ...withoutHindi } = tcl;
-  assert.equal(cueFor(withoutHindi, "hi"), tcl.demo_cue);
-  assert.doesNotMatch(
-    recommendReply(pack, { distance_feet: 8, light: "bright", content: ["cricket"] }, "hi").text,
-    /Show:/,
-  );
 });
 
 test("the review's advice is spoken in the associate's language too", () => {

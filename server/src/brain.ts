@@ -1,22 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 import {
-  aboutTheWords,
   allowedNumbers,
   canonUnit,
   factsFor,
   pairsIn,
-  recommendedInches,
+  readSearch,
   searchPack,
   spellOut,
-  words,
   type Pack,
+  type Search,
 } from "./pack.js";
+import { catalogConfig } from "./catalog.js";
 import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "./fal.js";
-import { recommendReply } from "./recommend.js";
-import { matchObjection, looksLikeAClaim, matchMyth, validateReply } from "./validate.js";
-import { findProduct, productReply, translateSpec } from "./product.js";
-import { asksSomethingSpecific, asksWhatWeHave, greetingReply, inStockReply, intentOf } from "./ask.js";
+import { greetingReply, isGreeting } from "./ask.js";
 import {
   endVisitLog,
   newVisitReference,
@@ -27,24 +24,19 @@ import {
   wantsVisitLog,
   worthFiling,
 } from "./visit.js";
-import { describe, extractCard } from "./extract.js";
 import { askedToSwitchLanguage, languageFrom, t, type Lang } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import {
   briefAnswer,
   cardSummary,
-  financeReply,
   followThrough,
-  itemisedTotal,
   reviewReply,
   shiftBrief,
   siteNeeds,
   wantsBrief,
-  wantsFinance,
   wantsFollowThrough,
   newCustomerRest,
   wantsNewCustomer,
-  wantsRecommend,
   wantsReview,
 } from "./steps.js";
 import type { Event, Reply, Session, Step } from "./types.js";
@@ -52,29 +44,42 @@ import { STEPS } from "./types.js";
 
 const SYSTEM = `You are Store IQ. Think of yourself as the floor manager of a Reliance Digital store, on WhatsApp. The person messaging you is one of your associates, on the shop floor, holding their phone in one hand.
 
-They come to you for whatever they do not know. Sometimes that is a customer standing in front of them. Sometimes it is a question about a product, a price, an offer, what arrived today, or what to say to someone who is wavering. Sometimes they are just starting their shift and say hello. Answer whichever it is, like a manager who knows the floor — not like a form.
+They come to you for whatever they do not know. Sometimes that is a customer standing in front of them. Sometimes it is a question about a product, a price, an offer, what is available, or what to say to someone who is wavering. Sometimes they are just starting their shift and say hello. Answer whichever it is, like a manager who knows the floor — not like a form.
+
+FACTS is what the live Reliance Digital catalogue returned just now for what they said. You are connected to it. Never say you have no access, no catalogue, no live data or no system.
 
 How to be:
 - Talk to the associate the way a good manager talks: short, plain, direct, no greeting rituals and no selling at them. If they say hello, ask what is going on with them, the way you would in the aisle.
-- Answer the question they actually asked. Do not change the subject to a questionnaire.
-- A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is in stock, what the spec is, whether an offer is running. Then, if it helps, one question. Never answer a direct question with only a question. "Any offer on the iPhone 18 Pro?" is answered about the iPhone 18 Pro, not with "which model?" when FACTS already shows you which ones there are.
-- If FACTS lists no offer on what they asked about, the answer is that none is running on it today. Say that plainly. Never mention a bank offer, an exchange, an EMI or any other discount that is not in FACTS — not even as something you could go and check. An offer you have not been given does not exist.
-- Ask only about things that make sense for what they are buying. A phone has no viewing distance, no wall mount and no room; a washing machine has no screen size. One question at a time, and stop asking as soon as you have enough to be useful: an associate with a customer who has decided does not want five more questions.
-- When they are with a customer and have told you about them, the order that works is: learn the home, correct a wrong belief kindly, turn a spec into something about this home, show three options with one reason and one difference each, give the full cost charge by charge, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
-- Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "How far will you sit from the TV?"
+- Answer the question they actually asked, about the exact thing they asked about. The search is loose, so FACTS can hold neighbours of what they named: an iPhone 18 Pro is not an iPhone 18 Pro Max, and a case is not a phone. If what they named is in FACTS, talk about that. If it is not, say plainly that this one is not coming up, set "unknown" true, and only then name the nearest thing, as a different product.
+- A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked what there is, which are good, to show something, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
+- A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets the price, whether it is available or on pre-order, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
+- Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, and stop as soon as you have enough to be useful.
+- With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
+- Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- Your reason line is for the associate, about the floor: why this question, why this set, why now. Never about yourself, your FACTS, your rules or what you are designed to do.
+- Offers are in FACTS in three places: a product's specs.bank_offer, specs.offer_tag and specs.discount, and the "offers" list, which says which products each one is "on". If none of those has one for the thing asked about, the answer is that none is showing on it today. Say that plainly. Never mention an offer, an exchange or an EMI that is not in FACTS, not even as something you could go and check.
 
 Hard rules, never bent:
-- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. Use only the FACTS given to you. If it is not there, say you do not have it and tell them who does — the shelf tag, the ASM, the service desk. "I do not have today's target" is a real answer and a good one. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
-- Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not fill in a customer's home from it, and do not steer it back to a product.
-- Never OPEN offers, discounts, exchange or finance yourself before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them — the real offer out of FACTS, or that none is running on it today. Refusing a question you were asked is not coaching.
+- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. FACTS says whether something is available (in_stock), not how many: never state a number of units. A feature FACTS does not mention is not a feature the product lacks: say it is not listed, never "it does not have one". If it is not in FACTS, say this is not showing and tell them who has it — the shelf tag, the ASM, the service desk. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
+- Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not file anything about a customer from it, do not steer it back to a product, and "unknown" stays false.
+- Never OPEN offers, discounts, exchange or finance yourself before you know what the customer needs and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them from FACTS. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
-- At most 2 short lines plus your reason, except three options which take three lines. At most 3 buttons, 20 characters each. They read this at a glance, out loud, with a customer waiting.
-- A button is an answer to the question you just asked, or a thing worth doing next — a product to pick, a card value, "show the card", "find out for me". NEVER a specification, a price, or a fact you have just stated: "2 TB storage" and "48 MP camera" are nothing the associate can do, and tapping one only asks you to repeat yourself. If you asked no question and there is nothing to do, send no buttons at all. Buttons must also be different from each other: two that lead to the same answer are one button.
-- A button answering something about the customer's home MUST have the id "card:<field>:<value>", for example "card:content:sports", "card:mount:wall", "card:distance_feet:8". Fields: room, distance_feet, light, mount, content, devices, family, internet, budget_rupees, start_level. Anything else gets a plain id.
+- At most 2 short lines, except three options which take three lines. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
+- A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
+
+/** One search of the store out of what was said. Understanding the message is the model's job: a
+ *  list of filler words was what searched "current data" for a question about an iPhone. */
+const SEARCH_SYSTEM = `You turn a message from a Reliance Digital store associate into one search of the store's product catalogue. You write no reply to anyone.
+
+q is the words of the product only: brand, model, size, capacity, variant, as the store would name it, in English. "iphone 18 pro 256 gb", "sony 85 inch tv", "samsung double door fridge", "front load washing machine". The store searches product names, not sentences, so words like want, buy, price, offer, stock, current, latest, today, customer and data never go in q. Keep every word that narrows the product: leaving out "256 gb" finds the wrong one.
+kind is what the thing is, as one plain singular noun a shop would use: phone, television, refrigerator, washing machine, air conditioner, laptop, tablet, watch, soundbar. It is null if the message does not say.
+sort_on is "price_asc" only when they ask for the cheapest, "price_dsc" only for the most expensive, "discount_dsc" only for which has the biggest discount, "latest" only for the newest, otherwise null. "What do they cost", "what is the price", "any offers on it" and "is there a discount" are not any of those: null.
+max_price is a budget in rupees they stated for this product, otherwise null.
+page_no is only for asking to see more of the same search: the last page_no plus one.
+
+LAST SEARCH is what the conversation is on. A message about the same thing — "it", "this one", its price, colours, warranty, offers — repeats LAST SEARCH exactly. A message that narrows it ("the 512 GB one", "the silver one") adds those words to its q. What the customer will use it for or wants from it ("gaming", "good camera", "for my mother") is not in a product's name, so it never goes in q: that message repeats LAST SEARCH too. A message naming a different product is a new search. A message that is not about any product, and has no LAST SEARCH to stay on, has q null. Hindi, Marathi and Hinglish are understood the same way.`;
 
 export type Decision = {
   step: Step;
@@ -83,38 +88,28 @@ export type Decision = {
   demonstrated: boolean;
   lines: string[];
   buttons: { id: string; title: string }[];
-  reason: string;
   /** Set when the answer is not in the pack. A manager who does not know says they will find out,
    *  so the reply carries the button that puts the question to a human. */
   unknown?: boolean;
+  objection?: string | null;
 };
 
 const schema = {
   type: "OBJECT",
   // "unknown" is required or the model simply leaves it out: it said "I do not have that"
   // in prose and reported nothing, so no human was ever offered.
-  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "reason", "unknown"],
+  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "unknown"],
   properties: {
     step: { type: "STRING", enum: [...STEPS] },
     card: {
       type: "OBJECT",
       properties: {
-        room: { type: "STRING", nullable: true },
-        distance_feet: { type: "NUMBER", nullable: true },
-        light: { type: "STRING", nullable: true },
-        mount: { type: "STRING", nullable: true },
-        content: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
-        devices: { type: "ARRAY", nullable: true, items: { type: "STRING" } },
-        family: { type: "STRING", nullable: true },
-        internet: { type: "STRING", nullable: true },
         budget_rupees: { type: "NUMBER", nullable: true },
-        start_level: { type: "STRING", nullable: true },
-        // A television's home has nine named fields. Everything else this product needs goes
-        // here, named by the model: capacity, loading type, covered balcony, water pressure.
         facts: {
           type: "ARRAY",
           nullable: true,
-          description: "anything that matters for THIS product and has no field above",
+          description:
+            "what the customer said they need from this product, such as main use or capacity. Not the product they named, not its colour or storage.",
           items: {
             type: "OBJECT",
             required: ["name", "value"],
@@ -130,7 +125,7 @@ const schema = {
     },
     demonstrated: {
       type: "BOOLEAN",
-      description: "true when this turn turned a spec into a line about this home",
+      description: "true when this turn turned a spec into a line about this customer's use",
     },
     lines: {
       type: "ARRAY",
@@ -145,11 +140,27 @@ const schema = {
         properties: { id: { type: "STRING" }, title: { type: "STRING" } },
       },
     },
-    reason: { type: "STRING", description: "one short line: why this answer" },
     unknown: {
       type: "BOOLEAN",
       description: "true when FACTS do not hold what they asked for, so a human has to answer it",
     },
+    objection: {
+      type: "STRING",
+      nullable: true,
+      description: "a doubt or wrong belief the customer raised this turn, in plain words, for the manager's report",
+    },
+  },
+} as const;
+
+const searchSchema = {
+  type: "OBJECT",
+  required: ["q"],
+  properties: {
+    q: { type: "STRING", nullable: true },
+    kind: { type: "STRING", nullable: true },
+    sort_on: { type: "STRING", nullable: true },
+    max_price: { type: "NUMBER", nullable: true },
+    page_no: { type: "NUMBER", nullable: true },
   },
 } as const;
 
@@ -329,7 +340,6 @@ const OFFER_WORDS =
 /** A figure beside the offer word is the difference between quoting a deal and declining to. */
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
 
-/** Fires only when a reply would put a number on an offer before the home has been earned. */
 /** Whether the associate asked about an offer in their own words. A question deserves its answer:
  *  the gate exists to stop the product LEADING with price, which the store visits found in 6 of 6
  *  conversations, not to refuse a manager who was asked outright. Decided by the user 2 Nov 2026,
@@ -349,7 +359,6 @@ export function offerLeaked(text: string, assessed: boolean, demonstrated: boole
   return !(assessed && demonstrated) && OFFER_WORDS.test(text) && A_FIGURE.test(text);
 }
 
-/** Four home facts, including how far they sit, is enough to stop talking about price first. */
 /** "Not sure" is an answer, and it is recorded, but it is not a fact about the home: a field the
  *  customer could not answer must not count towards having assessed it. */
 export const NOT_STATED = "not stated";
@@ -359,21 +368,7 @@ export function stated(value: unknown): boolean {
   return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
 }
 
-/** Viewing distance sizes a screen. It means nothing for a washing machine, so it is required
- *  only where the thing being sold has a screen at all — which the catalogue says by carrying a
- *  size in inches. Six hardcoded questions could not know the difference; this can. */
-export function needsSizing(pack: Pack, session?: Session): boolean {
-  const shortlisted = session?.shortlist?.length
-    ? pack.products.filter((product) => session.shortlist.includes(product.sku))
-    : pack.products;
-  return shortlisted.some((product) => product.size_inch > 0);
-}
-
-export function assessedFor(pack: Pack, session: Session): boolean {
-  return isAssessed(session.card, needsSizing(pack, session));
-}
-
-export function isAssessed(card: Session["card"], sizing = true): boolean {
+export function isAssessed(card: Session["card"]): boolean {
   const filled = [
     "room",
     "distance_m",
@@ -388,10 +383,7 @@ export function isAssessed(card: Session["card"], sizing = true): boolean {
   ].filter((key) => stated((card as Record<string, unknown>)[key]));
   // A fact the model had to name itself counts as much as one we thought of in advance.
   filled.push(...Object.keys(card.facts ?? {}));
-  // How far they sit is what sizes the screen, so "not sure" there leaves the home unassessed —
-  // where a screen is what is being sold.
-  const hasDistance = typeof card.distance_m === "number" || typeof card.distance_feet === "number";
-  return filled.length >= 4 && (hasDistance || !sizing);
+  return filled.length >= 4;
 }
 
 /** Every number a text states, as exact tokens. */
@@ -506,7 +498,10 @@ export function floor(reply: Reply): Reply {
   const reason = lines.findLast((line) => line.startsWith("↳"));
   const said = lines.filter((line) => !line.startsWith("↳"));
   const kept = reason ? [...said.slice(0, 2), reason] : said.slice(0, 3);
-  const buttons = (reply.buttons ?? []).slice(0, 3);
+  // WhatsApp refuses two buttons with one title, and three Apple phones are three "Apple"s.
+  const buttons = (reply.buttons ?? [])
+    .filter((button, index, all) => all.findIndex((other) => other.title === button.title) === index)
+    .slice(0, 3);
   // Formatted after the trim, never before: the reason is found by its ↳, and an italic marker in
   // front of it hid the line from the rule that exists to protect it.
   //
@@ -519,25 +514,39 @@ export function floor(reply: Reply): Reply {
   });
 }
 
+/** The ids the code acts on. Anything else a model writes is just words. */
+const DOES_SOMETHING = /^(select:[A-Za-z0-9_-]+|ask_expert|new_customer|follow_through|review)$/;
+
 export function render(decision: Decision): Reply {
-  const options = decision.step === "recommend";
+  // Three, whatever step the model named: it says three TVs, names two, and the step was "complete".
   const lines = (decision.lines ?? [])
     .map((line) => moneySafe(line).trim())
     .filter(Boolean)
-    .slice(0, options ? 3 : 2);
-  const reason = moneySafe(decision.reason ?? "").trim();
-  // A reason on its own is not an answer. The model sometimes returns only its justification —
-  // "the viewing distance is the most important factor" — and an associate reading that alone has
-  // been told nothing to do, so the fallback supplies the missing instruction instead.
+    .slice(0, 3);
   const said = lines.length ? lines : ["Tell me what the customer said and I will give you the next question."];
-  const text = [...said, options || !reason ? "" : `↳ ${reason}`].filter(Boolean).join("\n").slice(0, 1000);
-  const buttons = decision.buttons
-    .filter((button) => button?.id?.trim() && button?.title?.trim())
+  const text = said.join("\n").slice(0, 1000);
+  // A tap carries no words, so a button the model wrote carries its own title as what was said: the
+  // next turn reads it like typing, and nothing has to match an id the model made up. That makes a
+  // cut title a different sentence ("What will they use"), so only a select button is ever cut, and
+  // on a word, because "Haier 9 Kg (Rs 39,97" is what cutting anywhere else looks like.
+  const buttons = (decision.buttons ?? [])
     .slice(0, 3)
-    .map((button) => ({
-      id: button.id.trim().slice(0, 256),
-      title: button.title.trim().slice(0, 20),
-    }));
+    .map((button) => {
+      const clean = String(button?.title ?? "")
+        .replace(/\(?\bRs\.?\s?[\d,]+\)?/g, "")
+        .trim();
+      const id = String(button?.id ?? "").trim();
+      const acts = DOES_SOMETHING.test(id);
+      const title =
+        acts && clean.length > 20
+          ? clean
+              .slice(0, 21)
+              .replace(/\s+\S*$/, "")
+              .slice(0, 20)
+          : clean;
+      return { id: acts ? id : `say:${title}`, title };
+    })
+    .filter((button) => button.title && button.title.length <= 20);
   const unique = buttons.filter(
     (button, index) =>
       buttons.findIndex((other) => other.id === button.id) === index &&
@@ -551,118 +560,30 @@ export function render(decision: Decision): Reply {
 
 const CARD_FIELDS = new Set([
   "room",
-  "distance_m",
-  "distance_feet",
   "space",
-  "light",
-  "mount",
-  "content",
-  "devices",
   "family",
-  "internet",
   "budget_rupees",
-  "start_level",
-  "replacing",
   "priorities",
   "site_constraints",
+  "replacing",
 ]);
-/** Card fields that only mean something in front of a screen. An iPhone conversation was asked
- *  what room it was for and how far they would sit; a washing machine was asked the same. Telling
- *  the model not to was not enough — it still filled them — so a field that does not apply to what
- *  is being sold is dropped on the way in, whatever the model says. */
-const SCREEN_ONLY = ["distance_m", "distance_feet", "mount", "light"] as const;
 
-export function fieldApplies(field: string, pack: Pack, session?: Session): boolean {
-  return !SCREEN_ONLY.includes(field as (typeof SCREEN_ONLY)[number]) || needsSizing(pack, session);
-}
-
-const NUMERIC_FIELDS = new Set(["distance_m", "distance_feet", "budget_rupees"]);
-const LIST_FIELDS = new Set(["content", "devices", "priorities", "site_constraints"]);
-
-/** A tap already carries its answer, so the card is filled in code and never depends on the model repeating it. */
-export function applyAction(session: Session, action: string | undefined): string | undefined {
-  const match = action?.match(/^card:([a-z_]+):(.+)$/);
-  if (!match) return undefined;
-  const [, field, raw] = match as unknown as [string, string, string];
-  if (!CARD_FIELDS.has(field)) return undefined;
-  const value = raw.trim().slice(0, 60);
-  if (!value) return undefined;
-  if (NUMERIC_FIELDS.has(field)) {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return undefined;
-    (session.card as Record<string, unknown>)[field] = number;
-  } else if (LIST_FIELDS.has(field)) {
-    const list = Array.isArray(session.card[field as "content"]) ? [...session.card[field as "content"]!] : [];
-    if (!list.includes(value)) list.push(value);
-    (session.card as Record<string, unknown>)[field] = list.slice(0, 6);
-  } else (session.card as Record<string, unknown>)[field] = value;
-  return `${field} = ${value}`;
-}
-
-/** Devanagari in the associate's own words is the only thing that selects Hindi. */
-export function languageOf(text: string | undefined): "en" | "hi" {
-  return text && /[\u0900-\u097F]/.test(text) ? "hi" : "en";
-}
-
-function prompt(event: Event, session: Session, pack: Pack, tapped?: string, notes: string[] = []): string {
-  const facts = factsFor(pack, session.card, session.shortlist);
-  // The arithmetic the model should not do in its head, and only where a screen is being sold.
-  // The sizes we can actually hand over, beside the rule of thumb. Told only the rule, it answered
-  // a real associate "6 फीट की दूरी के लिए 43 इंच का टीवी सही रहेगा" — and this shop has no 43.
-  const sizes = [...new Set(pack.products.filter((p) => p.stock_units > 0).map((p) => p.size_inch))]
-    .sort((a, b) => a - b)
-    .join(", ");
-  const sizeHint = !needsSizing(pack, session)
-    ? ""
-    : [
-        session.card.distance_feet
-          ? `At ${session.card.distance_feet} feet, about ${recommendedInches(session.card.distance_feet)} inch fits.`
-          : "Viewing distance is still unknown, and it is what sizes a screen.",
-        sizes ? `In stock today, in inches: ${sizes}. Never name a size that is not on that list.` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-  // What is not on the card yet. Not an order to follow and not a question: the manager picks
-  // which of these is worth asking this customer, and whether to ask anything at all.
-  const card = session.card as Record<string, unknown>;
-  // Feet or metres, it is one fact: listing "distance_feet" as blank after they said three metres
-  // is how you ask somebody the same thing twice.
-  // A television's blanks are not a washing machine's: asking after the mount and the set-top box
-  // is noise once the thing being sold has no screen. The generic half is always worth having.
-  const screenGaps = ["distance", "light", "mount", "content", "devices"];
-  const gaps = ["room", "distance", "light", "mount", "content", "devices", "family", "internet", "budget_rupees"]
-    .filter((field) => needsSizing(pack, session) || !screenGaps.includes(field))
-    .filter((field) =>
-      field === "distance" ? !stated(card.distance_feet) && !stated(card.distance_m) : !stated(card[field]),
-    )
-    .join(", ");
-  // Named, so the model does not spend a turn asking something the code would throw away.
-  const notThisProduct = needsSizing(pack, session)
-    ? ""
-    : "NOT ABOUT WHAT THEY ARE BUYING — never ask these and never fill them: how far they sit, the wall mount, the light in the room. This has no screen.";
-  const gate =
-    assessedFor(pack, session) && session.demonstrated
-      ? "The home is assessed and a spec has been demonstrated, so offers and finance are open."
-      : "The home is NOT yet assessed or nothing has been demonstrated. Do not mention offers, discounts, exchange or finance.";
+function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []): string {
+  const gate = askedAboutOffers(event.text)
+    ? "They asked about offers or finance outright, so answer it from FACTS."
+    : session.assessed && session.demonstrated
+      ? "You know what they need and a spec has been demonstrated, so offers and finance are open."
+      : "Do not bring up offers, discounts, exchange or finance yourself. A price is fine.";
+  const picked = session.selection && pack.products.find((product) => product.sku === session.selection?.sku);
   return [
-    `FACTS (the only source of prices, offers, stock, finance and specs):\n${facts}`,
-    `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}`,
-    `HOME CARD SO FAR:\n${JSON.stringify(session.card)}`,
+    `FACTS (the only source of prices, offers, availability, finance and specs):\n${factsFor(pack)}`,
+    Object.keys(pack.shift_brief ?? {}).length ? `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}` : "",
+    Object.keys(session.card).length ? `WHAT THE CUSTOMER HAS SAID:\n${JSON.stringify(session.card)}` : "",
+    picked ? `THEY HAVE PICKED: ${picked.name}.` : "",
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
-    sizeHint,
-    // Once they have confirmed the card the blanks stop being the point: a manager who has been
-    // told enough moves on. Listing them had it asking about the home internet after the card was
-    // agreed, with the customer standing there waiting to be shown a television.
-    session.card_confirmed
-      ? "The card is confirmed. Do not go back to gathering."
-      : gaps
-        ? `STILL BLANK ON THE CARD: ${gaps}`
-        : "The card is full.",
-    notThisProduct,
     gate,
-    // What the code knows and the model does not: a fact just filed, a gate just hit, a tap. The
-    // questions used to be written here in a fixed list of six, which is a questionnaire with a
-    // chat window around it. The manager asks; this only says what has just happened.
+    // What the code knows and the model does not: a gate just hit, a tap, a search that came back
+    // empty. Nothing in here is a question; the manager asks.
     notes.length ? `JUST NOW:\n- ${notes.join("\n- ")}` : "",
     session.language === "hi"
       ? "The associate is writing in Hindi. Answer in Hindi."
@@ -673,17 +594,88 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string, not
         .map((turn) => `${turn.who}: ${turn.text}`)
         .join("\n") || "none"
     }`,
-    `THE ASSOCIATE ${event.action ? `tapped: ${event.action}` : ""}${tapped ? ` (already saved to the card: ${tapped})` : ""}${event.audio ? "sent the voice note attached below" : ""}${event.image ? "sent the photo attached below" : ""}${event.text ? ` said: ${event.text}` : ""}`.trim(),
-  ].join("\n\n");
+    `THE ASSOCIATE ${event.action ? `tapped: ${event.action}` : ""}${event.text ? ` said: ${event.text}` : ""}`.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-/** The turns that are pure facts: answered from the pack, with no model request spent. */
+/** One model request, through fal when there is a key and Gemini otherwise. */
+async function askModel(
+  system: string,
+  user: string,
+  shape: Record<string, unknown>,
+  request: typeof fetch,
+): Promise<string> {
+  const fal = falConfig();
+  if (fal) {
+    // No response schema on this endpoint, so the shape is asked for in words and read tolerantly.
+    const answered = await falText(fal, `${system}\n\n${shapeInstruction(shape)}`, user, request);
+    if (process.env.STOREIQ_DEBUG === "1")
+      console.log(`fal ${fal.model} $${answered.cost.toFixed(6)} RAW>>>`, answered.text, "<<<RAW");
+    return answered.text;
+  }
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw Error("Missing GEMINI_API_KEY");
+  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+  const response = await modelRequest(
+    request,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: shape,
+          temperature: 0.3,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    },
+  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024)));
+  const written: string | undefined = body?.candidates?.[0]?.content?.parts
+    ?.map((part: any) => part?.text)
+    .filter((value: unknown) => typeof value === "string")
+    .join("");
+  if (typeof written !== "string" || !written.trim())
+    throw Error(
+      `Empty Gemini response${body?.promptFeedback?.blockReason ? `: ${body.promptFeedback.blockReason}` : ""}`,
+    );
+  if (process.env.STOREIQ_DEBUG === "1") console.log("RAW>>>", written, "<<<RAW");
+  return written;
+}
+
+/** What to ask the catalogue for this turn, or null when the message is not about a product. */
+async function searchFrom(said: string, session: Session, request: typeof fetch): Promise<Search | null> {
+  const asked = [
+    `LAST SEARCH: ${JSON.stringify(session.search ?? null)}`,
+    `RECENT TURNS:\n${
+      session.history
+        .slice(-4)
+        .map((turn) => `${turn.who}: ${turn.text}`)
+        .join("\n") || "none"
+    }`,
+    `THE ASSOCIATE SAID: ${said}`,
+  ].join("\n\n");
+  const text = await askModel(SEARCH_SYSTEM, asked, searchSchema, request);
+  try {
+    return readSearch(readJson(text));
+  } catch {
+    // An unreadable search is the same as none: the conversation stays on what it was on.
+    return session.search ?? null;
+  }
+}
+
 /** Section 7: the card is interaction-scoped. A new customer gets an empty card, never the last one's. */
 export function startInteraction(session: Session): void {
   session.interaction_id = randomUUID();
   session.interaction_started = new Date().toISOString();
   session.card = {};
-  delete session.subject;
+  delete session.search;
   session.card_confirmed = false;
   session.assessed = false;
   session.demonstrated = false;
@@ -693,11 +685,10 @@ export function startInteraction(session: Session): void {
   session.history = [];
 }
 
+/** The turns that are the code's to answer, because they are a tap or a command rather than a
+ *  question: the reset, the consent steps, the card read-back, the brief and the score. A command is
+ *  the whole message; a sentence that merely starts with "today" or "review" is a question. */
 export function deterministic(event: Event, session: Session, pack: Pack, notes: string[] = []): Reply | null {
-  const note = (line: string): null => {
-    if (!notes.includes(line)) notes.push(line);
-    return null;
-  };
   if (wantsNewCustomer(event.text, event.action)) {
     startInteraction(session);
     return { text: `${t(session.language, "newcustomer")}\n↳ ${t(session.language, "why.newcustomer")}` };
@@ -705,7 +696,8 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   if (event.action === "card:confirmed") {
     session.card_confirmed = true;
     if (!session.steps_done.includes("assess")) session.steps_done.push("assess");
-    return note("They just confirmed the home card is right. Carry on from there.");
+    notes.push("They just confirmed what you noted about this customer is right. Carry on from there.");
+    return null;
   }
   if (event.action === "card:correct") {
     session.card_confirmed = false;
@@ -718,8 +710,7 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   const picked = event.action?.match(/^select:([A-Za-z0-9_-]+)$/);
   if (picked) {
     const sku = picked[1]!;
-    if (!pack.products.some((product) => product.sku === sku))
-      return { text: "That product is not in today's data pack." };
+    if (!pack.products.some((product) => product.sku === sku)) return { text: t(session.language, "ft.gone") };
     session.selection = {
       sku,
       accessories: [],
@@ -749,59 +740,14 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     session.consent = false;
     return { text: t(session.language, "ft.noconsent") };
   }
-  // Section 4C: the pack carries the confirm/correct pair, so a known claim needs no request.
-  if (looksLikeAClaim(event.text, event.action) && event.text) {
-    const myth = matchMyth(pack, event.text) ?? matchObjection(pack, event.text);
-    const corrected = validateReply(pack, event.text, session.language);
-    if (corrected) {
-      session.step = "validate";
-      if (!session.steps_done.includes("validate")) session.steps_done.push("validate");
-      if (myth) {
-        session.objections = session.objections ?? [];
-        if (!session.objections.includes(myth.claim)) session.objections.push(myth.claim);
-      }
-      return corrected;
-    }
-  }
-  // Section 4E: ranking the pack against a confirmed card is arithmetic, so no request is spent.
-  if (wantsRecommend(event.text, event.action) && assessedFor(pack, session)) {
-    if (!session.card_confirmed) return cardSummary(session);
-    session.step = "recommend";
-    if (!session.steps_done.includes("recommend")) session.steps_done.push("recommend");
-    // A cue given is a difference demonstrated, which is what opens the offer gate.
-    session.demonstrated = true;
-    return recommendReply(pack, session.card, session.language);
-  }
-  // "Which TVs are good?" from a browsing customer. The answer is still a question, not a product.
-  // A home fact in the same message outranks it, so the card extractor is not robbed of the turn.
-  if (
-    wantsRecommend(event.text, event.action) &&
-    !assessedFor(pack, session) &&
-    !Object.keys(extractCard(event.text ?? "")).length
-  )
-    return note(
-      "They want the three options, but the home is not assessed yet. Ask for the one thing you most need to size this up, in your own words.",
-    );
-  // Section 6: finance in one sentence with its full cost. It is arithmetic over the pack's terms,
-  // and it sits behind the same gate as every other money conversation.
-  if (wantsFinance(event.text, event.action)) {
-    if (!(assessedFor(pack, session) && session.demonstrated))
-      return note(
-        "They asked about EMI or finance before the home is known and a difference shown. Do not open money. Ask what you still need instead.",
-      );
-    const total = session.selection ? itemisedTotal(pack, session.selection)?.total : undefined;
-    if (!total) return followThrough(session, pack, event.name ?? session.phone);
-    session.step = "complete";
-    if (!session.steps_done.includes("complete")) session.steps_done.push("complete");
-    return financeReply(pack, total, session.language);
-  }
   if (wantsFollowThrough(event.text, event.action)) {
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
   }
-  if (event.action === "card:show" || /^\s*(card|home card|what do you have)\b/i.test(event.text ?? "")) {
+  // "what do you have" used to open this too, so "what do you have in Samsung phones?" got "I have
+  // nothing on this home yet".
+  if (event.action === "card:show" || /^\s*(card|home card|show the card)\s*[.!?]*\s*$/i.test(event.text ?? ""))
     return cardSummary(session);
-  }
   const answered = event.action?.match(/^brief:answer:(.+)$/);
   if (answered) {
     if (!session.steps_done.includes("brief")) session.steps_done.push("brief");
@@ -810,7 +756,7 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   if (wantsBrief(event.text, event.action)) {
     session.step = "brief";
     if (!session.steps_done.includes("brief")) session.steps_done.push("brief");
-    return shiftBrief(pack);
+    return shiftBrief(pack, session.language);
   }
   if (wantsReview(event.text, event.action)) {
     session.step = "review";
@@ -819,29 +765,6 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     return reply;
   }
   return null;
-}
-
-/** One set named, or one label figure quoted: the pack answers both without a request.
- *  A quoted figure is section 4D's demonstration, which is half of what opens the offer gate. */
-function packAnswer(pack: Pack, said: string, session: Session, wants: "set" | "spec" = "spec"): Reply | null {
-  const product = findProduct(pack, said);
-  // Photographing a tag means "tell me about this set"; the tag carries figures too, and answering
-  // one of those instead would answer a question the associate never asked. Typing a figure is the
-  // opposite case: there the figure IS the question.
-  if (wants === "set" && product) {
-    if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
-    return productReply(product, session.language, assessedFor(pack, session));
-  }
-  const translated = translateSpec(pack, said, product, session.language);
-  if (translated) {
-    session.step = "translate";
-    if (!session.steps_done.includes("translate")) session.steps_done.push("translate");
-    session.demonstrated = true;
-    return translated;
-  }
-  if (!product) return null;
-  if (!session.shortlist.includes(product.sku)) session.shortlist = [product.sku, ...session.shortlist].slice(0, 3);
-  return productReply(product, session.language, assessedFor(pack, session));
 }
 
 export type Store = {
@@ -864,24 +787,14 @@ export async function decide(
 async function answer(
   event: Event,
   session: Session,
-  pack: Pack,
+  base: Pack,
   request: typeof fetch = fetch,
   store?: Store,
 ): Promise<Reply> {
   if (event.name) session.associate = event.name;
-  // The catalogue is 8,383 products; the pack is whatever this conversation is about. Searched on
-  // the associate's own words, cached by query, and left exactly as it was when the catalogue is
-  // not configured or has nothing to say. A failure here must not cost them the turn: they are
-  // standing with a customer, and yesterday's pack answers better than an apology.
-  // A tap carries no words, and three taps in a row were enough to lose the conversation: the
-  // pack fell back to the four stub televisions and a washing machine customer was asked how far
-  // they sit from the TV, three turns running. So what the conversation is about is remembered,
-  // and only replaced when new words actually find something.
   // The words first, then everything that reads them. A voice note carries no text, and the
-  // catalogue search below reads event.text — so a spoken "do we have the iPhone 18 Pro in stock"
-  // searched for nothing, kept the catalogue's unsearched first page, and the model reported what
-  // it honestly saw: no iPhone anywhere in FACTS, which it phrased as having no catalogue access.
-  // The same shape as the very first fault found today: a turn that carries no text yet.
+  // catalogue search reads text: a spoken "do we have the iPhone 18 Pro in stock" searched for
+  // nothing, and the model reported what it honestly saw, as having no catalogue access.
   let heard: Partial<Session["card"]> = {};
   if (event.audio) {
     const spoken = await voiceNote(event.audio, request);
@@ -890,130 +803,39 @@ async function answer(
     event = { ...event, ...(said ? { text: said } : {}) };
     delete event.audio;
   }
-  // "New customer asking for iPhone 17 model 256 gb any offers going on?" is one sentence: the
-  // card has to be cleared AND the question answered. Split here rather than in deterministic(),
-  // because the search below reads `about` and a command never reaches the catalogue — so the
-  // reset swallowed the question, twice, and the iPhone was never looked up at all.
+  // A button the model wrote says its own title, so the tap is treated exactly as typing it.
+  const tappedWords = event.action?.match(/^say:(.+)$/s);
+  if (tappedWords) {
+    event = { ...event, text: tappedWords[1]! };
+    delete event.action;
+  }
+  // "New customer asking for iPhone 17 model 256 gb any offers going on?" is one sentence: the card
+  // has to be cleared AND the question answered.
   const started = wantsNewCustomer(event.text, event.action) ? newCustomerRest(event.text) : "";
+  const notes: string[] = [];
   if (started.length > 3) {
     startInteraction(session);
     event = { ...event, text: started };
+    notes.push("They have just started a new customer, so nothing is known about them yet.");
   }
-  const about = (event.text ?? "").trim();
-  // Notes exist before the search: a search that matched nothing is as worth telling the model as
-  // a card field just filled.
-  const notes: string[] = [];
-  if (started.length > 3) notes.push("They have just started a new customer, so the card is empty.");
-  // A command is not a product. Searching "recommend" returned a USB hub, which then became what
-  // the conversation was about and was offered as the one thing to show.
-  const isCommand =
-    wantsRecommend(about, undefined) ||
-    wantsFinance(about, undefined) ||
-    wantsBrief(about, undefined) ||
-    wantsNewCustomer(about, undefined) ||
-    wantsFollowThrough(about, undefined) ||
-    wantsVisitLog(about, undefined) ||
-    wantsExpert(about, undefined) ||
-    wantsManagerView(about, undefined);
-  // Searched once per customer, not once per sentence. Every substantive turn used to re-search
-  // on its own words — "hot water tap is there, they wash cottons daily" found whatever it found,
-  // and that became what the conversation was about, which put screens back in a washing machine
-  // pack and left the home unassessable. A new customer clears it; nothing else needs to.
-  // A greeting is not a product. "Hello" was searched, matched four Asus laptops, and became what
-  // the conversation was about for every turn after it. Filler-only turns never reach the store.
-  if (!session.subject && words(about).length > 0 && !isCommand) {
-    try {
-      const found = await searchPack(pack, about);
-      if (found !== pack) {
-        pack = found;
-        session.subject = about;
-      }
-    } catch {
-      // A miss is an answer, not a failure: the loose first page of the catalogue is whatever the
-      // store sorted first (a fridge, a television, resQ plans), and answering an iPhone question
-      // from it is how this associate was told about televisions instead.
-      notes.push(
-        `The catalogue search for ${JSON.stringify(about).slice(0, 70)} found no product. We ARE connected to the store catalogue — this one search came back empty, so say that this particular thing is not coming up, never that you have no catalogue, no access, no system or no data. Do not name a different product instead. Point them at the shelf tag or the ASM, and set "unknown" true so a human finds out.`,
-      );
-    }
-  } else if (session.subject) {
-    // A few words naming something ("what about iphone") is a change of subject, not a fact for
-    // the card. The pack follows only when the catalogue answered with something that carries the
-    // words actually said — "8 feet" and "on the wall" must not drag the pack away. A miss keeps
-    // the conversation they were already having.
-    // The cap is there to stop a description of the home — "hot water tap is there, they wash
-    // cottons daily" — from becoming what the conversation is about. Four words was too tight: a
-    // plain question is longer than that, and "Do we have any phones right now?" is seven, so a
-    // phones question was answered with the televisions from the turn before. What actually keeps
-    // a home fact out is the check below, that the products found carry the words said.
-    // shortcut: a word count, not an understanding of the sentence; replace it if a long home
-    // description ever starts matching real products.
-    // A question about the thing already being discussed is not a new subject. "which storage
-    // options does it come in" searched for "storage", found pen drives, and the iPhone 17 the
-    // associate was holding went out of the pack — so the guard then refused "17" as a figure
-    // nothing could support. An attribute is asked ABOUT a product; only a product changes it.
-    const named =
-      words(about).length > 0 && !isCommand && !asksSomethingSpecific(about) && about.split(/\s+/).length <= 10;
-    let changed = false;
-    if (named) {
-      try {
-        const found = await searchPack(pack, about);
-        if (found !== pack && aboutTheWords(words(about), found.products)) {
-          pack = found;
-          session.subject = about;
-          changed = true;
-        }
-      } catch {
-        // This turn's words matched nothing; the conversation keeps its subject.
-      }
-    }
-    if (!changed)
-      pack = await searchPack(pack, session.subject).catch(() => {
-        // The subject stopped finding anything, so it was never a product: conversations started
-        // before greetings became filler have "Hello" stored as what they are about. Forget it,
-        // and the next turn is free to name the real one.
-        delete session.subject;
-        return pack;
-      });
-  }
-  // What has just happened, for the model to answer around. Nothing in here is a question.
-  // Set once a home fact has been filed this turn. The product sheet must not win after that: it
-  // carries a price, and "they sit 3 m away and want a Samsung" is the home, not a price request.
-  let filed = false;
-  // A voice note becomes the words that were said, so everything below treats it exactly as it
-  // treats typing: the same extraction, the same objections and products, the same floor shape.
+  const remember = (reply: Reply): Reply => {
+    session.history.push({ who: "associate", text: (event.text ?? event.action ?? "photo").slice(0, 300) });
+    session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
+    session.history = session.history.slice(-12);
+    return reply;
+  };
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);
-  const tapped = applyAction(session, event.action);
-  if (tapped && !deterministic(event, session, pack, notes)) {
-    session.assessed = assessedFor(pack, session);
-    // A filled card gets read back for correction; anything else goes on to the model, which
-    // decides what is worth asking next. The tap itself is already in the prompt.
-    if (session.assessed && !session.card_confirmed) {
-      const reply = cardSummary(session);
-      session.history.push({ who: "associate", text: String(event.action).slice(0, 300) });
-      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-      return reply;
-    }
-    notes.push(`Saved to the card from their tap: ${tapped}.`);
-  }
-  // "Not sure" is a real answer: it fills nothing and moves on.
-  const skipped = event.action?.match(/^skip:([a-z_]+)$/);
-  if (skipped) {
-    (session.card as Record<string, unknown>)[skipped[1]!] = NOT_STATED;
-    notes.push(`They do not know the ${skipped[1]!.replace(/_/g, " ")}. It stays blank; work without it.`);
-  }
   // A request to switch language is a whole turn on its own.
   if (switched && (event.text ?? "").trim().split(/\s+/).length <= 4)
     return { text: t(session.language, "lang.switched") };
   // Extra points: a store visit, in the visitor's own words. It comes before everything that reads
-  // text as a customer, because a visit note is full of rooms, prices and brands and would
-  // otherwise be read as somebody's home.
+  // text as a customer, because a visit note is full of rooms, prices and brands.
   if (store && session.logging_visit && event.text) {
     if (!worthFiling(event.text)) return { text: t(session.language, "visit.tooshort") };
     const reference = newVisitReference();
-    const where = storeNamed(event.text, pack);
+    const where = storeNamed(event.text, base);
     await store.logVisit({
       reference,
       phone: session.phone,
@@ -1028,9 +850,38 @@ async function answer(
     startVisitLog(session);
     return visitOpened(session.language);
   }
-  // Extra points: both read from the pack and the database, so neither spends a request.
   if (store && wantsManagerView(event.text, event.action))
     return managerView(await store.today(), await store.openQuestions());
+  if (store && wantsExpert(event.text, event.action)) {
+    // A tap carries no words, and the "Find out for me" button is the usual way this is reached,
+    // so what they asked is the last thing they said.
+    const question = (
+      event.text ??
+      [...session.history].reverse().find((turn) => turn.who === "associate")?.text ??
+      ""
+    ).slice(0, 400);
+    const reference = newReference();
+    const { reply, area, owner } = expertReply(base, question, reference, session.language);
+    await store.logQuestion({ reference, phone: session.phone, area, owner, question });
+    return reply;
+  }
+  if (!event.action && !event.image && isGreeting(event.text))
+    return greetingReply(session.language, Object.keys(base.shift_brief ?? {}).length > 0);
+  for (const [field, value] of Object.entries(heard))
+    if (value !== null && value !== undefined) (session.card as Record<string, unknown>)[field] = value;
+
+  // The products this conversation is already on, so a tap or a command sees what the model saw.
+  let failed = false;
+  const fetchFor = async (search: Search): Promise<Pack> => {
+    try {
+      return await searchPack(base, search, request);
+    } catch (error) {
+      console.error(`Catalogue search failed: ${error instanceof Error ? error.message : "unknown"}`);
+      failed = true;
+      return { ...base, products: [], offers: [] };
+    }
+  };
+  let pack = session.search ? await fetchFor(session.search) : base;
   if (store && event.action === "site:problem" && session.selection) {
     const needs = siteNeeds(pack, session.selection).join("; ");
     const reference = newReference();
@@ -1039,185 +890,67 @@ async function answer(
     await store.logQuestion({ reference, phone: session.phone, area, owner, question });
     return reply;
   }
-  if (store && wantsExpert(event.text, event.action)) {
-    // A tap carries no words, and the "Find out for me" button is now the usual way this is
-    // reached, so the question was being logged empty: the manager portal showed an escalation
-    // with nothing in it. What they asked is the last thing they said.
-    const question = (
-      event.text ??
-      [...session.history].reverse().find((turn) => turn.who === "associate")?.text ??
-      ""
-    ).slice(0, 400);
-    const reference = newReference();
-    const { reply, area, owner } = expertReply(pack, question, reference, session.language);
-    await store.logQuestion({
-      reference,
-      phone: session.phone,
-      area,
-      owner,
-      question,
-    });
-    return reply;
-  }
-  // A question is not a description of the customer's home. Until this, every sentence was read as
-  // one, so "is the Sony good for a dark room" was filed as light = dim and "what TVs do we have"
-  // was answered with "how far will you sit from the TV?".
-  const intent = event.action ? "customer" : intentOf(event.text);
-  if (intent === "greeting" && !deterministic(event, session, pack, notes)) return greetingReply(session.language);
-  if (intent === "question" && event.text && !deterministic(event, session, pack, notes)) {
-    // Asked about one set, or about a figure on a label: both are already answered from the pack.
-    // But a summary of the set is the wrong answer to "what warranty comes with it", so a question
-    // about something specific goes on to the model, which has the charges and terms in front of it.
-    if (!asksSomethingSpecific(event.text)) {
-      const named = packAnswer(pack, event.text, session, "set");
-      if (named) return named;
-    }
-    // "do we have any offers on that" says "have", and the floor listing answered it with six
-    // iPhones and a question. An offer is one of the specific topics the model holds, like the
-    // warranty and the delivery, so it goes there rather than to a list of what is on the wall.
-    // And only once the conversation is about something. With nothing searched yet the pack is the
-    // catalogue's arbitrary first page, so "what do we have" answered a voice note with a fridge,
-    // a 50" television, an OPPO, an emergency LED batten, a JioTag and a Galaxy — a junk drawer
-    // presented as the floor. A shop with 8,383 products cannot answer that question; the model
-    // asks what they are after instead.
-    // The file pack is four televisions chosen on purpose, so listing it answers the question. The
-    // live catalogue's first page is not chosen at all, so until this conversation is about
-    // something the listing has nothing true to say.
-    if (
-      (session.subject || !pack.version.startsWith("live")) &&
-      asksWhatWeHave(event.text) &&
-      !asksSomethingSpecific(event.text)
-    )
-      return inStockReply(pack, session.card, session.language, assessedFor(pack, session));
-    // Anything else falls through to the model, which answers from the facts and is still held to
-    // the floor's shape and to the figures in the pack.
-  }
-  // Read what we confidently can from the words before spending a request on them.
-  if (
-    intent !== "question" &&
-    event.text &&
-    !event.image &&
-    !event.audio &&
-    !deterministic(event, session, pack, notes)
-  ) {
-    // What the model heard, with what the extractor can read from the same words on top: the
-    // extractor only takes what it is sure of, so where both spoke, the stricter one wins.
-    const read = { ...heard, ...extractCard(event.text) };
-    const fields = Object.entries(read).filter(
-      ([, value]) => value !== undefined && !(Array.isArray(value) && !value.length),
-    );
-    if (fields.length) {
-      for (const [field, value] of fields) (session.card as Record<string, unknown>)[field] = value;
-      session.assessed = assessedFor(pack, session);
-      if (!session.steps_done.includes("assess") && session.assessed) session.steps_done.push("assess");
-      // A full card is read back for correction. Short of that the facts are filed and the turn
-      // goes to the model, because what is worth asking next is a judgement, not a list.
-      if (session.assessed && !session.card_confirmed) {
-        const reply = cardSummary(session);
-        session.history.push({ who: "associate", text: event.text.slice(0, 300) });
-        session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-        session.history = session.history.slice(-12);
-        return reply;
-      }
-      notes.push(`Read from their own words and saved: ${describe(Object.fromEntries(fields))}.`);
-      filed = true;
-    }
-  }
-  // The customer is standing at one set, or asked what a figure on its label means. Both are pack
-  // facts, and both run after the card extractor so a home fact in the same message still wins.
-  if (intent !== "question" && event.text && !event.image && !event.audio && !filed) {
-    const reply = packAnswer(pack, event.text, session);
-    if (reply) {
-      session.history.push({
-        who: "associate",
-        text: event.text.slice(0, 300),
-      });
-      session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-      session.history = session.history.slice(-12);
-      return reply;
-    }
-  }
-  // A photo of a shelf tag: read the tag, then answer from the pack.
+  const free = deterministic(event, session, pack, notes);
+  if (free) return remember(free);
+
+  // A photo of a shelf tag: read what is printed, then treat it as being told the same words. The
+  // reply is still written from the catalogue, so a misread tag cannot become an invented price.
   if (event.image) {
     const read = await labelText(event.image, request).catch(() => "");
-    const said = [read, event.text].filter(Boolean).join(" ");
-    const reply = packAnswer(pack, said, session, "set");
-    session.history.push({
-      who: "associate",
-      text: `photo: ${read || "unreadable"}`.slice(0, 300),
-    });
-    const answer = reply ?? {
-      text: read ? t(session.language, "p.notfound", { v: read.slice(0, 60) }) : t(session.language, "p.unread"),
-    };
-    session.history.push({ who: "storeiq", text: answer.text.slice(0, 300) });
-    session.history = session.history.slice(-12);
-    return answer;
+    if (!read) return remember({ text: t(session.language, "p.unread") });
+    event = { ...event, text: [`The shelf tag in their photo reads: ${read}.`, event.text].filter(Boolean).join(" ") };
+    delete event.image;
   }
-  const free = deterministic(event, session, pack, notes);
-  if (free) {
-    session.history.push({
-      who: "associate",
-      text: (event.text ?? event.action ?? "").slice(0, 300),
-    });
-    session.history.push({ who: "storeiq", text: free.text.slice(0, 300) });
-    session.history = session.history.slice(-12);
-    return free;
-  }
-  // Text only, now. A voice note became the words that were said before anything above ran, and a
-  // photo is answered from the pack and never reaches here, so this call is for a sentence no
-  // deterministic path could read — which, since the written questions went, is most turns.
-  //
-  // fal.ai's router when FAL_KEY is set, Gemini otherwise. The router is the paid path and costs
-  // about a hundredth of a US cent a turn; Gemini's free tier is 20 requests a day, which is no
-  // longer a product. Gemini keeps the voice note and the photo either way: the router takes
-  // neither audio nor images.
-  const asked = prompt(event, session, pack, tapped, notes);
-  const fal = falConfig();
-  let text: string;
-  if (fal) {
-    // No response schema on this endpoint, so the shape is asked for in words and read tolerantly.
-    const answered = await falText(fal, `${SYSTEM}\n\n${shapeInstruction(schema)}`, asked, request);
-    if (process.env.STOREIQ_DEBUG === "1")
-      console.log(`fal ${fal.model} $${answered.cost.toFixed(6)} RAW>>>`, answered.text, "<<<RAW");
-    text = answered.text;
-  } else {
-    const key = process.env.GEMINI_API_KEY?.trim();
-    if (!key) throw Error("Missing GEMINI_API_KEY");
-    const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-    const response = await modelRequest(
-      request,
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: asked }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-            temperature: 0.3,
-            // The floor wants an answer, not deliberation: thinking is off for the 5-second rule.
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
-      },
-    );
-    const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024)));
-    const written: string | undefined = body?.candidates?.[0]?.content?.parts
-      ?.map((part: any) => part?.text)
-      .filter((value: unknown) => typeof value === "string")
-      .join("");
-    if (typeof written !== "string" || !written.trim())
-      throw Error(
-        `Empty Gemini response${body?.promptFeedback?.blockReason ? `: ${body.promptFeedback.blockReason}` : ""}`,
-      );
-    if (process.env.STOREIQ_DEBUG === "1") console.log("RAW>>>", written, "<<<RAW");
-    text = written;
-  }
-  const decision = readJson<Decision>(text);
 
-  // Merge the card before the gate: this turn's answers count towards being assessed.
+  // The turn: what they said becomes a search, the store's answer becomes FACTS, and the model
+  // writes the reply from those. Nothing about a product is answered from a written line any more.
+  if (event.text && catalogConfig()) {
+    const search = await searchFrom(event.text, session, request);
+    if (search) {
+      failed = false;
+      pack = await fetchFor(search);
+      session.search = search;
+      // Changing the product withdraws the consent, and the picked one is not on this search.
+      if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {
+        delete session.selection;
+        session.consent = false;
+      }
+    }
+    if (failed)
+      notes.push(
+        'The catalogue did not answer just now, so FACTS has nothing. Say you cannot check it this second and to try again in a moment or use the shelf tag; do not name any product, and set "unknown" true. This is a hiccup, not a missing system.',
+      );
+    else if (search && !pack.products.length)
+      notes.push(
+        `The live catalogue search for ${JSON.stringify(search.q)} found no product. Say this one is not coming up in the catalogue, and to check the shelf tag or the ASM; do not name a different product, and set "unknown" true.`,
+      );
+  }
+
+  const told = (card: Decision["card"]): string =>
+    [
+      event.text,
+      event.action,
+      typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
+      typeof card?.budget_rupees === "number" ? `Rs ${card.budget_rupees}` : "",
+      // Anything the model filed under its own name is still something the associate said. The
+      // budget went in as a fact rather than budget_rupees, and quoting it back was refused.
+      ...Object.values(session.card.facts ?? {}),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  const figuresIn = (decision: Decision): string[] =>
+    unsupportedNumbers(render(decision).text, allowedNumbers(pack), told(decision.card));
+  const written = async (extra: string[] = []): Promise<Decision> =>
+    readJson<Decision>(await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra]), schema, request));
+  let decision = await written();
+  // Told once what it got wrong, it usually just needed to read the figure again. The guard is
+  // unchanged: what it refuses a second time still does not go out.
+  const wrong = figuresIn(decision);
+  if (wrong.length)
+    decision = await written([
+      `You wrote ${wrong.join(", ")}, which is not in FACTS and was not said by the associate. Answer again using only figures exactly as FACTS has them, or say that this one is not showing.`,
+    ]);
+
   const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
   if (Array.isArray(extra))
     for (const fact of extra)
@@ -1227,65 +960,52 @@ async function answer(
           [String(fact.name).slice(0, 40)]: String(fact.value).slice(0, 80),
         };
   for (const [field, value] of Object.entries(decision.card ?? {}))
-    if (field === "facts") continue;
-    // A viewing distance on a phone is not a fact about this customer, it is the television
-    // assumption wearing the card's clothes. Dropped here rather than argued with in the prompt.
-    else if (!fieldApplies(field, pack, session)) continue;
-    else if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
+    if (CARD_FIELDS.has(field) && value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
       (session.card as Record<string, unknown>)[field] = value;
   session.shortlist = (decision.shortlist ?? [])
     .filter((sku) => pack.products.some((product) => product.sku === sku))
     .slice(0, 3);
-  session.assessed = assessedFor(pack, session);
+  session.assessed = isAssessed(session.card);
   if (decision.demonstrated) session.demonstrated = true;
+  if (decision.objection && !session.objections?.includes(decision.objection))
+    session.objections = [...(session.objections ?? []), String(decision.objection).slice(0, 120)];
   if (STEPS.includes(decision.step)) {
     session.step = decision.step;
     if (!session.steps_done.includes(decision.step)) session.steps_done.push(decision.step);
   }
 
-  // Section 3: show what was understood and allow correction before the card drives a recommendation.
-  if (!session.card_confirmed && session.assessed && ["recommend", "complete", "close"].includes(decision.step))
-    return cardSummary(session);
-
   let reply = render(decision);
-  // What the associate has told us, this turn and before: the card holds nothing they did not say
-  // or tap, and a figure they gave in one turn is still theirs in the next.
-  const told = [
-    typeof session.card.distance_feet === "number" ? `${session.card.distance_feet} feet` : "",
-    typeof session.card.distance_m === "number" ? `${session.card.distance_m} metre` : "",
-    typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
-    // Anything the model filed under its own name is still something the associate said. The
-    // budget went in as a fact rather than budget_rupees, and quoting it back was refused.
-    ...Object.values(session.card.facts ?? {}),
-  ].filter(Boolean);
-  const said = [event.text, event.action, ...told].filter(Boolean).join(" ");
+  // A pick has to be something that can be picked, or the tap fails with the customer waiting.
+  const buttons = reply.buttons?.filter(
+    (button) =>
+      !button.id.startsWith("select:") || pack.products.some((product) => `select:${product.sku}` === button.id),
+  );
+  reply = { text: reply.text, ...(buttons?.length ? { buttons } : {}) };
   // A manager who does not know the answer finds out. The question goes to the named expert and
   // comes back as a notice, so the associate is not left with "I do not have that".
-  //
-  // The reason line is written here rather than left to the model: asked for something missing it
-  // explains itself to the associate — "not in FACTS", "I am designed not to invent" — which is
-  // this product talking about itself to somebody holding a customer.
   if (decision.unknown && store) reply = unknownReply(reply, session.language);
-  const bad = unsupportedNumbers(reply.text, allowedNumbers(pack), said);
+  const bad = figuresIn(decision);
+  const asked = askedAboutOffers(event.text);
   if (bad.length)
     reply = offerExpert(
       {
-        text: `That figure is not in today's data pack, so I will not say it.\n↳ Check the shelf tag or the manager before quoting ${bad[0]}.`,
+        text: `${t(session.language, "guard.figure")}\n↳ ${t(session.language, "guard.check", { v: bad[0]! })}`,
       },
       session.language,
       !!store,
     );
-  else if (offerLeaked(reply.text, session.assessed, session.demonstrated, askedAboutOffers(event.text)))
-    reply = {
-      // The gate is the code's and the words after it are the manager's: this used to borrow the
-      // next written question, which put the questionnaire back in by the side door.
-      text: `${t(session.language, "gate.offers", { body: t(session.language, "gate.offers.ask") })}\n↳ Our associates led with price in 6 of 6 visits; the home has to come first.`,
-    };
-  session.history.push({
-    who: "associate",
-    text: (event.text ?? event.action ?? (event.audio ? "voice note" : "photo")).slice(0, 300),
-  });
-  session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
-  session.history = session.history.slice(-12);
-  return reply;
+  else if (offerLeaked(reply.text, session.assessed, session.demonstrated, asked)) {
+    // Asked the price, it gave the price and volunteered a discount. The price is what they asked
+    // for, so only the line that opens the offer goes.
+    const kept = reply.text
+      .split("\n")
+      .filter((line) => !offerLeaked(line, session.assessed, session.demonstrated, asked));
+    reply = kept.some((line) => !line.startsWith("↳"))
+      ? { ...reply, text: kept.join("\n") }
+      : {
+          // The gate is the code's and the words after it are the manager's.
+          text: `${t(session.language, "gate.offers", { body: t(session.language, "gate.offers.ask") })}\n↳ ${t(session.language, "gate.reason")}`,
+        };
+  }
+  return remember(reply);
 }

@@ -25,30 +25,32 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
 ## The rules this codebase is built on
 
 1. **No invented figures.** Every amount, percentage and specification in a reply must exist in
-   `data/pack.json`, be derivable from it, or have been said by the associate. A figure carrying a
-   unit is checked as a **pair** — `2 year` passes, `1 year` does not, however many 1s the pack
-   holds — in English, Hindi and Marathi.
-   **Because of this, the replies that state a figure are composed in code, and stay that way.**
-   The product sheet, the itemised cost, finance, the card read-back, the brief and the score are
-   written phrases with the pack's numbers in them. Do not hand them to the model to phrase: that
-   is where "the warranty is one year" and "today's target is 12 TVs" came from. Decided
-   2026-10-30, by the user, after both were proposed.
-2. **The offer gate.** No offer, discount, exchange, EMI or finance figure before the home is
-   assessed *and* a difference demonstrated — **unless the associate asks outright**. A question in
-   their own words opens it, and they get the real offer from the pack or "none is running on it
-   today". Decided by the user 2 Nov 2026, after a walk where a customer who had already decided
+   what the catalogue returned for this turn, be derivable from it, or have been said by the
+   associate. A figure carrying a unit is checked as a **pair** — `2 year` passes, `1 year` does
+   not, however many 1s the data holds — in English, Hindi and Marathi.
+   **The model writes the reply from the catalogue's rows, and the code checks every figure in it.**
+   The turn is: what was said becomes a search, the store's rows become FACTS, the model writes.
+   Decided by the user 2 Nov 2026, replacing the 2026-10-30 decision that the product sheet, finance
+   and the options were composed in code: those were written over a stub of televisions and answered
+   the wrong product. A refused figure gets one retry that names it, and what is refused twice does
+   not go out. **Do not weaken the guard to get a reply through.** Still composed in code: the
+   consent draft and itemised total (rule 3, arithmetic), the card read-back, the brief and the score.
+2. **The offer gate.** No offer, discount, exchange, EMI or finance figure before the customer's
+   needs are known *and* a difference demonstrated — **unless the associate asks outright**. A
+   question in their own words opens it, and they get the real offer from the catalogue or "none is
+   running on it today". Decided by the user 2 Nov 2026, after a walk where a customer who had already decided
    was sent back to the room three times instead of being told. The gate stops the product
    *leading* with price, which the store visits found in 6 of 6 conversations; it is not a refusal
    to answer. `askedAboutOffers()` in `brain.ts`. **Do not close it again.**
 3. **Consent.** Nothing reaches a customer without an explicit tap. Changing the product withdraws it.
 4. **No written questions.** The model asks. `questionFlow` and `nextQuestion` were deleted on
    2026-10-30 — six questions with buttons and eight more — because a written list can only ever be
-   about a television, and it made the product a form with a chat window around it. The code files
-   what it reads and tells the model in a note (`JUST NOW:`, `STILL BLANK ON THE CARD:`); what is
-   worth asking this customer is the model's judgement. **Do not add a question to the code.**
-   What still answers without a model request is anything that is a fact rather than a judgement: a
-   product sheet, a label figure, an objection matched from the pack, the card read-back, the brief,
-   the itemised cost, the score.
+   about a television, and it made the product a form with a chat window around it. The code tells
+   the model only what it cannot see, in a note (`JUST NOW:`): a search that missed, a store that did
+   not answer. What is worth asking this customer is the model's judgement, and a customer who has
+   decided is served, not interviewed. **Do not add a question to the code.** What still answers
+   without a model request is a tap or a whole-message command: the reset, consent, the card
+   read-back, the brief, the score.
 5. **The 24-hour window.** Replies go only to numbers that wrote to us inside Meta's window. Never
    remove `withinWindow()`.
 
@@ -69,11 +71,15 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   first, because Whisper answers "Unsupported data URL" to base64 inline. The router has no
   response schema, so the JSON shape is asked for in words and read by `readJson()`.
   **Gemini is still the label photo**, and answers the turn when there is no `FAL_KEY`.
-- The pack comes from the **live catalogue** when `CATALOG_APPLICATION_ID` and
-  `CATALOG_APPLICATION_TOKEN` are set (`startingPack()` in `pack.ts`), and from `data/pack.json`
-  otherwise — or when the live call fails, loudly, so a bad key cannot kill the number. The host
-  defaults to Fynd's, because Jio Commerce is on Fynd's platform and the application pair selects
-  the Reliance Digital sales channel.
+- The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and
+  `CATALOG_APPLICATION_TOKEN` are set: `searchFrom()` in `brain.ts` asks the model for one search
+  and `searchPack()` in `pack.ts` runs it, in FDK `getProducts` parameters, with
+  `getPromotionOffers` for the first five rows. That makes two model requests a turn. When the store
+  does not answer it is logged, the model is told and the number stays up; no data is substituted.
+  `data/pack.json` is a stub of televisions, used only with no credentials (dev and tests), and must
+  never reach an associate as today's data. The host defaults to `api.jioretailer.com`. Reads only:
+  `catalog.ts` can GET an allowlist of paths and nothing else, and the FDK is deliberately not
+  installed because its handles carry write methods.
 - Money is written `Rs 54,990`, never `₹`.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything

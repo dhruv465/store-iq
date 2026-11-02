@@ -8,33 +8,33 @@ Status is what the code actually does, verified, not what it intends to do.
 | # | Requirement | Status |
 | --- | --- | --- |
 | 1 | Receive and process associate voice notes | **Done, on a real phone.** Transcribed by `fal-ai/whisper`, which returns the words and nothing else; the card is then read from them exactly as from typed words. Proven from a handset in English and in Hindi, and the one that came back refused — "तीन मीटर दूर बैठते हैं" answered in feet — was a guard fault, now fixed: three metres is ten feet. |
-| 2 | Create, display and correct a home card | **Done.** Read back in the brief's "I heard" shape with confirm and fix buttons; recommend, complete and close are held until confirmed. |
-| 3 | Suggest the next question based on the current card | **Done.** The card is the input and the question is the manager's. The code files every fact it can read from the words, then tells the model what it just saved and what is still blank; the question comes back in the brief's `Ask:` shape. Two written lists of questions were deleted on 30 October because a written list can only ever be about a television — a washing machine was being asked its viewing distance. |
-| 4 | Accept a product-label image, return a customer-friendly explanation | **Works, proven on a rendered tag, never on a phone camera.** The image goes to Gemini, which reads the tag text only; the answer is then written from `labels[]` in the pack, so the explanation cannot be invented. When the model is unreachable it says so usefully — "I could not read a model off that photo. Type the model number, or the brand and the size." |
-| 5 | Three recommendations, one reason **and one demonstration cue** each | **Done, deterministic.** `recommend.ts` ranks the pack against the card in code, so no request is spent and the reasons cannot be invented. Reasons are de-duplicated: three options never share one. Verified live at 1 ms. |
+| 2 | Create, display and correct a home card | **Changed 2 Nov 2026, by the user: only where it helps.** What the customer says they need is noted, and read back with a correction button when the associate says `card`. It is no longer read back on its own: an automatic read-back replaced real answers ("does it have a heater" got a card). |
+| 3 | Suggest the next question based on the current card | **Done, by the model.** Asked only if the answer changes what is shown, about the product in front of them. No question is written in code. |
+| 4 | Accept a product-label image, return a customer-friendly explanation | **Works, not re-proven since 2 Nov.** Gemini reads the tag text; that text is treated as being told the same words, so the reply is written from the live catalogue. `labels[]` is no longer used. Photo is off without `GEMINI_API_KEY`. |
+| 5 | Three recommendations, one reason **and one demonstration cue** each | **Model-written since 2 Nov, no longer deterministic.** `recommend.ts` ranked television rules and was deleted. Three options come from the live rows with one reason each. **The store has no demonstration cue, and the model is not given one, so a cue is not guaranteed.** |
 | 6 | Calculate and display an itemised total from supplied data | **Done.** `itemisedTotal()` computes it in code, not the model, so it cannot be wrong. Verified live: 54,990 + 1,499 + 499 = Rs 56,988. The close now also states the **net payable** after every offer the pack says applies to that product, and the saving off MRP — "Rs 35,000 off MRP today: listed Rs 89,990, here Rs 54,990" — both behind the offer gate. |
-| 7 | Gate offers until assessment and demonstration are complete | **Done.** `offerLeaked()` fires on an offer word plus a figure, and the deterministic close is held behind the same gate: with the home unknown, the MRP saving, the net payable and the accessory line are all absent, and asking for a discount is refused with the reason and no figure. Tested both ways. |
-| 8 | Explain finance using only supplied terms and full cost | **Done, deterministic.** `financeOptions()` computes each term from the pack: a no-cost term is exact (instalments plus the processing fee), an interest-bearing one uses the standard reducing-balance instalment and is given as "about", because the bank sets the exact figure. The reason line names the worst full cost, not the friendliest: Rs 71,039 against Rs 62,990 today. Behind the same gate as every other money answer. |
-| 9 | Consent-based summary and follow-up task | **Done, deterministic.** Selection comes from a tap only, the summary is withheld until `consent:yes`, and changing the product withdraws consent. The draft now proposes **one accessory the card justifies** — the HDMI 2.1 cable for a PS5 home, a soundbar for a larger hall, a stabiliser when the site notes say the supply is unstable — taken by tap, and never offered twice. Task owner is the associate; the site is asked about before an installer is booked and the last task is confirming it works. |
+| 7 | Gate offers until assessment and demonstration are complete | **Done, and opens when the associate asks outright.** `offerLeaked()` drops a line that volunteers one; the close is held behind the same gate. Tested both ways. |
+| 8 | Explain finance using only supplied terms and full cost | **Model-written since 2 Nov, from the store's own terms.** A row's `pg_offer` gives months, the instalment, the total and the saving, all in FACTS and checked by the figure guard. `financeOptions()` computed from stub terms and was deleted. |
+| 9 | Consent-based summary and follow-up task | **Done, deterministic.** Selection comes from a tap only, the summary is withheld until `consent:yes`, and changing the product withdraws consent. No accessory is proposed any more: the store does not say which go with what.
 | 10 | Conversation score and one improvement suggestion | **Done.** The store visits' own card: seven steps, 0 to 2 each, Guide at 11. Deterministic, costs no model request. |
 
 ## Beyond the ten: the conversation that loses the sale
 
 | Item | State |
 | --- | --- |
-| The three objections the store visits heard | **Done, deterministic.** The pack carries a confirm/correct pair and a matching line for "it is too costly", "I can buy the same set online" and "I will think about it", in English, Hinglish and Devanagari. Answered in the same confirm-then-correct shape as a spec myth, and recorded against the conversation so the manager can see which objection the floor meets most. A spec myth wins when both could match, because the customer is asking about the product rather than leaving. An objection the pack does not know is not answered at all. |
-| An option over the budget | **Done.** It stays on the card with the gap stated in the open rather than being quietly dropped, so the associate chooses whether to show it. |
+| The three objections the store visits heard | **Model-written since 2 Nov.** The written confirm/correct pairs were television stubs and were deleted. The model answers, and reports the objection, which is recorded against the conversation for the manager. |
+| An option over the budget | **Not guaranteed since 2 Nov.** A stated budget is now a price filter on the store, so what is over it is not returned. |
 
 ## Section 8 acceptance sequence
 
 | Stage | Built | Needs a model |
 | --- | --- | --- |
-| assess | yes | only for free-form voice or text; by tap it is deterministic |
-| validate | yes | only for a claim the pack does not list |
+| assess | yes | yes |
+| validate | yes | yes |
 | translate | yes | **yes** — reading the label photo |
-| recommend + demonstrate | yes | no |
-| complete | yes | no |
-| close | yes | no |
+| recommend + demonstrate | yes | yes |
+| complete | yes | no, once a product is tapped |
+| close | yes | no, once a product is tapped |
 | follow through | yes | no |
 | review | yes | no |
 
@@ -42,18 +42,18 @@ Status is what the code actually does, verified, not what it intends to do.
 
 | Behaviour | State |
 | --- | --- |
-| An associate can ask what the shop has | **Done.** "What TVs do we have in stock" is answered with what is on the floor — brand, size and panel — and deliberately without prices, because our associates opened with price in 6 of 6 visits and a price list here would teach the habit the product exists to break. Once the home is known the same question offers the three that fit. |
-| An associate can ask about one set | **Done.** "Is the Sony good for a dark room" answers from the pack about that set. It used to be filed as `light = dim`, a fact about the customer's living room. |
-| Saying hello | **Done.** Answered, with what the associate can do next. It used to open the distance question, which is a questionnaire talking to itself. |
-| A question is told from a description | **Done.** `intentOf()` separates them, and a question that is mostly about the customer — "do they have WiFi at home?" — is still read as a description. |
+| An associate can ask what the shop has | **Done.** Searched live and answered with names and prices from the store. |
+| An associate can ask about one set | **Done.** Searched live; a question files nothing about the customer. |
+| Saying hello | **Done.** Answered by asking what is going on, with what the associate can do next. |
+| A question is told from a description | **Done, by the model.** `intentOf()` and its word lists were deleted. |
 
 ## Floor rules (contest §2)
 
 | Rule | State |
 | --- | --- |
-| First reply in under 5 seconds | **Holds.** Deterministic turns answer in 1–15 ms; a model turn measured 1.9–3.1 s. Voice and photo get an acknowledgement immediately while the answer is prepared. |
+| First reply in under 5 seconds | **Usually, not always.** Tapped and command turns answer in 1–25 ms. A model turn is two requests plus the store: 2–6 s measured on 2 Nov, and about 20 s when the provider times out once and is retried. Voice and photo get an acknowledgement immediately while the answer is prepared. |
 | Not more than 3 lines and 3 buttons | **Holds, now enforced for every reply.** It used to be enforced only in `render()`, which handles model output — and eight of the nine stages stopped going through the model, so each deterministic reply was its own chance to break it. The shift brief ran to five lines and the close to four. `floor()` now gates every reply at the exit, dropping the reason before the words to say when something has to go. A test walks a whole conversation, in all three languages, and holds every turn to it. |
-| A reason in each answer (judging, 25 with the steps) | **Holds.** Twelve of fourteen turns carry a `↳` line; the recommend step carries its reasons inside each of the three option lines, which is the one shape where a separate reason line would not fit. Each question now says why it is the one being asked — "the distance decides the size more than the room does". |
+| A reason in each answer (judging, 25 with the steps) | **No longer holds, since 2 Nov.** Asked for one on every answer, the model explained itself ("The customer has decided and is asking about offers"), so model replies carry none. Code-composed replies and the "I do not know" reply still do. Decide whether judging needs it back. |
 | Voice and photo first | **Wired, not exercised with real media.** The paths exist and a rendered shelf tag was read end to end in 2.9 s; no real voice note or phone photo has been through them. |
 
 ## 7. Guardrails
@@ -65,7 +65,7 @@ Status is what the code actually does, verified, not what it intends to do.
 | Never invent a price, offer, stock, specification, finance term or discount | Holds. Exact-token number guard; 999 is not supported by 79990 containing it. Tested against an adversarial push to match a competitor quote. |
 | Never infer wealth from appearance; the associate sets the starting level | Holds. `start_level` is only ever written from what the associate supplies. |
 | Keep the associate in control of the recommendation | Holds. Every reply is a line to say or a question to ask, never an instruction to the customer. |
-| Show uncertainty when data is missing | Holds. An unsupported figure becomes "that figure is not in today's data pack". |
+| Show uncertainty when data is missing | Holds. An unsupported figure is refused by name, and a search that finds nothing is told to the model as nothing and offered to a human. |
 | **Home card is interaction-scoped unless persistence is approved** | **Was violated.** The card was stored per phone indefinitely, so an associate's next customer inherited the previous customer's home. Fixed this round. |
 
 ## Open gaps, in the order they are worth doing
@@ -76,17 +76,14 @@ Status is what the code actually does, verified, not what it intends to do.
 
 ## What still needs a model
 
-Two things: turning a free-form voice note or sentence into card fields, and reading a label photo.
-Validate answers known claims from the pack's confirm/correct pairs, including the brief's own
-electricity example, in 7 ms; a claim the pack has nothing on still goes to the model. Assess by tap, validate, recommend, complete, close, follow-through, brief and review
-are all deterministic — they answer in single-digit milliseconds, spend no quota, and cannot invent a
-figure. That is most of the §8 acceptance sequence running without the model at all.
+Every turn about a product: one request for the search, one for the reply. Consent, the itemised
+total, the card read-back, the brief, the review and the score are code, and answer in milliseconds.
 
 ## Extra points (contest §2)
 
 | Item | State |
 | --- | --- |
-| Hindi and one more Indian language | **Done, two Indian languages: Hindi and Marathi, plus English.** Every deterministic reply. Hindi and Marathi, including the questions, the buttons, the card read-back, the recommendation reasons and the demonstration cues. Devanagari input fills the card too. Figures, product names and prices are never translated. |
+| Hindi and one more Indian language | **Done, two Indian languages: Hindi and Marathi, plus English.** Every deterministic reply. Hindi and Marathi, including the buttons and the card read-back; model replies follow the associate's language. Figures, product names and prices are never translated. |
 | Department manager view | **Done, two ways, now with per-step coaching.** On the number, "team" returns the store visits' own table. In a browser, `/manager` is a React portal: the manager adds associates by name and number, then sees one row each — customers taken, home cards actually made, median and best of 14, conversations at Guide, how often the home came before the price, and when they were last seen. A rostered associate with no customers is marked quiet. Each row also carries that associate's seven step marks out of 2, so a manager sees where one person is weak rather than only their median, alongside a live floor stream, the objections the floor is meeting and which products are moving. The manager can also tell the whole floor today's offers, previewing exactly who it reaches first; anyone outside Meta's 24 hour window is held and told the moment they next write, so no approved template is needed and nobody is dropped. |
 | Ask an expert | **Done.** Routed by subject to a named owner with a quotable reference and a line to hold the customer. |
 | Store visit log by voice note | **Done.** Say `visit`, then speak or type it. The note is filed against the store its own words name, with a reference, the associate and the date, and the manager reads it in the portal. A visit is never read as a customer's home, though it is full of rooms, prices and brands — the log takes the next thing said before anything interprets it as a customer. Too short to be useful is refused rather than filed. |

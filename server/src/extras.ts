@@ -8,8 +8,10 @@ import type { HomeCard, Reply, Session, Step } from "./types.js";
 /** The contest's extra points: "ask an expert" and the department manager view.
  *  Both are facts about the pack and the database, so neither spends a model request. */
 
-const EXPERT = /\b(ask an expert|expert|escalate|specialist|senior|poocho|poochho)\b/i;
-const MANAGER = /^\s*(team|manager|floor|today|shift report|dashboard)\b/i;
+// A command is the whole message. "today's price of iPhone 17" began with "today" and got this
+// dashboard; "senior citizen phone" contained "senior" and went to an expert.
+const EXPERT = /\b(ask an expert|escalate)\b|^\s*(expert|specialist|poocho|poochho)\s*[.!?]*\s*$/i;
+const MANAGER = /^\s*(team|manager|floor|today|shift report|dashboard)\s*[.!?]*\s*$/i;
 
 export function wantsExpert(text: string | undefined, action: string | undefined): boolean {
   return action === "ask_expert" || (!!text && EXPERT.test(text));
