@@ -1070,7 +1070,19 @@ async function answer(
     // "do we have any offers on that" says "have", and the floor listing answered it with six
     // iPhones and a question. An offer is one of the specific topics the model holds, like the
     // warranty and the delivery, so it goes there rather than to a list of what is on the wall.
-    if (asksWhatWeHave(event.text) && !asksSomethingSpecific(event.text))
+    // And only once the conversation is about something. With nothing searched yet the pack is the
+    // catalogue's arbitrary first page, so "what do we have" answered a voice note with a fridge,
+    // a 50" television, an OPPO, an emergency LED batten, a JioTag and a Galaxy — a junk drawer
+    // presented as the floor. A shop with 8,383 products cannot answer that question; the model
+    // asks what they are after instead.
+    // The file pack is four televisions chosen on purpose, so listing it answers the question. The
+    // live catalogue's first page is not chosen at all, so until this conversation is about
+    // something the listing has nothing true to say.
+    if (
+      (session.subject || !pack.version.startsWith("live")) &&
+      asksWhatWeHave(event.text) &&
+      !asksSomethingSpecific(event.text)
+    )
       return inStockReply(pack, session.card, session.language, assessedFor(pack, session));
     // Anything else falls through to the model, which answers from the facts and is still held to
     // the floor's shape and to the figures in the pack.
