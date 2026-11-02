@@ -916,7 +916,14 @@ async function answer(
         // This turn's words matched nothing; the conversation keeps its subject.
       }
     }
-    if (!changed) pack = await searchPack(pack, session.subject).catch(() => pack);
+    if (!changed)
+      pack = await searchPack(pack, session.subject).catch(() => {
+        // The subject stopped finding anything, so it was never a product: conversations started
+        // before greetings became filler have "Hello" stored as what they are about. Forget it,
+        // and the next turn is free to name the real one.
+        delete session.subject;
+        return pack;
+      });
   }
   // What has just happened, for the model to answer around. Nothing in here is a question.
   // Set once a home fact has been filed this turn. The product sheet must not win after that: it

@@ -198,7 +198,11 @@ const SERVICE = /resq|warranty|protection|insurance|installation/i;
  *  "Washing Machines" for "washing machine" and "Front Loading" for "front load" — but "sony" is
  *  not an ending of "son", so the false match goes and the real ones stay. */
 function names(text: string, word: string): boolean {
-  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es|ing|ed)?\\b`).test(text);
+  // Both sides lose the plural, not just the product's: the associate types "phones" and the
+  // catalogue writes "Mobile Phone", so a one-sided test matched neither the phone nor the
+  // category and a telephoto lens was handed over as the most popular phone in the shop.
+  const stem = word.length > 3 ? word.replace(/s$/, "") : word;
+  return new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es|ing|ed)?\\b`).test(text);
 }
 
 export function aboutTheWords(said: string[], products: { brand: string; name: string }[]): boolean {
