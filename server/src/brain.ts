@@ -56,6 +56,9 @@ They come to you for whatever they do not know. Sometimes that is a customer sta
 How to be:
 - Talk to the associate the way a good manager talks: short, plain, direct, no greeting rituals and no selling at them. If they say hello, ask what is going on with them, the way you would in the aisle.
 - Answer the question they actually asked. Do not change the subject to a questionnaire.
+- A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is in stock, what the spec is, whether an offer is running. Then, if it helps, one question. Never answer a direct question with only a question. "Any offer on the iPhone 18 Pro?" is answered about the iPhone 18 Pro, not with "which model?" when FACTS already shows you which ones there are.
+- If FACTS lists no offer on what they asked about, the answer is that none is running on it today. Say that plainly. Never mention a bank offer, an exchange, an EMI or any other discount that is not in FACTS — not even as something you could go and check. An offer you have not been given does not exist.
+- Ask only about things that make sense for what they are buying. A phone has no viewing distance, no wall mount and no room; a washing machine has no screen size. One question at a time, and stop asking as soon as you have enough to be useful: an associate with a customer who has decided does not want five more questions.
 - When they are with a customer and have told you about them, the order that works is: learn the home, correct a wrong belief kindly, turn a spec into something about this home, show three options with one reason and one difference each, give the full cost charge by charge, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "How far will you sit from the TV?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
@@ -459,26 +462,6 @@ export function moneySafe(text: string): string {
   return text.replace(/","\s?(?=[\d₹])/g, "Rs ").replace(/\bRs\s+₹/g, "Rs ");
 }
 
-/** Three lines and three buttons is the floor limit. The recommend step spends all three lines on
- *  the three options, each carrying its own reason; every other step uses two plus a reason line. */
-/** The contest's floor rule — "not more than 3 lines and 3 buttons" — applied to every reply that
- *  leaves, not only to the ones a model wrote.
- *
- *  `render()` below has always enforced it on model output, but eight of the nine stages now answer
- *  deterministically and build their own text, so each of those was its own chance to break it. One
- *  gate at the exit is the only version of this rule that cannot drift. The reason line counts as a
- *  line, because on a phone it is one. */
-/** WhatsApp's own formatting, applied to every reply as it leaves.
- *
- *  An associate reads this at a glance with a customer waiting, so the words to say out loud have
- *  to be the thing their eye lands on. WhatsApp gives *bold*, _italic_ and nothing else worth
- *  having, and the markers must hug the text or they show up as asterisks.
- *
- *  Three rules, none of which can overlap another, because a nested marker renders as litter:
- *   - the reason line is context, not words: italic, whole
- *   - a line with quoted words has the quote emboldened and nothing else, because that is the
- *     sentence to speak — in any language, which is why this reads the quotes and not the label
- *   - any other line gets its leading label and its rupee figures picked out */
 export function pretty(reply: Reply): Reply {
   const money = (part: string): string => part.replace(/\bRs\s?([\d,]+)/g, "*Rs $1*");
   const text = reply.text
@@ -1036,7 +1019,10 @@ async function answer(
       const named = packAnswer(pack, event.text, session, "set");
       if (named) return named;
     }
-    if (asksWhatWeHave(event.text))
+    // "do we have any offers on that" says "have", and the floor listing answered it with six
+    // iPhones and a question. An offer is one of the specific topics the model holds, like the
+    // warranty and the delivery, so it goes there rather than to a list of what is on the wall.
+    if (asksWhatWeHave(event.text) && !asksSomethingSpecific(event.text))
       return inStockReply(pack, session.card, session.language, assessedFor(pack, session));
     // Anything else falls through to the model, which answers from the facts and is still held to
     // the floor's shape and to the figures in the pack.

@@ -60,7 +60,7 @@ export function intentOf(text: string | undefined): Intent {
  *  TCL any good" and the wrong one to "what warranty comes with it", so these go to the model,
  *  which has the charges, the finance terms and the offers in front of it. */
 const TOPIC =
-  /\b(warrant\w*|guarantee|deliver\w*|install\w*|exchange|emi|finance|instal?ment|service|return|replace\w*|setup|set up|mount\w*|bracket|insurance|garanti|वारंटी|डिलीवरी)\b/i;
+  /\b(warrant\w*|guarantee|deliver\w*|install\w*|exchange|emi|finance|instal?ment|service|return|replace\w*|setup|set up|mount\w*|bracket|insurance|garanti|offers?|discounts?|deals?|scheme|cashback|ऑफर|वारंटी|डिलीवरी)\b/i;
 
 export function asksSomethingSpecific(text: string): boolean {
   return TOPIC.test(text);
