@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
@@ -97,4 +98,16 @@ test("an associate who said five feet is not asked the distance again", async ()
   assert.match(model.prompts.join(" "), /distance_feet/);
   assert.match(model.prompts.join(" "), /5/);
   assert.match(reply.text, /Ask: /);
+});
+
+test("a voice note reaches the catalogue, because the words arrive before the search", async () => {
+  // The transcript used to be produced 89 lines AFTER the catalogue search read event.text, so a
+  // spoken "do we have the iPhone 18 Pro in stock" searched for nothing at all, kept the
+  // catalogue's unsearched first page, and the model honestly reported that no iPhone was in
+  // FACTS — which it phrased to the associate as having no access to the catalogue.
+  const source = await readFile(new URL("../server/src/brain.ts", import.meta.url), "utf8");
+  const transcribe = source.indexOf("await voiceNote(event.audio");
+  const search = source.indexOf('const about = (event.text ?? "").trim();');
+  assert.ok(transcribe > 0 && search > 0, "both steps still exist");
+  assert.ok(transcribe < search, "a voice note must become words before anything reads them");
 });

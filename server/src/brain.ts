@@ -877,6 +877,19 @@ async function answer(
   // pack fell back to the four stub televisions and a washing machine customer was asked how far
   // they sit from the TV, three turns running. So what the conversation is about is remembered,
   // and only replaced when new words actually find something.
+  // The words first, then everything that reads them. A voice note carries no text, and the
+  // catalogue search below reads event.text — so a spoken "do we have the iPhone 18 Pro in stock"
+  // searched for nothing, kept the catalogue's unsearched first page, and the model reported what
+  // it honestly saw: no iPhone anywhere in FACTS, which it phrased as having no catalogue access.
+  // The same shape as the very first fault found today: a turn that carries no text yet.
+  let heard: Partial<Session["card"]> = {};
+  if (event.audio) {
+    const spoken = await voiceNote(event.audio, request);
+    heard = spoken.card;
+    const said = [spoken.transcript, event.text].filter(Boolean).join(" ").trim();
+    event = { ...event, ...(said ? { text: said } : {}) };
+    delete event.audio;
+  }
   // "New customer asking for iPhone 17 model 256 gb any offers going on?" is one sentence: the
   // card has to be cleared AND the question answered. Split here rather than in deterministic(),
   // because the search below reads `about` and a command never reaches the catalogue — so the
@@ -920,7 +933,7 @@ async function answer(
       // store sorted first (a fridge, a television, resQ plans), and answering an iPhone question
       // from it is how this associate was told about televisions instead.
       notes.push(
-        `The catalogue search for ${JSON.stringify(about).slice(0, 70)} matched nothing. FACTS has no product for what they asked about. Do not name any other product instead: say you cannot see it in what we can search, point them to the shelf tag or the ASM, and set "unknown" true so a human finds out.`,
+        `The catalogue search for ${JSON.stringify(about).slice(0, 70)} found no product. We ARE connected to the store catalogue — this one search came back empty, so say that this particular thing is not coming up, never that you have no catalogue, no access, no system or no data. Do not name a different product instead. Point them at the shelf tag or the ASM, and set "unknown" true so a human finds out.`,
       );
     }
   } else if (session.subject) {
@@ -969,14 +982,6 @@ async function answer(
   let filed = false;
   // A voice note becomes the words that were said, so everything below treats it exactly as it
   // treats typing: the same extraction, the same objections and products, the same floor shape.
-  let heard: Partial<Session["card"]> = {};
-  if (event.audio) {
-    const spoken = await voiceNote(event.audio, request);
-    heard = spoken.card;
-    const said = [spoken.transcript, event.text].filter(Boolean).join(" ").trim();
-    event = { ...event, ...(said ? { text: said } : {}) };
-    delete event.audio;
-  }
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);
