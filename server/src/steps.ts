@@ -14,6 +14,17 @@ export function wantsNewCustomer(text: string | undefined, action: string | unde
   return action === "new_customer" || (!!text && NEW_CUSTOMER_WORDS.test(text));
 }
 
+/** What the associate said AFTER announcing the new customer. "New customer asking for iPhone 17
+ *  model 256 gb any offers going on?" is one sentence: the card has to be cleared AND the question
+ *  answered. It was answered with "new customer, clean card" twice, and the question thrown away
+ *  both times, because the command matched the first two words and took the whole turn. */
+export function newCustomerRest(text: string | undefined): string {
+  if (!text) return "";
+  const rest = text.replace(NEW_CUSTOMER_WORDS, "").trim();
+  // "new customer" and "new customer." are the command and nothing else.
+  return rest.replace(/^[,.:;\-\s]+/, "").trim();
+}
+
 /** Plain words for what Store IQ believes about this home, in the brief's "I heard" shape. */
 export function cardSummary(session: Session): Reply {
   const card = session.card;

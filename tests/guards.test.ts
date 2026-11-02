@@ -329,3 +329,18 @@ test("a viewing distance is not a fact about a phone", async () => {
     assert.equal(fieldApplies(field, screens), true, field);
   }
 });
+
+test("saying there is no offer is not opening one", () => {
+  // "The iPhone 17 256 GB is Rs 99,900. There are no offers running on it today." was replaced
+  // with "Offers come after the home": the gate read the price as the offer's figure and the
+  // honest denial as the leak. An associate who asks and is told "none" has not been sold to.
+  assert.equal(
+    offerLeaked("The iPhone 17 256 GB is Rs 99,900. There are no offers running on it today.", false, false),
+    false,
+  );
+  assert.equal(offerLeaked("No offers are running on the iPhone 18 Pro models today.", false, false), false);
+  assert.equal(offerLeaked("There is no discount on this one, it is Rs 54,990.", false, false), false);
+  // But an offer's own name is not a denial, and a real quote is still a leak.
+  assert.equal(offerLeaked("No-cost EMI runs 9 months at Rs 6110.", false, false), true);
+  assert.equal(offerLeaked("The HDFC offer is 7.5%, capped at Rs 8000.", false, false), true);
+});

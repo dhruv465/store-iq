@@ -42,6 +42,7 @@ import {
   wantsBrief,
   wantsFinance,
   wantsFollowThrough,
+  newCustomerRest,
   wantsNewCustomer,
   wantsRecommend,
   wantsReview,
@@ -70,8 +71,9 @@ Hard rules, never bent:
 - Never OPEN offers, discounts, exchange or finance yourself before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them — the real offer out of FACTS, or that none is running on it today. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines plus your reason, except three options which take three lines. At most 3 buttons, 20 characters each. They read this at a glance, out loud, with a customer waiting.
+- A button is an answer to the question you just asked, or a thing worth doing next — a product to pick, a card value, "show the card", "find out for me". NEVER a specification, a price, or a fact you have just stated: "2 TB storage" and "48 MP camera" are nothing the associate can do, and tapping one only asks you to repeat yourself. If you asked no question and there is nothing to do, send no buttons at all. Buttons must also be different from each other: two that lead to the same answer are one button.
 - A button answering something about the customer's home MUST have the id "card:<field>:<value>", for example "card:content:sports", "card:mount:wall", "card:distance_feet:8". Fields: room, distance_feet, light, mount, content, devices, family, internet, budget_rupees, start_level. Anything else gets a plain id.
-- Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode.
+- Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
 
 export type Decision = {
@@ -322,7 +324,8 @@ export async function voiceNote(
   return { transcript: String(heard.transcript ?? "").slice(0, 600), card };
 }
 
-const OFFER_WORDS = /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|chhoot|छूट)s?\b/i;
+const OFFER_WORDS =
+  /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|deal|sale|chhoot|छूट)s?\b/i;
 /** A figure beside the offer word is the difference between quoting a deal and declining to. */
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
 
@@ -335,8 +338,14 @@ export function askedAboutOffers(said: string | undefined): boolean {
   return !!said && OFFER_WORDS.test(said);
 }
 
+/** Saying there is NO offer is not opening one. "The iPhone 17 256 GB is Rs 99,900. There are no
+ *  offers running on it today." was replaced with "Offers come after the home": the gate read the
+ *  price as the offer's figure and the honest denial as the leak. */
+const DENIES_OFFER =
+  /\b(no|not|none|nothing|never|nahi)\b(?![\s-]*cost)[^.!?]{0,40}\b(offer|discount|exchange|emi|finance|cashback|bonus|scheme|deal|sale)s?\b|\b(offer|discount|deal|scheme)s?\b[^.!?]{0,40}\b(no|not running|none|nothing|nahi)\b/i;
+
 export function offerLeaked(text: string, assessed: boolean, demonstrated: boolean, asked = false): boolean {
-  if (asked) return false;
+  if (asked || DENIES_OFFER.test(text)) return false;
   return !(assessed && demonstrated) && OFFER_WORDS.test(text) && A_FIGURE.test(text);
 }
 
@@ -868,10 +877,20 @@ async function answer(
   // pack fell back to the four stub televisions and a washing machine customer was asked how far
   // they sit from the TV, three turns running. So what the conversation is about is remembered,
   // and only replaced when new words actually find something.
+  // "New customer asking for iPhone 17 model 256 gb any offers going on?" is one sentence: the
+  // card has to be cleared AND the question answered. Split here rather than in deterministic(),
+  // because the search below reads `about` and a command never reaches the catalogue — so the
+  // reset swallowed the question, twice, and the iPhone was never looked up at all.
+  const started = wantsNewCustomer(event.text, event.action) ? newCustomerRest(event.text) : "";
+  if (started.length > 3) {
+    startInteraction(session);
+    event = { ...event, text: started };
+  }
   const about = (event.text ?? "").trim();
   // Notes exist before the search: a search that matched nothing is as worth telling the model as
   // a card field just filled.
   const notes: string[] = [];
+  if (started.length > 3) notes.push("They have just started a new customer, so the card is empty.");
   // A command is not a product. Searching "recommend" returned a USB hub, which then became what
   // the conversation was about and was offered as the one thing to show.
   const isCommand =
