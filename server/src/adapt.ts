@@ -152,11 +152,12 @@ function rowOffers(row: Record<string, any>): Record<string, string> {
     } | null;
     const saving = Math.round(Number(bank?.discount) || 0);
     const emi = String(bank?.subtitle ?? "").match(/^([\d.]+)\/(\d+)$/);
-    if (bank?.bank && emi) {
+    const name = String(bank?.bank ?? "").replace(/_/g, " ");
+    if (name && emi) {
       const monthly = Math.round(Number(emi[1]));
       const months = Number(emi[2]);
-      found.bank_offer = `${bank.bank}: ${months} months at Rs ${monthly} a month, Rs ${monthly * months} in all, saves Rs ${saving}`;
-    } else if (bank?.bank && saving) found.bank_offer = `${bank.bank} card: saves Rs ${saving}`;
+      found.bank_offer = `${name}: ${months} months at Rs ${monthly} a month, Rs ${monthly * months} in all, saves Rs ${saving}`;
+    } else if (name && saving) found.bank_offer = `${name} card: saves Rs ${saving}`;
   } catch {
     // A pg_offer that is not JSON is not an offer anyone can quote.
   }

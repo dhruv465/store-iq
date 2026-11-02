@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { falSpend } from "./fal.js";
+import { falSpend, NOTHING_HEARD } from "./fal.js";
+import { t } from "./i18n.js";
 import { decide } from "./brain.js";
 import type { DB } from "./db.js";
 import type { Pack } from "./pack.js";
@@ -97,10 +98,7 @@ export async function deliverHeldNotices(
 }
 
 /** The floor rule is a first reply inside 5 seconds; voice and photo work cannot meet that, so they get an instant line. */
-const ACK: Record<string, string> = {
-  audio: "👂 Sun raha hoon…",
-  image: "🔎 Label padh raha hoon…",
-};
+const ACK: Record<string, string> = { audio: "ack.audio", image: "ack.image" };
 
 export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) {
   let stopped = false;
@@ -109,11 +107,11 @@ export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) 
   const running = new Map<string, Promise<void>>();
 
   async function handle(row: any): Promise<void> {
+    const session = await db.session(row.phone);
     const ack = ACK[row.message_type];
-    if (ack) await db.send(row.phone, { text: ack }).catch(() => {});
+    if (ack) await db.send(row.phone, { text: t(session.language, ack) }).catch(() => {});
     const event = await incomingEvent(row);
     await deliverHeldNotices(db, row.phone);
-    const session = await db.session(row.phone);
     let reply: Reply;
     const started = Date.now();
     try {
@@ -127,12 +125,10 @@ export function startWorker(db: DB, pack: Pack, options: { whatsapp: boolean }) 
     } catch (error) {
       // Silence in front of a customer is worse than an honest line. The session is left untouched,
       // so the associate can simply ask again from where they were.
-      console.error("Turn failed after retries", error instanceof Error ? error.message : "unknown");
+      const message = error instanceof Error ? error.message : "unknown";
+      console.error("Turn failed after retries", message);
       await db.send(row.phone, {
-        text:
-          session.language === "hi"
-            ? "Main abhi jawab nahi de paya. Ek baar phir bhejiye.\n↳ Connection issue, aapka customer card waise hi hai."
-            : "I could not answer that just now. Send it again.\n↳ A connection problem, your customer card is untouched.",
+        text: t(session.language, message === NOTHING_HEARD ? "voice.unheard" : "turn.failed"),
       });
       return;
     }

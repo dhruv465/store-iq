@@ -193,7 +193,11 @@ export async function searchPack(base: Pack, search: Search, request: typeof fet
   if (kind) {
     // "iphone 18 pro" comes back as cases and straps named after the phone. When most of what came
     // back is not the thing asked for, the same words are asked again on the store's own shelf for it.
-    if (rows.filter((row) => carriesKind(row, kind)).length * 2 < rows.length) {
+    // The shelf and not the name: "Laptop Stand" has the word in it, so "laptop under 40000" was
+    // answered with stands and "none under that", with an Acer at Rs 36,990 on the shelf.
+    const onShelf = (row: Row): boolean =>
+      (row.categories ?? []).some((category: Row) => shelfIs(String(category?.name), kind));
+    if (rows.filter(onShelf).length * 2 < rows.length) {
       const shelves = shelvesOf(found.filters, kind);
       if (shelves.length) {
         const f = [`category:${shelves.join("||")}`, ...(price ? [price] : [])].join(":::");
@@ -519,21 +523,29 @@ export function allowedNumbers(pack: Pack): Set<number | string> {
  *  "1 in stock"; a screen size and a panel are in the name where they mean anything. */
 export function factsFor(pack: Pack): string {
   const skip = new Set(["stock_units", "size_inch", "panel", "energy", "weak_for"]);
+  // Everything running on a product, on that product's own line. Offers used to sit in three spec
+  // keys and a separate list, so an empty look at one read as "no offer" with one named right below.
+  const offerSpecs = ["discount", "offer_tag", "bank_offer"];
+  const onIt = (offer: Record<string, unknown>, name: string): boolean =>
+    Array.isArray(offer.on) && offer.on.includes(name);
+  const general = pack.offers.filter((offer) => !Array.isArray(offer.on));
   // Twelve rows with every spec is 10,000 tokens a turn, and the later ones are the same thing in
   // another colour. So the first six are in full, and the rest say what tells them apart.
-  const offerSpecs = /^(discount|offer_tag|status|bank_offer)$/;
   return JSON.stringify({
     ...(pack.search ? { search: pack.search } : {}),
     products: pack.products.slice(0, 12).map((product, index) => ({
       ...Object.fromEntries(Object.entries(product).filter(([key, value]) => !skip.has(key) && value !== "")),
       good_for: product.good_for.slice(0, index < 6 ? 8 : 0),
-      specs:
-        index < 6
-          ? product.specs
-          : Object.fromEntries(Object.entries(product.specs).filter(([key]) => offerSpecs.test(key))),
+      specs: Object.fromEntries(
+        Object.entries(product.specs).filter(([key]) => !offerSpecs.includes(key) && (index < 6 || key === "status")),
+      ),
+      offers_on_it: [
+        ...offerSpecs.map((key) => (product.specs as Record<string, unknown>)[key]).filter(Boolean),
+        ...pack.offers.filter((offer) => onIt(offer, product.name)).map((offer) => offer.title),
+      ],
       in_stock: product.stock_units > 0,
     })),
-    offers: pack.offers,
+    ...(general.length ? { offers: general } : {}),
     // Only a file pack has these: the live one is empty, and an empty list is not worth the tokens.
     ...Object.fromEntries(
       (["finance", "charges", "accessories", "labels", "myths", "install_requirements"] as const)

@@ -30,7 +30,9 @@ try {
   // voice note, the key is optional: without it a photo says "type the model number" and nothing
   // else changes, and the server refusing to start over it was the last thing tying us to it.
   const photo = process.env.GEMINI_API_KEY?.trim() ? await assertModelAvailable() : "off";
-  const model = fal ? `fal ${fal.model} · voice on fal-ai/whisper · photo ${photo}` : await assertModelAvailable();
+  const model = fal
+    ? `fal ${fal.model} · voice on fal-ai/elevenlabs/speech-to-text · photo ${photo}`
+    : await assertModelAvailable();
   const worker = startWorker(db, pack, { whatsapp });
   const app = createApp(
     {

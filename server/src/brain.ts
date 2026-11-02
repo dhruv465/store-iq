@@ -24,7 +24,7 @@ import {
   wantsVisitLog,
   worthFiling,
 } from "./visit.js";
-import { askedToSwitchLanguage, languageFrom, t, type Lang } from "./i18n.js";
+import { askedToSwitchLanguage, INDIAN_SCRIPT, INDIAN_WORDS, languageFrom, t, type Lang } from "./i18n.js";
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import {
   briefAnswer,
@@ -57,7 +57,7 @@ How to be:
 - With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- Offers are in FACTS in three places: a product's specs.bank_offer, specs.offer_tag and specs.discount, and the "offers" list, which says which products each one is "on". If none of those has one for the thing asked about, the answer is that none is showing on it today. Say that plainly. Never mention an offer, an exchange or an EMI that is not in FACTS, not even as something you could go and check.
+- Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
 - Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. FACTS says whether something is available (in_stock), not how many: never state a number of units. A feature FACTS does not mention is not a feature the product lacks: say it is not listed, never "it does not have one". If it is not in FACTS, say this is not showing and tell them who has it — the shelf tag, the ASM, the service desk. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
@@ -288,9 +288,8 @@ export async function voiceNote(
   audio: NonNullable<Event["audio"]>,
   request: typeof fetch = fetch,
 ): Promise<{ transcript: string; card: Partial<Session["card"]> }> {
-  // Whisper on fal where there is a key, because Gemini's free tier is 20 requests a day and a
-  // voice note is the one thing an associate sends when their hands are full. Whisper returns the
-  // words and nothing else, which is all the rest of this file wants: the card is then read from
+  // fal where there is a key, because Gemini's free tier is 20 requests a day and a voice note is
+  // the one thing an associate sends when their hands are full. It returns the words and nothing else, which is all the rest of this file wants: the card is then read from
   // those words exactly as it is from typed ones, by the extractor first and the manager after.
   const fal = falConfig();
   if (fal) return { transcript: await falTranscribe(fal, audio, request), card: {} };
@@ -335,8 +334,10 @@ export async function voiceNote(
   return { transcript: String(heard.transcript ?? "").slice(0, 600), card };
 }
 
+// No \b on the Devanagari: in JavaScript a word boundary only knows ASCII, so a question in Hindi was
+// never an offer question, and the model was told not to bring offers up while being asked for them.
 const OFFER_WORDS =
-  /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|deal|sale|chhoot|छूट)s?\b/i;
+  /\b(offer|discount|exchange|emi|finance|cashback|instant|no.cost|bonus|scheme|deal|sale|chhoot)s?\b|ऑफ\u093c?र|छूट|डिस्काउंट|ईएमआई|एक्सचेंज|कैशबैक/i;
 /** A figure beside the offer word is the difference between quoting a deal and declining to. */
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
 
@@ -352,7 +353,7 @@ export function askedAboutOffers(said: string | undefined): boolean {
  *  offers running on it today." was replaced with "Offers come after the home": the gate read the
  *  price as the offer's figure and the honest denial as the leak. */
 const DENIES_OFFER =
-  /\b(no|not|none|nothing|never|nahi)\b(?![\s-]*cost)[^.!?]{0,40}\b(offer|discount|exchange|emi|finance|cashback|bonus|scheme|deal|sale)s?\b|\b(offer|discount|deal|scheme)s?\b[^.!?]{0,40}\b(no|not running|none|nothing|nahi)\b/i;
+  /\b(no|not|none|nothing|never|nahi)\b(?![\s-]*cost)[^.!?]{0,40}\b(offer|discount|exchange|emi|finance|cashback|bonus|scheme|deal|sale)s?\b|\b(offer|discount|deal|scheme)s?\b[^.!?]{0,40}\b(no|not running|none|nothing|nahi)\b|(ऑफ\u093c?र|छूट)[^।.!?]{0,40}(नहीं|नाही)/i;
 
 export function offerLeaked(text: string, assessed: boolean, demonstrated: boolean, asked = false): boolean {
   if (asked || DENIES_OFFER.test(text)) return false;
@@ -390,6 +391,15 @@ export function isAssessed(card: Session["card"]): boolean {
 export function numbersIn(text: string): Set<number> {
   const found = new Set<number>();
   for (const token of text.matchAll(/\d[\d,]*(?:\.\d+)?/g)) found.add(Number(token[0].replace(/,/g, "")));
+  // "30 to 40 thousand" is how a budget is said, and quoting it back as Rs 40,000 was refused.
+  for (const [, low, high, scale] of text.matchAll(
+    /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to|se|से)\s*(\d+(?:\.\d+)?))?\s*(k|thousand|hazaa?r|ह[ज\u095b]\u093c?ार|lakhs?|lacs?|लाख)(?![a-z])/gi,
+  )) {
+    const by = /^(lakh|lac|लाख)/i.test(scale!) ? 100_000 : 1000;
+    for (const figure of [low, high]) if (figure) found.add(Number(figure) * by);
+  }
+  // "30 to 40,000": the thousands are only written on the second one.
+  for (const [, low] of text.matchAll(/(\d{1,3})\s*(?:-|–|to|se|से)\s*\d{1,3},000\b/gi)) found.add(Number(low) * 1000);
   return found;
 }
 
@@ -469,11 +479,17 @@ export function offerExpert(reply: Reply, lang: Lang, when = true): Reply {
 }
 
 export function moneySafe(text: string): string {
-  return text.replace(/","\s?(?=[\d₹])/g, "Rs ").replace(/\bRs\s+₹/g, "Rs ");
+  return text
+    .replace(/","\s?(?=[\d₹])/g, "Rs ")
+    .replace(/\bRs\s+₹/g, "Rs ")
+    .replace(
+      /\bRs\.?\s?(\d+(?:,\d+)*)/g,
+      (_, amount: string) => `Rs ${Number(amount.replace(/,/g, "")).toLocaleString("en-IN")}`,
+    );
 }
 
 export function pretty(reply: Reply): Reply {
-  const money = (part: string): string => part.replace(/\bRs\s?([\d,]+)/g, "*Rs $1*");
+  const money = (part: string): string => part.replace(/\bRs\s?(\d+(?:,\d+)*)/g, "*Rs $1*");
   const text = reply.text
     .split("\n")
     .map((line) => {
@@ -568,6 +584,26 @@ const CARD_FIELDS = new Set([
   "replacing",
 ]);
 
+/** Told from the message in hand and said last, because a model follows the turns in front of it:
+ *  told further up that the associate was writing English, it still answered six Hindi replies in a row. */
+function languageNote(said: string | undefined, lang: Lang): string {
+  const latin = !!said && !INDIAN_SCRIPT.test(said);
+  const language =
+    lang === "en"
+      ? latin && INDIAN_WORDS.test(said!)
+        ? "Hinglish, in Latin script, never Devanagari"
+        : "English"
+      : `${lang === "mr" ? "Marathi" : "Hindi"}, ${latin ? "in Latin script, never Devanagari" : "in Devanagari"}`;
+  return `Write this reply and its buttons in ${language}, whatever language the recent turns are in.`;
+}
+
+/** Whether a reply came back in the script this message needs. The instruction above is not enough:
+ *  with Hindi turns in front of it the model answered an English question in Hindi, told not to. */
+export function wrongScript(reply: string, said: string | undefined, lang: Lang): boolean {
+  const wantsDevanagari = lang !== "en" && (!said || INDIAN_SCRIPT.test(said));
+  return wantsDevanagari === !/[\u0900-\u097f]/.test(reply) && !!reply.trim();
+}
+
 function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []): string {
   const gate = askedAboutOffers(event.text)
     ? "They asked about offers or finance outright, so answer it from FACTS."
@@ -585,9 +621,6 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
     // What the code knows and the model does not: a gate just hit, a tap, a search that came back
     // empty. Nothing in here is a question; the manager asks.
     notes.length ? `JUST NOW:\n- ${notes.join("\n- ")}` : "",
-    session.language === "hi"
-      ? "The associate is writing in Hindi. Answer in Hindi."
-      : "The associate is writing in Latin script. Answer in English or Hinglish in Latin script, never Devanagari.",
     `RECENT TURNS:\n${
       session.history
         .slice(-6)
@@ -595,6 +628,7 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
         .join("\n") || "none"
     }`,
     `THE ASSOCIATE ${event.action ? `tapped: ${event.action}` : ""}${event.text ? ` said: ${event.text}` : ""}`.trim(),
+    languageNote(event.text, session.language),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -827,9 +861,15 @@ async function answer(
   const switched = askedToSwitchLanguage(event.text);
   if (switched) session.language = switched;
   else if (event.text) session.language = languageFrom(event.text, session.language);
-  // A request to switch language is a whole turn on its own.
-  if (switched && (event.text ?? "").trim().split(/\s+/).length <= 4)
-    return { text: t(session.language, "lang.switched") };
+  // Asked for another language after an answer, they want that answer in it: "tell me in English"
+  // got "Theek hai", and the question had to be asked again. With nothing to repeat, it says so.
+  const repeating = !!switched && (event.text ?? "").trim().split(/\s+/).length <= 4;
+  if (repeating) {
+    if (!session.history.length) return { text: t(session.language, "lang.switched") };
+    notes.push(
+      "They asked for this language. Say your last answer again in it, in full, offers included, and add nothing else.",
+    );
+  }
   // Extra points: a store visit, in the visitor's own words. It comes before everything that reads
   // text as a customer, because a visit note is full of rooms, prices and brands.
   if (store && session.logging_visit && event.text) {
@@ -932,6 +972,8 @@ async function answer(
       event.action,
       typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
       typeof card?.budget_rupees === "number" ? `Rs ${card.budget_rupees}` : "",
+      // The search read it from their words, spelled however they spelled it: "eighty thousand".
+      session.search?.max_price ? `Rs ${session.search.max_price}` : "",
       // Anything the model filed under its own name is still something the associate said. The
       // budget went in as a fact rather than budget_rupees, and quoting it back was refused.
       ...Object.values(session.card.facts ?? {}),
@@ -949,6 +991,10 @@ async function answer(
   if (wrong.length)
     decision = await written([
       `You wrote ${wrong.join(", ")}, which is not in FACTS and was not said by the associate. Answer again using only figures exactly as FACTS has them, or say that this one is not showing.`,
+    ]);
+  if (wrongScript(render(decision).text, event.text, session.language))
+    decision = await written([
+      `You wrote your last draft in the wrong language. ${languageNote(event.text, session.language)} Give the same answer, translated.`,
     ]);
 
   const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
@@ -985,7 +1031,8 @@ async function answer(
   // comes back as a notice, so the associate is not left with "I do not have that".
   if (decision.unknown && store) reply = unknownReply(reply, session.language);
   const bad = figuresIn(decision);
-  const asked = askedAboutOffers(event.text);
+  // Saying an answer again in another language is not opening anything: it was already asked.
+  const asked = askedAboutOffers(event.text) || repeating;
   if (bad.length)
     reply = offerExpert(
       {

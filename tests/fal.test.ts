@@ -86,13 +86,13 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
   }
 });
 
-test("a voice note is uploaded first, because Whisper refuses a data URI", async () => {
+test("a voice note is uploaded first, because the speech model takes a URL", async () => {
   const calls: { url: string; init: RequestInit }[] = [];
   const fake = (async (url: string | URL, init: RequestInit = {}) => {
     calls.push({ url: String(url), init });
     const body = String(url).includes("storage/upload")
       ? { upload_url: "https://v3b.fal.media/files/b/x?signature=s", file_url: "https://v3b.fal.media/files/b/x" }
-      : String(url).includes("whisper")
+      : String(url).includes("speech-to-text")
         ? { text: "  they sit about five feet away  " }
         : {};
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -109,7 +109,11 @@ test("a voice note is uploaded first, because Whisper refuses a data URI", async
   assert.equal(heard, "they sit about five feet away");
   assert.deepEqual(
     calls.map((call) => `${call.init.method} ${new URL(call.url).host}${new URL(call.url).pathname}`),
-    ["POST rest.alpha.fal.ai/storage/upload/initiate", "PUT v3b.fal.media/files/b/x", "POST fal.run/fal-ai/whisper"],
+    [
+      "POST rest.alpha.fal.ai/storage/upload/initiate",
+      "PUT v3b.fal.media/files/b/x",
+      "POST fal.run/fal-ai/elevenlabs/speech-to-text",
+    ],
   );
   assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { content_type: "audio/ogg", file_name: "note" });
   assert.doesNotMatch(String(calls[2]!.init.body), /base64/, "the audio itself is not in the transcribe call");

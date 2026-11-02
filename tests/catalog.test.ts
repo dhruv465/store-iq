@@ -21,6 +21,7 @@ import {
   type Search,
 } from "../server/src/pack.js";
 import { decide, unsupportedNumbers } from "../server/src/brain.js";
+import { t } from "../server/src/i18n.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
 import "./model.js";
 
@@ -282,6 +283,26 @@ test("cases named after the phone send the same words to the store's phone shelf
   assert.equal(store.store[1]!.searchParams.get("f"), "category:smart-phones");
 });
 
+test("a laptop stand is named after a laptop and is not one: the shelf decides", async () => {
+  const stand = { categories: [{ name: "Laptop Stands" }] };
+  const store = shop((url) =>
+    url.searchParams.get("f")?.startsWith("category")
+      ? page([row(7, "Acer Aspire 3 Laptop", 36990, { categories: [{ name: "Mid End Laptops" }] })])
+      : page([row(8, "Aluminium Laptop Stand", 707, stand), row(9, "Laptop Messenger Bag", 999, stand)], {
+          filters: categories("entry-level-laptops", "mid-end-laptops", "laptop-stands"),
+        }),
+  );
+  const pack = await searchPack(base, search("laptop", { kind: "laptop", max_price: 40000 }), store.fetch);
+  assert.deepEqual(
+    pack.products.map((product) => product.price_rupees),
+    [36990],
+  );
+  assert.equal(
+    store.store[1]!.searchParams.get("f"),
+    "category:entry-level-laptops||mid-end-laptops:::min_price_effective:[1,INR TO 40000,INR]",
+  );
+});
+
 test("a budget uses the price facet's own format, and joins a shelf with :::", async () => {
   const seen: string[] = [];
   const store = shop((url) => {
@@ -432,9 +453,46 @@ test("FACTS is what the store returned, with no unit count and later rows cut to
   assert.equal(facts.products[0].in_stock, true);
   assert.equal(facts.products[0].stock_units, undefined, "this listing only says yes or no");
   assert.equal(facts.products[0].specs.ram, "8 GB");
-  assert.deepEqual(facts.products[7].specs, { discount: "10% OFF" });
+  assert.deepEqual(facts.products[7].specs, {});
+  assert.deepEqual(facts.products[7].offers_on_it, ["10% OFF"]);
   assert.deepEqual(facts.products[7].good_for, []);
   for (const empty of ["finance", "charges", "accessories", "labels", "myths"]) assert.equal(facts[empty], undefined);
+});
+
+test("every offer on a product is on that product's own line, and one on its neighbour is not", async () => {
+  const fake = (async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.includes("available-promotions"))
+      return Response.json({
+        available_promotions:
+          url.searchParams.get("slug") === "slug-61"
+            ? [{ id: "p9", offer_text: "Free wall mount", valid_till: "2099-01-01T00:00:00Z" }]
+            : [],
+      });
+    return Response.json(
+      page([
+        row(60, "LG NU870", 38990, {
+          discount: "15% OFF",
+          _custom_meta: [
+            { key: "pg_offer", value: JSON.stringify({ bank: "INDUSIND_BANK", discount: "3899" }) },
+            { key: "Tag1", value: "5% Upto 1500 HDFC/ICICI CC*" },
+          ],
+        }),
+        row(61, "LG NU885", 39990),
+        row(62, "LG Plain", 29990),
+      ]),
+    );
+  }) as unknown as typeof fetch;
+  const facts = JSON.parse(factsFor(await searchPack(base, search("lg offers"), fake)));
+  assert.deepEqual(facts.products[0].offers_on_it, [
+    "15% OFF",
+    "5% Upto 1500 HDFC/ICICI CC*",
+    "INDUSIND BANK card: saves Rs 3899",
+  ]);
+  assert.deepEqual(facts.products[1].offers_on_it, ["Free wall mount"]);
+  assert.deepEqual(facts.products[2].offers_on_it, []);
+  assert.equal(facts.products[0].specs.bank_offer, undefined, "one place to read it, so two cannot disagree");
+  assert.equal(facts.offers, undefined);
 });
 
 test("the guard allows what the store's row says, and nothing it does not", async () => {
@@ -478,6 +536,91 @@ test("a turn: the sentence becomes a search, the store's rows become FACTS, the 
   assert.deepEqual(reply.buttons, [{ id: "select:CODE50", title: "Silver" }]);
   assert.deepEqual(session.search, { q, kind: "phone" });
   assert.deepEqual(session.card, {}, "a decided customer has no home card");
+});
+
+test("the reply is written in the language of this message, whatever came before", async () => {
+  const text = `lg set ${++unique}`;
+  const store = shop(() => page([row(70, "LG set", 38990)]), { q: text }, { lines: ["It is Rs 38,990."] });
+  const session = newSession("919820000001");
+  session.language = "hi";
+  const last = () => store.told.at(-1)!;
+  await decide(said("Are there any offers running on this TV?"), session, base, store.fetch);
+  assert.equal(session.language, "en");
+  assert.match(last(), /Write this reply and its buttons in English/);
+  await decide(said("इस पर कोई ऑफर है?"), session, base, store.fetch);
+  assert.match(last(), /in Hindi, in Devanagari/);
+  await decide(said("iske baare mein batao kitne ka hai"), session, base, store.fetch);
+  assert.match(last(), /in Hindi, in Latin script/);
+  session.language = "en";
+  await decide(said("iske baare mein batao kitne ka hai"), session, base, store.fetch);
+  assert.match(last(), /in Hinglish, in Latin script/);
+  session.language = "mr";
+  await decide(said("याची किंमत किती आहे"), session, base, store.fetch);
+  assert.match(last(), /in Marathi, in Devanagari/);
+});
+
+test("a reply in the wrong script is written again once, and is not sent like that", async () => {
+  const q = `lg script ${++unique}`;
+  let wrote = 0;
+  const store = shop(() => page([row(73, "LG script", 38990)]), { q });
+  const lines = ["इस पर Rs 38,990 है।", "It is Rs 38,990."];
+  const fake = (async (url: string | URL, init: RequestInit = {}) => {
+    const body = init.body ? String(init.body) : "";
+    if (!String(url).includes("generativelanguage") || body.includes("one search of the store"))
+      return store.fetch(url, init);
+    const answer = {
+      step: "complete",
+      card: {},
+      shortlist: [],
+      demonstrated: false,
+      lines: [lines[wrote++]],
+      buttons: [],
+    };
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] });
+  }) as unknown as typeof fetch;
+  const session = newSession("919820000001");
+  session.language = "hi";
+  const reply = await decide(said("Are there any offers running on this TV?"), session, base, fake);
+  assert.equal(wrote, 2);
+  assert.match(reply.text, /It is/);
+});
+
+test("asked for English after an answer, it says that answer again in English", async () => {
+  const q = `lg repeat ${++unique}`;
+  const store = shop(
+    () => page([row(71, "LG repeat", 38990, { discount: "15% OFF" })]),
+    { q },
+    { lines: ["It is Rs 38,990 and 15% off."] },
+  );
+  const session = newSession("919820000001");
+  await decide(said("LG टीवी दिखाओ"), session, base, store.fetch);
+  const reply = await decide(said("tell me in English"), session, base, store.fetch);
+  assert.match(store.told.at(-1)!, /Say your last answer again/, "it went to the model");
+  assert.match(reply.text, /Rs 38,990/, "an offer already asked for is not gated when it is said again");
+  assert.equal(session.language, "en");
+
+  const fresh = newSession("919820000002");
+  const before = store.told.length;
+  const ack = await decide(said("hindi please"), fresh, base, store.fetch);
+  assert.equal(store.told.length, before, "with nothing to repeat, it only says so");
+  assert.equal(ack.text, t("hi", "lang.switched"));
+});
+
+test("a budget the search read from the words is one the associate said, however it was spelled", async () => {
+  const q = `iphone budget ${++unique}`;
+  const store = shop(
+    () => page([row(72, "Apple iPhone 15", 69900)]),
+    { q, kind: "phone", max_price: 80000 },
+    { lines: ["Under Rs 80,000 there is the iPhone 15 at Rs 69,900."] },
+  );
+  const reply = await decide(
+    said("someone wants an iPhone under eighty thousand"),
+    newSession("919820000001"),
+    base,
+    store.fetch,
+  );
+  assert.match(reply.text, /Rs 80,000/);
+  assert.doesNotMatch(reply.text, /not in the catalogue/);
 });
 
 test("a follow-up is searched with the last search in front of the model, and stays on it", async () => {

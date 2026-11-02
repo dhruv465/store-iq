@@ -68,7 +68,12 @@ const EN: Record<string, Phrase> = {
   "exp.say": (v) => `Say: "Let me confirm that with our ${v.area} desk and come straight back to you."`,
   "gate.offers": (v) => `Not the offer yet. ${v.body}`,
   "gate.offers.ask": "Show them the difference first, and ask me if they ask.",
-  "lang.switched": "Theek hai.",
+  "lang.switched": "Okay, English from here.",
+  "ack.audio": "👂 Listening…",
+  "ack.image": "🔎 Reading the label…",
+  "turn.failed":
+    "I could not answer that just now. Send it again.\n↳ A connection problem, your customer card is untouched.",
+  "voice.unheard": "I could not make out that voice note. Say it again, or type it.",
   "greet.back": "Go on — what's happening?",
   "greet.how": "",
   "greet.reason": "Customer in front of you, or something you want to check?",
@@ -170,6 +175,10 @@ const HI: Record<string, Phrase> = {
   "gate.offers": (v) => `अभी ऑफ़र नहीं। ${v.body}`,
   "gate.offers.ask": "पहले फ़र्क़ दिखाइए, और वे पूछें तो मुझसे पूछिए।",
   "lang.switched": "ठीक है, अब हिंदी में।",
+  "ack.audio": "👂 सुन रहा हूँ…",
+  "ack.image": "🔎 लेबल पढ़ रहा हूँ…",
+  "turn.failed": "अभी जवाब नहीं दे पाया। एक बार फिर भेजिए।\n↳ कनेक्शन की दिक़्क़त है, ग्राहक कार्ड वैसा ही है।",
+  "voice.unheard": "यह वॉइस नोट समझ नहीं आया। फिर से बोलिए, या लिख दीजिए।",
   "greet.back": "हाँ बोलिए — क्या चल रहा है?",
   "greet.how": "",
   "greet.reason": "ग्राहक सामने है, या कुछ पूछना है?",
@@ -270,6 +279,10 @@ const MR: Record<string, Phrase> = {
   "gate.offers": (v) => `अजून ऑफर नको. ${v.body}`,
   "gate.offers.ask": "आधी फरक दाखवा, आणि त्यांनी विचारलं तर मला विचारा.",
   "lang.switched": "ठीक आहे, आता मराठीत.",
+  "ack.audio": "👂 ऐकतोय…",
+  "ack.image": "🔎 लेबल वाचतोय…",
+  "turn.failed": "आत्ता उत्तर देता आलं नाही. पुन्हा पाठवा.\n↳ कनेक्शनची अडचण आहे, ग्राहक कार्ड तसंच आहे.",
+  "voice.unheard": "हा व्हॉइस नोट समजला नाही. पुन्हा बोला, किंवा लिहा.",
   "greet.back": "हां बोला — काय चाललंय?",
   "greet.how": "",
   "greet.reason": "ग्राहक समोर आहे, की काही विचारायचंय?",
@@ -329,19 +342,34 @@ export function t(lang: Lang, key: string, vars: Record<string, string | number>
   return typeof phrase === "function" ? phrase(vars) : phrase;
 }
 
+// No \b on the Devanagari: in JavaScript a word boundary only knows ASCII, so "इंग्लिश में बताओ" was
+// never a request for English.
 const EXPLICIT: [RegExp, Lang][] = [
-  [/\b(english|angrezi|इंग्लिश|इंग्रजी)\b/i, "en"],
-  [/\b(marathi|मराठी)\b/i, "mr"],
-  [/\b(hindi|हिंदी|हिन्दी)\b/i, "hi"],
+  [/\b(english|angrezi)\b|इंग्लिश|इंग्रजी|अंग्रे[ज\u095b]\u093c?ी/i, "en"],
+  [/\bmarathi\b|मराठी/i, "mr"],
+  [/\bhindi\b|हिंदी|हिन्दी/i, "hi"],
 ];
 
-/** An explicit request wins. Otherwise Devanagari means Hindi, since both scripts look alike. */
+/** Speech models write spoken Hindi in Urdu script as readily as in Devanagari. */
+export const INDIAN_SCRIPT = /[\u0900-\u097f\u0600-\u06ff]/;
+
+/** Hinglish and Marathi written in Latin letters. Everything else in Latin letters is English. */
+export const INDIAN_WORDS =
+  /\b(hai|hain|tha|thi|ka|ki|ke|ko|kya|kaise|kaisa|kitna|kitne|kitni|nahi|nahin|mein|mujhe|hum|aap|tum|chahiye|batao|bataiye|bolo|dikhao|dikhaiye|aur|bhi|wala|wali|haan|theek|lena|hazar|hazaar|neeche|aahe|ahe|kay|kiti|pahije|mala|ani|nahi|sanga|dakhva)\b/i;
+
+/** The language of what they just said, because that is what they want back: an English question
+ *  after a Hindi one was answered in Hindi, every time. An explicit request wins, Devanagari is Hindi
+ *  unless Marathi is already on (the scripts look alike), and a Latin sentence is English unless its
+ *  words say otherwise. A name alone says nothing, so "LG Nanocell" keeps what was on.
+ *
+ *  shortcut: a word list, so a Hinglish sentence using none of them reads as English. Whisper-style
+ *  language detection on typed text is the upgrade if that shows up on the floor. */
 export function languageFrom(text: string | undefined, current: Lang): Lang {
   if (!text) return current;
   for (const [pattern, lang] of EXPLICIT) if (pattern.test(text)) return lang;
-  if (/[ऀ-ॿ]/.test(text)) return current === "mr" ? "mr" : "hi";
-  // Latin script keeps whatever was chosen: Hinglish and Marathi in Latin are still that language.
-  return current;
+  if (INDIAN_SCRIPT.test(text)) return current === "mr" ? "mr" : "hi";
+  const words = text.match(/[a-z]+/gi) ?? [];
+  return words.length >= 3 && !INDIAN_WORDS.test(text) ? "en" : current;
 }
 
 export function askedToSwitchLanguage(text: string | undefined): Lang | null {

@@ -67,8 +67,8 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
 - Test on localhost with `POST /try`. It never queues a WhatsApp message. Do not message real
   numbers while testing.
 - With `FAL_KEY` set (`server/src/fal.ts`): the turn goes through **fal.ai's OpenRouter router**
-  (model in `FAL_MODEL`) and a **voice note through `fal-ai/whisper`** — uploaded to fal storage
-  first, because Whisper answers "Unsupported data URL" to base64 inline. The router has no
+  (model in `FAL_MODEL`) and a **voice note through `fal-ai/elevenlabs/speech-to-text`** — uploaded to fal
+  storage first, because it takes a URL and not base64 inline. Not Whisper: it dropped clear notes and misheard Hindi. The router has no
   response schema, so the JSON shape is asked for in words and read by `readJson()`.
   **Gemini is still the label photo**, and answers the turn when there is no `FAL_KEY`.
 - The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and

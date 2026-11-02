@@ -81,9 +81,9 @@ export async function falText(
   return { text: body.output, cost: body.usage?.cost ?? 0 };
 }
 
-/** Whisper takes a URL and nothing else: a base64 data URI is refused with "Unsupported data URL",
- *  whatever the general file documentation says. So the bytes go to fal's own storage first, which
- *  hands back the URL to transcribe.
+/** The speech models take a URL and nothing else: a base64 data URI is refused with "Unsupported
+ *  data URL", whatever the general file documentation says. So the bytes go to fal's own storage
+ *  first, which hands back the URL to transcribe.
  *
  *  That URL is on a public CDN, and the voice note is a customer's room described out loud. It is
  *  the same trust boundary as sending the bytes to any transcription provider — WhatsApp's own CDN
@@ -118,11 +118,17 @@ async function falUpload(
   return where.file_url;
 }
 
-/** A voice note, transcribed. Whisper on fal, because the router takes no audio and Gemini's free
- *  tier is 20 requests a day — which is how an associate on a real phone got "I could not answer
- *  that just now" twice in a row.
+export const NOTHING_HEARD = "Nothing heard in the voice note";
+
+/** A voice note, transcribed, on fal because the router takes no audio and Gemini's free tier is 20
+ *  requests a day.
  *
- *  Language is left unset on purpose: Whisper detects it, and this product is spoken to in three. */
+ *  ElevenLabs Scribe and not Whisper, compared on ten real notes from the floor on 2 Nov 2026. Whisper
+ *  returned nothing at all for a clear "someone wants to buy an iPhone under eighty thousand", wrote
+ *  Hindi in Urdu script, and heard "laptop" as "लेक्टॉप" and "43 inch" as "फोर्टी त्री इंच". Scribe got
+ *  all of those, and keeps "Laptop में कोई option है" in the mix it was said in.
+ *
+ *  Language is left unset on purpose: it detects it, and this product is spoken to in three. */
 export async function falTranscribe(
   config: FalConfig,
   audio: { bytes: Uint8Array; mimeType: string },
@@ -130,15 +136,15 @@ export async function falTranscribe(
 ): Promise<string> {
   const response = await modelRequest(
     request,
-    "https://fal.run/fal-ai/whisper",
+    "https://fal.run/fal-ai/elevenlabs/speech-to-text",
     {
       method: "POST",
       headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
       body: JSON.stringify({
         audio_url: await falUpload(config, audio, request),
-        task: "transcribe",
-        // One chunk: we want the words, not where they sat in the file.
-        chunk_level: "none",
+        // The words only: no "(laughs)", and nobody cares who said which.
+        tag_audio_events: false,
+        diarize: false,
       }),
     },
     "fal",
@@ -148,7 +154,7 @@ export async function falTranscribe(
     error?: string;
   };
   if (body.error) throw Error(`fal refused the audio: ${body.error}`);
-  if (!body.text?.trim()) throw Error("Nothing heard in the voice note");
+  if (!body.text?.trim()) throw Error(NOTHING_HEARD);
   return body.text.trim().slice(0, 600);
 }
 

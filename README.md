@@ -58,8 +58,9 @@ what the cheaper slugs did instead, including one that invented a brand warranty
 router refuses outright. The endpoint has no response schema, so the JSON shape is asked for in the system prompt and
 read tolerantly; it takes no audio and no images.
 
-A **voice note** goes to `fal-ai/whisper` on the same key, uploaded to fal storage first because
-Whisper answers "Unsupported data URL" to base64 inline. It returns the words and nothing else,
+A **voice note** goes to `fal-ai/elevenlabs/speech-to-text` on the same key, uploaded to fal storage
+first because it takes a URL and not base64 inline. Whisper was dropped after it returned nothing for
+a clear note and misheard Hindi on the same ten real notes. It returns the words and nothing else,
 which is all the rest wants: the card is then read from those words exactly as from typed ones.
 Proven on real audio in English and Hindi.
 
