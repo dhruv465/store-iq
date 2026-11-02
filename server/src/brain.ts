@@ -902,7 +902,14 @@ async function answer(
     // the card. The pack follows only when the catalogue answered with something that carries the
     // words actually said — "8 feet" and "on the wall" must not drag the pack away. A miss keeps
     // the conversation they were already having.
-    const named = about.length > 3 && !isCommand && about.split(/\s+/).length <= 4;
+    // The cap is there to stop a description of the home — "hot water tap is there, they wash
+    // cottons daily" — from becoming what the conversation is about. Four words was too tight: a
+    // plain question is longer than that, and "Do we have any phones right now?" is seven, so a
+    // phones question was answered with the televisions from the turn before. What actually keeps
+    // a home fact out is the check below, that the products found carry the words said.
+    // shortcut: a word count, not an understanding of the sentence; replace it if a long home
+    // description ever starts matching real products.
+    const named = words(about).length > 0 && !isCommand && about.split(/\s+/).length <= 10;
     let changed = false;
     if (named) {
       try {
