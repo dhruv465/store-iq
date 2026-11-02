@@ -10,6 +10,7 @@ import {
   decide,
   numbersIn,
   offerExpert,
+  askedAboutOffers,
   offerLeaked,
   unknownReply,
   render,
@@ -297,4 +298,17 @@ test("tapping Find out for me logs what they actually asked", async () => {
   assert.equal(logged.length, 1);
   assert.match(logged[0]!.question, /USB ports/);
   assert.match(reply.text, /SIQ-/, "with a reference the associate can quote");
+});
+
+test("a gate is not a refusal to answer: asked outright, the offer is given", () => {
+  // The gate exists to stop the product LEADING with price, which the store visits found in 6 of 6
+  // conversations. An associate holding a customer who has decided asked three times and was sent
+  // back to the room each time, so a question they asked in their own words opens it.
+  const quoted = "The HDFC offer is 7.5%, capped at Rs 8000.";
+  assert.equal(offerLeaked(quoted, false, false), true, "unprompted, before the home: still shut");
+  assert.equal(offerLeaked(quoted, false, false, true), false, "they asked, so they are told");
+  assert.equal(askedAboutOffers("any offer running on the Sony 85 inch"), true);
+  assert.equal(askedAboutOffers("is there a discount on this"), true);
+  assert.equal(askedAboutOffers("customer wants a washing machine"), false, "no offer word, no opening");
+  assert.equal(askedAboutOffers(undefined), false, "a tap carries no words");
 });

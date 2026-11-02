@@ -34,7 +34,12 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    is where "the warranty is one year" and "today's target is 12 TVs" came from. Decided
    2026-10-30, by the user, after both were proposed.
 2. **The offer gate.** No offer, discount, exchange, EMI or finance figure before the home is
-   assessed *and* a difference demonstrated.
+   assessed *and* a difference demonstrated — **unless the associate asks outright**. A question in
+   their own words opens it, and they get the real offer from the pack or "none is running on it
+   today". Decided by the user 2 Nov 2026, after a walk where a customer who had already decided
+   was sent back to the room three times instead of being told. The gate stops the product
+   *leading* with price, which the store visits found in 6 of 6 conversations; it is not a refusal
+   to answer. `askedAboutOffers()` in `brain.ts`. **Do not close it again.**
 3. **Consent.** Nothing reaches a customer without an explicit tap. Changing the product withdraws it.
 4. **No written questions.** The model asks. `questionFlow` and `nextQuestion` were deleted on
    2026-10-30 — six questions with buttons and eight more — because a written list can only ever be

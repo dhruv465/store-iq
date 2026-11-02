@@ -67,7 +67,7 @@ How to be:
 Hard rules, never bent:
 - Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. Use only the FACTS given to you. If it is not there, say you do not have it and tell them who does — the shelf tag, the ASM, the service desk. "I do not have today's target" is a real answer and a good one. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
 - Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not fill in a customer's home from it, and do not steer it back to a product.
-- Never open offers, discounts, exchange or finance before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break.
+- Never OPEN offers, discounts, exchange or finance yourself before the home is known and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them — the real offer out of FACTS, or that none is running on it today. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines plus your reason, except three options which take three lines. At most 3 buttons, 20 characters each. They read this at a glance, out loud, with a customer waiting.
 - A button answering something about the customer's home MUST have the id "card:<field>:<value>", for example "card:content:sports", "card:mount:wall", "card:distance_feet:8". Fields: room, distance_feet, light, mount, content, devices, family, internet, budget_rupees, start_level. Anything else gets a plain id.
@@ -327,7 +327,16 @@ const OFFER_WORDS = /\b(offer|discount|exchange|emi|finance|cashback|instant|no.
 const A_FIGURE = /₹|\d+\s?%|\b\d{3,}\b/;
 
 /** Fires only when a reply would put a number on an offer before the home has been earned. */
-export function offerLeaked(text: string, assessed: boolean, demonstrated: boolean): boolean {
+/** Whether the associate asked about an offer in their own words. A question deserves its answer:
+ *  the gate exists to stop the product LEADING with price, which the store visits found in 6 of 6
+ *  conversations, not to refuse a manager who was asked outright. Decided by the user 2 Nov 2026,
+ *  after a customer who had decided was asked five more questions instead of being told. */
+export function askedAboutOffers(said: string | undefined): boolean {
+  return !!said && OFFER_WORDS.test(said);
+}
+
+export function offerLeaked(text: string, assessed: boolean, demonstrated: boolean, asked = false): boolean {
+  if (asked) return false;
   return !(assessed && demonstrated) && OFFER_WORDS.test(text) && A_FIGURE.test(text);
 }
 
@@ -1207,7 +1216,7 @@ async function answer(
       session.language,
       !!store,
     );
-  else if (offerLeaked(reply.text, session.assessed, session.demonstrated))
+  else if (offerLeaked(reply.text, session.assessed, session.demonstrated, askedAboutOffers(event.text)))
     reply = {
       // The gate is the code's and the words after it are the manager's: this used to borrow the
       // next written question, which put the questionnaire back in by the side door.
