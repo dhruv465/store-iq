@@ -916,7 +916,12 @@ async function answer(
     // a home fact out is the check below, that the products found carry the words said.
     // shortcut: a word count, not an understanding of the sentence; replace it if a long home
     // description ever starts matching real products.
-    const named = words(about).length > 0 && !isCommand && about.split(/\s+/).length <= 10;
+    // A question about the thing already being discussed is not a new subject. "which storage
+    // options does it come in" searched for "storage", found pen drives, and the iPhone 17 the
+    // associate was holding went out of the pack — so the guard then refused "17" as a figure
+    // nothing could support. An attribute is asked ABOUT a product; only a product changes it.
+    const named =
+      words(about).length > 0 && !isCommand && !asksSomethingSpecific(about) && about.split(/\s+/).length <= 10;
     let changed = false;
     if (named) {
       try {
