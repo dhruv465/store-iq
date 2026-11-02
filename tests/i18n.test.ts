@@ -26,9 +26,6 @@ test("an explicit request switches language outright", () => {
 });
 
 test("every phrase the code still writes exists in all three languages", () => {
-  // The six written questions and their buttons used to be the bulk of this. What is left is the
-  // card read-back, the gates and the refusals — and a phrase missing from one language is a
-  // sentence of English in the middle of a Hindi conversation.
   for (const key of Object.keys(PHRASES.en))
     for (const lang of ["hi", "mr"] as const)
       assert.ok(PHRASES[lang][key] !== undefined, `${key} is missing from ${lang}`);
@@ -43,7 +40,6 @@ test("the card read-back speaks the associate's language", () => {
 test("the review score speaks the associate's language", () => {
   const session = filled("mr");
   session.steps_done = ["brief", "validate"];
-  // A filled card is half the Assess step, so validate 2 plus assess 1 is 3.
   assert.match(reviewReply(session).text, /ही बातचीत: 14 पैकी 3/);
   assert.match(reviewReply(session).text, /गाइड 11 पासून सुरू होतो/);
 });
@@ -54,7 +50,6 @@ test("a missing phrase falls back to English rather than breaking", () => {
 });
 
 test("figures and product names are never translated", () => {
-  // Rs and the pack's own numbers must survive in every language.
   assert.match(t("hi", "ft.read", { name: "TCL 55 inch C6K", total: "56,988" }), /TCL 55 inch C6K/);
   assert.match(t("mr", "ft.read", { name: "TCL 55 inch C6K", total: "56,988" }), /Rs 56,988/);
 });
@@ -121,7 +116,6 @@ test("a demonstration cue is spoken in the associate's language when the pack ha
   assert.match(cueFor(tcl, "hi"), /क्रिकेट क्लिप/);
   assert.match(cueFor(tcl, "mr"), /चेंडू स्पष्ट/);
   assert.match(cueFor(tcl, "en"), /Cricket clip/);
-  // A pack without a translated cue falls back rather than dropping it.
   const { demo_cue_hi: _dropped, ...withoutHindi } = tcl;
   assert.equal(cueFor(withoutHindi, "hi"), tcl.demo_cue);
   assert.doesNotMatch(
@@ -131,8 +125,6 @@ test("a demonstration cue is spoken in the associate's language when the pack ha
 });
 
 test("the review's advice is spoken in the associate's language too", () => {
-  // The seven step names are the contest scorecard's own words and stay as they are; the sentence
-  // telling the associate what to do next is the part that has to be theirs.
   const english =
     /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|With consent/;
   assert.match(reviewReply(Object.assign(filled("en"), { steps_done: [] })).text, english);

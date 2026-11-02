@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { extractCard } from "../server/src/extract.js";
 
 test("the brief's own example sentence is read without a model", () => {
-  // Section 5: the associate's voice note, verbatim.
   const card = extractCard(
     "Customer has a 12-by-14-foot living room, four people at home, mostly sports and OTT, and wants good sound.",
   );

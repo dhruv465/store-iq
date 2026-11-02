@@ -22,8 +22,6 @@ function tap(session: Session, action: string) {
   return deterministic(event, session, pack);
 }
 
-/** The objections live behind the same claim trigger as the myths, so an ordinary objection on the
- *  floor gets the confirm-then-correct shape without a model request. */
 test("the too-costly objection is confirmed, then handed one line to say", () => {
   const packText = pack.objections!.find((o) => o.claim === "It is too costly")!;
   assert.equal(matchObjection(pack, "customer says it is too costly")!.claim, packText.claim);
@@ -54,7 +52,6 @@ test("the buy-online objection answers with the demo, not with figures", () => {
 });
 
 test("customer thinks a spec, not about leaving — the myth wins over the later objection", () => {
-  // Bare "thinks" must not read as "thinking it over", so a real claim still gets its myth.
   const matched = matchObjection(pack, "customer thinks 60 Hz is enough");
   assert.equal(matched, null);
 });
@@ -85,7 +82,6 @@ test("a larger hall is handed the soundbar; an already-taken accessory never com
   const taken = { sku: "TCL-55C6KS", accessories: ["ACC-SOUNDBAR"], charges: [] };
   const clean = { sku: "TCL-55C6KS", accessories: [], charges: [] };
   assert.equal(proposeAccessory(pack, { ...HOME, room: "large hall" } as HomeCard, taken), null);
-  // More than four people at the wall is a large hall by the same measure.
   assert.equal(
     proposeAccessory(pack, { ...HOME, family: "6 people" } as HomeCard, clean)?.id,
     "ACC-SOUNDBAR",
@@ -126,8 +122,6 @@ test("the draft offers the accessory with a take-it tap next to consent", () => 
 
 test("an option above the budget says the gap in the open, with its reason behind it", () => {
   const card: HomeCard = { distance_feet: 5, light: "bright afternoon sun", content: ["cricket"] };
-  // A Rs 60,000 budget: the TCL leads at 54,990, the Samsung and the LG sit above it and must
-  // still be presentable, with their gap in the open.
   const options = rank(pack, { ...card, budget_rupees: 60000 }, "en");
   const above = options.filter((option) => option.product.price_rupees > 60000);
   assert.ok(above.length >= 1, "an over-budget option stayed on the list");

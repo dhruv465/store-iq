@@ -70,8 +70,6 @@ test("asked for the good ones before the home is known, the manager asks rather 
   const session = newSession("919000000000");
   const model = manager({ lines: ['Ask: "How far back will they be sitting?"'] });
   const reply = await decide(said("which ones are good?"), session, pack, model.fetch);
-  // The gate is still the code's: it refuses to recommend and says why, in a note the manager
-  // answers around. The question itself is no longer one of six written ones.
   assert.match(model.prompts[0]!, /the home is not assessed yet/i);
   assert.match(reply.text, /Ask:/);
   assert.ok(!/Rs /.test(reply.text), "no price before the home");
@@ -95,7 +93,6 @@ test("a tag's own figures do not hijack the answer: a photo asks about the set",
     id: "m4",
     phone: "919000000000",
     modality: "image",
-    // What the label reader returns for a shelf tag: the set AND its printed figures.
     text: "TCL, TCL-55C6KS, 55 inch, 800 nits, 144 Hz, 2 x HDMI 2.1",
     image: { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
   };
@@ -124,10 +121,8 @@ test("a photo whose caption names the set is answered from the pack", async () =
 });
 
 test("a model code is matched as a word, not as letters hiding inside other words", () => {
-  // "about 800 nits" squashes to "about800nits", which contains the LG's code "ut80".
   assert.equal(findProduct(pack, "what do I say about 800 nits"), null);
   assert.equal(findProduct(pack, "about 800 nits"), null);
-  // The real ways a code arrives still match: typed, and read off a tag.
   assert.equal(findProduct(pack, "the UT80 one")?.sku, "LG-65UT8050");
   assert.equal(findProduct(pack, "65UT8050")?.sku, "LG-65UT8050");
   assert.equal(findProduct(pack, "TCL, TCL-55C6KS, 55 inch, 800 nits")?.sku, "TCL-55C6KS");

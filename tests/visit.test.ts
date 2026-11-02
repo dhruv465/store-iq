@@ -5,10 +5,6 @@ import { decide } from "../server/src/brain.js";
 import { storeNamed, wantsVisitLog, worthFiling } from "../server/src/visit.js";
 import { newSession, type Event, type Session } from "../server/src/types.js";
 
-/** The contest's last extra point. The visits of 10 and 11 October are why this product exists and
- *  they were written up from memory hours later; somebody standing in a competitor's shop can only
- *  speak. */
-
 const pack = await loadPack("data/pack.json");
 process.env.GEMINI_API_KEY = "test-key";
 
@@ -55,7 +51,6 @@ test("a visit note is never read as a customer's home", async () => {
   const { store } = filing();
   await decide(said("visit"), session, pack, dead, store as never);
   await decide(said(NOTE), session, pack, dead, store as never);
-  // The note says "bright hall" and "85 inch", which the card extractor would happily take.
   assert.deepEqual(session.card, {}, "a competitor's shop is not this customer's home");
   assert.deepEqual(session.steps_done, []);
 });

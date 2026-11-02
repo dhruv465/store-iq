@@ -5,13 +5,8 @@ import type { DB } from "../server/src/db.js";
 import { managerRoutes, sessionToken } from "../server/src/manager.js";
 import { newSession, type Reply, type Session } from "../server/src/types.js";
 
-/** The broadcast route messages every associate on the floor, so it is worth proving in process
- *  who can reach it. Nothing here touches WhatsApp: the stub records what would have been sent. */
-
 const PASSWORD = "test-password";
 const AUTH = `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}`;
-// The origin the request itself carries: a different port is a different origin, which is the
-// whole point of the check.
 const ORIGIN = "http://localhost";
 
 function harness(options: { reachable?: string[] } = {}): {
@@ -31,7 +26,6 @@ function harness(options: { reachable?: string[] } = {}): {
       { phone: "919820000001", name: "Ramesh" },
       { phone: "919820000002", name: "Asha" },
     ],
-    // A number that wrote to the agent without being anybody's associate: it must never be sent to.
     reachable: async (): Promise<string[]> => options.reachable ?? ["919820000001", "919820000002", "919999999999"],
     send: async (phone: string, reply: Reply): Promise<void> => void sent.push({ phone, reply }),
     addAssociate: async (): Promise<void> => {},
@@ -78,8 +72,6 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
 
 test("the floor cannot be read without signing in", async () => {
   const { app } = harness();
-  // The portal's own files are public: they hold no data, and the page's job when signed out is to
-  // show the sign-in card. Everything it then asks for needs the session.
   for (const path of ["/api/manager/floor", "/api/manager/roster"]) {
     const response = await app.request(path);
     assert.equal(response.status, 401, path);
@@ -117,8 +109,6 @@ test("signing in needs the password, and hands back a cookie that is not readabl
 });
 
 test("somebody else's page cannot send to the floor with the manager's cached credentials", async () => {
-  // Two shapes a cross-site request can take: a form post, which an HTML form can make from any
-  // page, and a plain fetch. Neither can set a header of its own, so neither gets through.
   for (const headers of [
     { origin: "https://evil.example.com", "content-type": "application/x-www-form-urlencoded" },
     { origin: "https://evil.example.com", "x-store-iq": "" },

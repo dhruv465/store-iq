@@ -5,11 +5,6 @@ import { decide } from "../server/src/brain.js";
 import { loadPack } from "../server/src/pack.js";
 import { newSession, type Event } from "../server/src/types.js";
 
-/** The turn goes through fal.ai's OpenRouter router when FAL_KEY is set, because Gemini's free
- *  tier is 20 requests a day and the model now answers most turns. The router has no response
- *  schema and takes no audio or images, so the shape is asked for in words and read tolerantly,
- *  and the voice note and the photo stay on Gemini. */
-
 const pack = await loadPack("data/pack.json");
 
 function spy(output: string): { fetch: typeof fetch; calls: { url: string; init: RequestInit }[] } {
@@ -50,7 +45,6 @@ test("an error or an empty answer is not read as a reply", async () => {
 });
 
 test("JSON is read out of whatever the model wrapped it in", () => {
-  // No response schema on this endpoint, so an answer arrives fenced, or with a sentence in front.
   assert.deepEqual(readJson('```json\n{"step":"assess"}\n```'), { step: "assess" });
   assert.deepEqual(readJson('Sure! Here it is: {"step":"close"} — hope that helps'), { step: "close" });
   assert.deepEqual(readJson('{"lines":["a"],"card":{"room":"hall"}}'), { lines: ["a"], card: { room: "hall" } });
@@ -84,7 +78,6 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
     assert.equal(calls.length, 1);
     assert.match(calls[0]!.url, /fal\.run/);
     assert.doesNotMatch(calls[0]!.url, /googleapis/, "no GEMINI_API_KEY is set and none is needed");
-    // The same floor shape as every other reply: the words emboldened, the reason italic.
     assert.match(reply.text, /Ask: "\*Which room is it for\?\*"/);
     assert.match(reply.text, /_↳ the room sizes it_/);
   } finally {
@@ -95,8 +88,6 @@ test("a turn goes to fal when the key is set, and Gemini is never called", async
 });
 
 test("a voice note is uploaded first, because Whisper refuses a data URI", async () => {
-  // "Unsupported data URL" is what the endpoint answers to base64 inline, whatever the general file
-  // documentation says. So the bytes go to fal's storage and the URL it returns is transcribed.
   const calls: { url: string; init: RequestInit }[] = [];
   const fake = (async (url: string | URL, init: RequestInit = {}) => {
     calls.push({ url: String(url), init });
@@ -121,10 +112,8 @@ test("a voice note is uploaded first, because Whisper refuses a data URI", async
     calls.map((call) => `${call.init.method} ${new URL(call.url).host}${new URL(call.url).pathname}`),
     ["POST rest.alpha.fal.ai/storage/upload/initiate", "PUT v3b.fal.media/files/b/x", "POST fal.run/fal-ai/whisper"],
   );
-  // The file name carries nothing about the associate or the customer.
   assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { content_type: "audio/ogg", file_name: "note" });
   assert.doesNotMatch(String(calls[2]!.init.body), /base64/, "the audio itself is not in the transcribe call");
-  // The key goes to fal's own API. The upload URL is already signed, so the CDN never sees it.
   for (const index of [0, 2])
     assert.equal((calls[index]!.init.headers as Record<string, string>).authorization, "Key fal-secret");
   assert.equal((calls[1]!.init.headers as Record<string, string>).authorization, undefined);

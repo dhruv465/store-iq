@@ -62,8 +62,6 @@ test("confirming the card records the assess step and tells the manager so", () 
   const session = assessed();
   const event: Event = { id: "x", phone: session.phone, modality: "interactive", action: "card:confirmed" };
   const notes: string[] = [];
-  // Nothing is written here any more: the code records the step and hands the turn over, because
-  // what follows a confirmed card is a judgement about this customer.
   assert.equal(deterministic(event, session, pack, notes), null);
   assert.equal(session.card_confirmed, true);
   assert.ok(session.steps_done.includes("assess"));

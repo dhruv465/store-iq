@@ -3,11 +3,6 @@ import assert from "node:assert/strict";
 import { openDatabase, NOTICE_LIFE_HOURS } from "../server/src/db.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 
-/** The 24 hour window is Meta's rule and cannot be argued with: a free-form message only reaches
- *  somebody who wrote to the number today. So a notice for an associate who has been quiet is not
- *  dropped and does not need an approved template — it waits, and writing to the number is what
- *  releases it. These run against a real database, in memory. */
-
 test("a notice waits for the associate and is released once, in order", async () => {
   const db = await openDatabase("memory://");
   try {
@@ -35,8 +30,6 @@ test("a notice about today is not delivered tomorrow", async () => {
   const db = await openDatabase("memory://");
   try {
     await db.queueNotice("📢 Store manager:\nToday only", ["919820000002"]);
-    // The shift it belonged to is over: asking with no lifetime left is the same question the
-    // server asks the morning after.
     assert.deepEqual(await db.waitingNotices("919820000002", 0), [], "a stale offer is worse than no notice");
     assert.equal(await db.noticesWaiting(0), 0, "and the manager is not told it is still pending");
     assert.equal((await db.waitingNotices("919820000002")).length, 1, "but inside the shift it is still owed");

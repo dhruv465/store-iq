@@ -83,7 +83,6 @@ test("a card answered in metres counts as assessed, same as feet", async () => {
 });
 
 test("a size that is not the fit is not described as the fit", () => {
-  // 3 m suggests about 74 inch; nothing in the pack is that big.
   const reply = recommendReply(pack, { distance_m: 3, content: ["news"] });
   assert.doesNotMatch(
     reply.text,
@@ -94,7 +93,6 @@ test("a size that is not the fit is not described as the fit", () => {
 });
 
 test("a size that genuinely fits still says so", () => {
-  // 8 feet suggests 60 inch; the 65 is within three.
   const options = rank(pack, { distance_feet: 8, content: ["news"] });
   assert.ok(options.some((o) => /is the fit at that distance/.test(o.reason)));
 });
@@ -108,7 +106,6 @@ test("three options never argue the same point twice", () => {
     const keys = rank(pack, card).map((o) => o.key);
     const after = distinguish(rank(pack, card)).map((o) => o.key);
     assert.equal(new Set(after).size, after.length, `duplicate reason kind for ${JSON.stringify(card)}, from ${keys}`);
-    // "800 nits holds the picture" and "600 nits holds the picture" are the same point, not two.
     const reasons = recommendReply(pack, card)
       .text.split("\n")
       .map((line) => line.split(" — ")[1]);

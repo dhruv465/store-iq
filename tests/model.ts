@@ -1,13 +1,5 @@
 import type { Decision } from "../server/src/brain.js";
 
-/** The manager, stubbed.
- *
- *  The questions used to be six written ones, so most of these tests could prove a whole walk with
- *  a fetch that rejects. The manager asks them now, which means a walk needs something standing in
- *  for the model — and what the code sends it is worth asserting too: every fact the code filed
- *  reaches the prompt as a note, or the manager asks for what they have already been told. */
-// A stubbed fetch is still a request as far as the code is concerned, and it refuses to make one
-// without a key.
 process.env.GEMINI_API_KEY ||= "test-key";
 
 export function manager(
@@ -21,7 +13,6 @@ export function manager(
     const sent = JSON.stringify(body?.contents ?? body);
     state.prompts.push(sent);
     state.calls += 1;
-    // A voice note is two requests: the transcription first, then the turn itself.
     const answer =
       transcript && sent.includes("inline_data")
         ? transcript

@@ -20,10 +20,6 @@ import {
   type Pack,
 } from "../server/src/pack.js";
 
-/** This talks to a production store. The tests below are the proof that it cannot write to one,
- *  rather than a promise that it will not: every call it is capable of making is a GET, to one of
- *  the listed paths, on one host. */
-
 const config = { host: "https://api.example.com", applicationId: "app-id", applicationToken: "app-token" };
 
 function spy(body: unknown = { items: [], page: {} }): {
@@ -40,7 +36,6 @@ function spy(body: unknown = { items: [], page: {} }): {
 
 test("only the five readable endpoints can be called, and all are on the storefront surface", async () => {
   assert.equal(ALLOWED_PATHS.length, 5);
-  // /service/platform/ is the surface that can write. Nothing here is on it.
   for (const path of ALLOWED_PATHS) assert.match(path, /^\/service\/application\//, path);
   const { fetch: fake, calls } = spy();
   for (const path of [
@@ -66,7 +61,6 @@ test("every request it can make is a GET", async () => {
 
 test("a parameter cannot steer the path or the host", async () => {
   const { fetch: fake, calls } = spy();
-  // A value that tries to climb out of the path, and one that tries to change the host.
   await assert.rejects(read(config, "../../platform/products" as never, {}, fake), /Refusing to call/);
   await getProducts(config, { q: "../../../service/platform/products" }, fake);
   const called = new URL(calls[0]!.url);
@@ -80,7 +74,6 @@ test("the application pair is the credential, sent the way the FDK client sends 
   await getProducts(config, { q: "tv" }, fake);
   assert.doesNotMatch(calls[0]!.url, /app-token/, "a URL ends up in logs and proxies");
   const headers = calls[0]!.init.headers as Record<string, string>;
-  // Authorization: Bearer base64(applicationID:applicationToken), as the public client does it.
   assert.equal(headers.authorization, `Bearer ${Buffer.from("app-id:app-token").toString("base64")}`);
 });
 
@@ -95,9 +88,6 @@ test("the catalogue stays off until the application pair is present", () => {
   assert.equal(catalogConfig({} as never), null);
   assert.equal(catalogConfig({ CATALOG_HOST: "x" } as never), null);
   assert.equal(catalogConfig({ CATALOG_APPLICATION_ID: "y" } as never), null);
-  // The pair is enough, and the host is Jio's own Fynd tenant, read off the partner panel at
-  // platform.jioretailer.com. Fynd's generic api.fynd.com answers 401 for a Reliance Digital pair,
-  // which is exactly what the first live attempt did.
   assert.deepEqual(catalogConfig({ CATALOG_APPLICATION_ID: "y", CATALOG_APPLICATION_TOKEN: "z" } as never), {
     host: "https://api.jioretailer.com",
     applicationId: "y",
@@ -142,7 +132,6 @@ test("every parameter the v1.9.5 reference documents reaches the query", async (
   assert.equal(offers.searchParams.get("promotion_group"), "bank");
 });
 
-/** One page of the live catalogue, in the shape getProducts returns it. */
 function store(body: Record<string, unknown>): typeof fetch {
   return (async (url: string | URL) =>
     new Response(JSON.stringify(String(url).includes("available-promotions") ? { available_promotions: [] } : body), {
@@ -179,14 +168,10 @@ test("the server serves the live catalogue the moment the credentials are set", 
     assert.match(live.source, /live catalogue · 1 product/);
     assert.equal(live.pack.products[0]!.sku, "SON-K55S30");
     assert.equal(live.pack.products[0]!.price_rupees, 62990);
-    // Everything the two methods do not carry stays from the file.
     assert.ok(live.pack.finance.length, "finance terms are ours");
     assert.ok(live.pack.charges.length, "so are the charges");
-    // And NOT the pack's own offers. The stub's HDFC discount and exchange bonus are not running on
-    // this channel, and an offer quoted that does not exist is worse than no offer at all.
     assert.deepEqual(live.pack.offers, [], "nothing running is the honest answer");
 
-    // A bad key must not kill the number: say so and serve the file.
     const broken = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
     const fallen = await startingPack(broken);
     assert.match(fallen.source, /live catalogue failed/);
@@ -198,8 +183,6 @@ test("the server serves the live catalogue the moment the credentials are set", 
   }
 });
 
-/** The `filters` block the v1.9.5 reference documents, in the shape the live store returns it:
- *  the counts below are the real ones for q=sony and q=washing machine on 1 Nov 2026. */
 test("the store's own facets choose the filter, in the documented f= syntax", async () => {
   const { narrow } = await import("../server/src/pack.js");
   const facet = (name: string, values: [string, number][]) => ({
@@ -207,8 +190,6 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
     values: values.map(([value, count]) => ({ value, count })),
   });
 
-  // "sony" returns a camera pouch first out of 294 rows. Its own category facet says 110 are
-  // televisions, and sony is 194 of the 294, so both join the filter with `:::` between them.
   assert.equal(
     narrow(
       [
@@ -226,9 +207,6 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
     "brand:sony:::category:led-televisions",
   );
 
-  // "washing machine": extended-warranty out-counts nothing here, but resq (74 of 241) is the top
-  // brand and is Reliance's service brand. A protection plan is not a product, and no real brand
-  // holds half the rows, so the category alone is the filter.
   assert.equal(
     narrow(
       [
@@ -246,7 +224,6 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
     "category:washing-machines",
   );
 
-  // "fridge" is the case that proves the exclusion: 150 extended warranties against 122 fridges.
   assert.equal(
     narrow(
       [
@@ -260,7 +237,6 @@ test("the store's own facets choose the filter, in the documented f= syntax", as
     "category:frost-free",
   );
 
-  // Nothing to narrow to is not an error: the loose query's own rows stand.
   assert.equal(narrow([], 12), undefined);
   assert.equal(narrow([facet("category", [["extended-warranty", 9]])], 9), undefined);
 });
@@ -270,10 +246,6 @@ test("the last word left after the brand names the kind, so a smart watch is not
     key: { name },
     values: values.map(([value, count]) => ({ value, count })),
   });
-  // "smart watch" is the case that proves the head: the store's own facet counts put
-  // smart-phones (970) above sports-fitness-watches (466), the word "smart" opens both, and the
-  // associate may have named the brand too ("smart watch noise"). What is said is a watch, and
-  // the brand the associate named joins even when it holds a small share of the rows.
   assert.equal(
     narrow(
       [
@@ -290,8 +262,6 @@ test("the last word left after the brand names the kind, so a smart watch is not
     ),
     "brand:noise:::category:sports-fitness-watches",
   );
-  // "smart watch" without the brand reads the same way on the kind: watch is the head of the
-  // phrase, and no brand is said, so none is narrowed to even if one holds a third of the rows.
   assert.equal(
     narrow(
       [
@@ -306,8 +276,6 @@ test("the last word left after the brand names the kind, so a smart watch is not
     ),
     "category:sports-fitness-watches",
   );
-  // "soundbar sony" — Sony thin in the soundbar shelf — is still Sony's answer, not the more
-  // popular JBLs.
   assert.equal(
     narrow(
       [
@@ -332,8 +300,6 @@ test("an accessory shelf is not the kind named, until an accessory is asked for"
     key: { name },
     values: values.map(([value, count]) => ({ value, count })),
   });
-  // The store's own counts put the accessories shelf above the watches it serves: with the shelf
-  // counted, "smart watch" refined into a shelf of straps.
   const shelf = shelfFacet("category", [
     ["smart-watch-accessories", 2400],
     ["smart-phones", 970],
@@ -344,15 +310,10 @@ test("an accessory shelf is not the kind named, until an accessory is asked for"
     "category:sports-fitness-watches",
     "the straps never answer a watch question by their shelf's big count",
   );
-  // Asked for the accessory itself, the shelf is the right answer again.
   assert.equal(narrow([shelf], 3836, ["strap", "smart", "watch"]), "category:smart-watch-accessories");
   assert.equal(categoryByWords([shelf], ["smart", "watch", "strap"]), "smart-watch-accessories");
 });
 
-/** "iphone" is the case that killed the count pick. The store's own facets for q=iphone put
- *  sports-fitness-watches (142) above smart-phones (117), and the count pick refined the search
- *  into Apple Watches. The kind said — iphone is a phone — is inside smart-phones, and that is
- *  the category that counts. */
 test("the kind a brand name is, said against the facets, reaches the f= filter", () => {
   const facet = (name: string, values: [string, number][]) => ({
     key: { name },
@@ -392,8 +353,6 @@ const base: Pack = {
   install_requirements: {},
 };
 
-/** The store's real answer to q="iphone" and to the category the facets pick, on 1 Nov 2026: the
- *  loose search ranks a MagSafe wallet first out of 547, and the phones sit behind the refine. */
 test("an iphone question finds iphones, on the associate's own sentence", async () => {
   const saved = { ...process.env };
   Object.assign(process.env, {
@@ -462,8 +421,6 @@ test("an iphone question finds iphones, on the associate's own sentence", async 
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }) as unknown as typeof fetch;
 
-    // The full sentence the associate sends, not a product name: the question words must fall
-    // away, because "asking iphone" was a query the store answered with smart glasses.
     assert.deepEqual(terms("customer is asking about the iphone which i can see at the store"), ["iphone"]);
 
     const pack = await searchPack(base, "customer is asking about the iphone which i can see at the store", fake);
@@ -508,13 +465,6 @@ test("a search that matches nothing refuses the catalogue's first page", async (
   }
 });
 
-/** The fuzzy storefront answers any string with something: the first candidate a sentence leaves
- *  behind ("printer office") can be USB adapters while the product noun alone ("printer") stands
- *  in the catalogue. The search has to keep trying. */
-/** The store refines a brand into a thin shelf by popularity: the loose "soundbar sony" answered
- *  with Sony bars, the category page beneath it answered with the more popular JBLs. The refine
- *  has to keep the brand the associate said — and the words, in the rows the reply is built
- *  from. */
 test("a refine keeps the brand and the words the loose rows carried", async () => {
   const saved = { ...process.env };
   Object.assign(process.env, {
@@ -540,8 +490,6 @@ test("a refine keeps the brand and the words the loose rows carried", async () =
     page: { item_total: 15 },
     filters: [{ key: { name: "category" }, values: [{ value: "tv-speakers-soundbars", count: 15 }] }],
   };
-  // The store's own category page answers by popularity, and no Sony facet is on the loose
-  // response for this query — the refused refine is the only thing standing between the two.
   const jblPage = {
     items: [
       row(4, "JBL", "JBL Sound Bar 2.1 Essential (440W) Soundbar with Dolby Digital"),
@@ -761,16 +709,10 @@ test("a said word is matched as a word, so 'son' is not every Sony in the shop",
   const speakers = [{ brand: "Sony", name: "SRS ULT TOWER 5 Wireless Bluetooth Party Speaker" }];
   const laptops = [{ brand: "Microsoft", name: "Surface 15 Windows Laptop" }];
 
-  // "a laptop for my son's college" reduces to laptop/son/college. The store answers q="laptop son"
-  // with nine Sony speakers, and a substring test scored them as highly as the real laptops — so
-  // the worse candidate won for being asked first, and the associate was offered a party speaker.
   assert.equal(aboutTheWords(["laptop", "son", "college"], speakers), false, "Sony is not a son");
   assert.equal(aboutTheWords(["laptop", "son", "college"], laptops), true);
 
-  // An English ending is the same word, which is the half that must keep working: the store writes
-  // "Washing Machines" where the associate types "washing machine", and "Front Loading" for "load".
   assert.equal(aboutTheWords(["machine"], [{ brand: "Lloyd", name: "Top Load Washing Machines" }]), true);
   assert.equal(aboutTheWords(["load"], [{ brand: "Lloyd", name: "Front Loading Washing Machine" }]), true);
-  // And a word that only shares a stem is still not a match.
   assert.equal(aboutTheWords(["cool"], [{ brand: "Voltas", name: "Cooler 45 L" }]), false, "a cooler is not cool");
 });

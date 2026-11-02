@@ -86,8 +86,6 @@ test("assessed needs four home facts including the viewing distance", () => {
 
 test("the viewing distance is only required where there is a screen", () => {
   const home = { room: "hall", light: "bright", mount: "wall", content: ["cricket"] };
-  // Four facts and no distance: not assessed for a television, assessed for anything without a
-  // screen. The six written questions asked every customer how far they would sit.
   assert.equal(isAssessed(home), false);
   assert.equal(isAssessed(home, false), true);
   assert.equal(needsSizing(pack), true, "this pack sells televisions");
@@ -152,7 +150,6 @@ test("an Rs figure is checked against the pack just like a rupee sign", () => {
 });
 
 test("a number inside a bigger pack number is not permission to say it", () => {
-  // 999 sits inside 79990 and 4990 inside 54990; neither is a real figure.
   assert.deepEqual(unsupportedNumbers("Yours for Rs 999.", allowed, ""), ["999"]);
   assert.deepEqual(unsupportedNumbers("Yours for Rs 4990.", allowed, ""), ["4990"]);
   assert.deepEqual(unsupportedNumbers("Yours for Rs 54990.", allowed, ""), []);
@@ -160,8 +157,6 @@ test("a number inside a bigger pack number is not permission to say it", () => {
 
 test("figures written into label prose stay quotable", () => {
   assert.deepEqual(unsupportedNumbers("2 PM sunlight on that wall.", allowed, ""), []);
-  // This pack sells four televisions. A washing machine's load is not in it, and 8 being in the
-  // pack as something else is not permission to say it in kilograms.
   assert.deepEqual(unsupportedNumbers("8 kg in one wash.", allowed, ""), ["8 kg"]);
 });
 
@@ -210,7 +205,6 @@ test("every product carries a demonstration cue, as section 6.5 requires", () =>
 });
 
 test("an itemised total with an accessory and delivery is sayable", () => {
-  // TCL 54990 + soundbar 11990 + delivery 499
   assert.deepEqual(
     unsupportedNumbers("TCL Rs 54990 plus soundbar Rs 11990 plus delivery Rs 499 is Rs 67479.", allowed, ""),
     [],
@@ -233,49 +227,34 @@ test("a running cost that is not in the data is still refused", () => {
 });
 
 test("a figure is its number and its unit, not the number alone", () => {
-  // A model answered "the standard warranty is one year" when the only warranty in the pack is the
-  // 2-year extended one. It passed a check on the number because the pack holds 1 as a port count.
   assert.deepEqual(unsupportedNumbers("the warranty is 3 years", allowed, ""), ["3 year"]);
   assert.deepEqual(unsupportedNumbers("the standard warranty is one year", allowed, ""), ["1 year"]);
   assert.deepEqual(unsupportedNumbers("delivery takes 7 days", allowed, ""), ["7 day"]);
-  // The 2-year extended warranty is a charge in the pack, so it is sayable.
   assert.deepEqual(unsupportedNumbers("the extended warranty runs 2 years", allowed, ""), []);
-  // 9 is the TCL's stock count, which is not permission to claim nine sockets. The old allowlist
-  // held values without their units and let this through.
   assert.deepEqual(unsupportedNumbers("it has 9 HDMI ports", allowed, ""), ["9 port"]);
   assert.deepEqual(unsupportedNumbers("it has 2 HDMI 2.1 ports", allowed, ""), [], "the TCL has two");
-  // The brief's own example of a good line must survive: no unit, no claim.
   assert.deepEqual(unsupportedNumbers("two pairs of jeans and two bedsheets in one wash", allowed, ""), []);
-  // And the pack's real figures still pass.
   assert.deepEqual(unsupportedNumbers("TCL 55 inch, 144 Hz, Rs 54,990", allowed, ""), []);
 });
 
 test("a unit in the associate's own language is still a unit", () => {
-  // "Warranty sab TVs par 1 saal ki milti hai" walked past an English-only unit table, which is
-  // the same invented warranty as before in the other half of the languages this product speaks.
   assert.deepEqual(unsupportedNumbers("Warranty sab TVs par 1 saal ki milti hai.", allowed, ""), ["1 year"]);
   assert.deepEqual(unsupportedNumbers("वारंटी 1 साल की है।", allowed, ""), ["1 year"]);
   assert.deepEqual(unsupportedNumbers("डिलीवरी 7 दिन लेती है।", allowed, ""), ["7 day"]);
-  // And the pack's own figures pass in Hindi exactly as they do in English.
   assert.deepEqual(unsupportedNumbers("TCL 55 इंच, 144 Hz.", allowed, ""), []);
   assert.deepEqual(unsupportedNumbers("Extended warranty 2 saal ki hai.", allowed, ""), []);
 });
 
 test("a bare count is a claim once it is bigger than prose", () => {
-  // Was: anything under 100 with no unit went unchecked. A model announced "Target is 12 TVs
-  // today" and there is no target of any kind in the pack.
   assert.deepEqual(unsupportedNumbers("Target is 47 TVs today.", allowed, ""), ["47"]);
   assert.deepEqual(unsupportedNumbers("Three options, two bedsheets in one wash.", allowed, ""), []);
   assert.deepEqual(unsupportedNumbers("9 in stock.", allowed, ""), [], "the TCL's own count");
-  // shortcut: 12 is in the pack, inside a demo cue that says "stand at 8 feet, then 12", so a
-  // bare 12 of anything passes. Closing this needs the noun paired, not just the unit.
   assert.deepEqual(unsupportedNumbers("Target is 12 TVs today.", allowed, ""), []);
 });
 
 test("a reply that could not answer carries a human who can", () => {
   const refused = offerExpert({ text: "I do not have that." }, "en");
   assert.deepEqual(refused.buttons, [{ id: "ask_expert", title: "Find out for me" }]);
-  // Never twice, and never when there is no store to log the question against.
   assert.deepEqual(offerExpert(refused, "en").buttons?.length, 1);
   assert.equal(offerExpert({ text: "x" }, "en", false).buttons, undefined);
   assert.equal(offerExpert({ text: "x" }, "hi").buttons![0]!.title, "पता करके बताइए");
@@ -292,17 +271,12 @@ test("asked for something the pack does not have, the reason is ours and a human
 });
 
 test("a unit conversion of what they said is not an invention", () => {
-  // A Hindi voice note said "तीन मीटर दूर बैठते हैं" and the manager answered in feet. Three metres
-  // is ten feet, and refusing that is the guard calling arithmetic a lie.
   assert.deepEqual(unsupportedNumbers("At 10 feet, a 65 inch fills the wall.", allowed, "they sit 3 metres away"), []);
   assert.deepEqual(unsupportedNumbers("sits 1.5 metres away", allowed, "about 5 feet from the wall"), []);
-  // And a distance nobody mentioned is still refused.
   assert.deepEqual(unsupportedNumbers("At 14 feet you want bigger.", allowed, "they sit 3 metres away"), ["14 foot"]);
 });
 
 test("tapping Find out for me logs what they actually asked", async () => {
-  // The button is how this is reached now, and a tap carries no words: the question was logged as
-  // an empty string, so the manager portal showed an escalation with nothing in it.
   const logged: { question: string; area: string }[] = [];
   const store = {
     today: async () => [],

@@ -131,9 +131,21 @@ function TodayOverview({ floor }: { floor: Floor }) {
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  if (score >= 1.8) return <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600">{score.toFixed(1)}/2</span>;
-  if (score >= 1.0) return <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-600">{score.toFixed(1)}/2</span>;
-  return <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-xs font-medium text-rose-600">{score.toFixed(1)}/2</span>;
+  if (score >= 1.8)
+    return (
+      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600">
+        {score.toFixed(1)}/2
+      </span>
+    );
+  if (score >= 1.0)
+    return (
+      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-600">
+        {score.toFixed(1)}/2
+      </span>
+    );
+  return (
+    <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-xs font-medium text-rose-600">{score.toFixed(1)}/2</span>
+  );
 }
 
 function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => void }) {
@@ -342,9 +354,7 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Live Floor Stream</CardTitle>
-            <CardDescription>
-              Recent customer interactions, active stage, and pricing discipline.
-            </CardDescription>
+            <CardDescription>Recent customer interactions, active stage, and pricing discipline.</CardDescription>
           </div>
           <Badge variant="outline" className="text-xs">
             {feed.length} {feed.length === 1 ? "interaction" : "interactions"} today
@@ -381,7 +391,9 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
                       <CheckCircle2 className="size-3" /> Home first
                     </Badge>
                   )}
-                  <span className="text-muted-foreground text-xs">{new Date(item.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {new Date(item.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
                 </div>
               </div>
 
@@ -398,8 +410,16 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
                 ) : item.shortlist.length ? (
                   <Badge variant="secondary">Pitched: {item.shortlist.join(", ")}</Badge>
                 ) : null}
-                {item.consent ? <Badge variant="outline" className="text-emerald-600 border-emerald-300">Consent given</Badge> : null}
-                {item.siteChecked ? <Badge variant="outline" className="text-blue-600 border-blue-300">Site checked</Badge> : null}
+                {item.consent ? (
+                  <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                    Consent given
+                  </Badge>
+                ) : null}
+                {item.siteChecked ? (
+                  <Badge variant="outline" className="text-blue-600 border-blue-300">
+                    Site checked
+                  </Badge>
+                ) : null}
               </div>
 
               {item.lastLine ? (
@@ -569,7 +589,10 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
       <CardContent>
         <div className="space-y-3">
           {questions.map((q) => (
-            <div key={q.reference} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border bg-background p-3 text-sm">
+            <div
+              key={q.reference}
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border bg-background p-3 text-sm"
+            >
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="font-mono font-semibold">
@@ -580,9 +603,7 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
                   </Badge>
                   <span className="text-xs text-muted-foreground">Owner: {q.owner}</span>
                 </div>
-                {q.question ? (
-                  <p className="text-sm font-medium text-foreground mt-1">"{q.question}"</p>
-                ) : null}
+                {q.question ? <p className="text-sm font-medium text-foreground mt-1">"{q.question}"</p> : null}
                 <span className="text-xs text-muted-foreground">Associate: {q.phone}</span>
               </div>
               <Button
@@ -591,7 +612,11 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
                 disabled={resolving === q.reference}
                 onClick={() => resolve(q.reference)}
               >
-                {resolving === q.reference ? <Loader2 className="animate-spin size-3.5" /> : <CheckCircle2 className="size-3.5 text-emerald-600" />}
+                {resolving === q.reference ? (
+                  <Loader2 className="animate-spin size-3.5" />
+                ) : (
+                  <CheckCircle2 className="size-3.5 text-emerald-600" />
+                )}
                 Mark Answered
               </Button>
             </div>
@@ -713,8 +738,8 @@ function TellTheFloor({ floor }: { floor: Floor }) {
         <CardTitle>Tell the floor</CardTitle>
         <CardDescription>
           Today's offers, a stock change, anything everyone needs. It goes straight to the {floor.reachable}{" "}
-          {floor.reachable === 1 ? "associate" : "associates"} who messaged the number in the last 24 hours; anyone
-          else on the roster gets it the moment they next write. You see exactly who before anything is sent.
+          {floor.reachable === 1 ? "associate" : "associates"} who messaged the number in the last 24 hours; anyone else
+          on the roster gets it the moment they next write. You see exactly who before anything is sent.
           {floor.waiting ? ` ${floor.waiting} still waiting to be picked up.` : ""}
         </CardDescription>
       </CardHeader>
@@ -849,7 +874,9 @@ export default function App() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">Store IQ · Manager Dashboard</h1>
-            <Badge variant="outline" className="text-xs">Reliance Digital</Badge>
+            <Badge variant="outline" className="text-xs">
+              Reliance Digital
+            </Badge>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
             {floor ? floor.summary.split("\n")[0] : "Reading the floor…"}

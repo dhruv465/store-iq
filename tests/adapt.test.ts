@@ -4,10 +4,6 @@ import { adaptPack, adaptProduct, figure, fromFdk, fromPromotion, running } from
 import { rank } from "../server/src/recommend.js";
 import type { Pack } from "../server/src/pack.js";
 
-/** The real catalogue will arrive in its own shape. These are the shapes a retail export actually
- *  takes — spaced and capitalised headers, rupee signs, units inside the value — and the point of
- *  the adapter is that none of them needs a change anywhere but its name list. */
-
 const vendorRow = {
   "Article Code": "RD-TCL-55C6",
   "Brand Name": "TCL",
@@ -44,7 +40,6 @@ test("a vendor row with its own headers becomes a product we can serve", () => {
   assert.equal(product.specs.refresh_hz, 144);
   assert.equal(product.specs.hdmi_21_ports, 2);
   assert.deepEqual(product.good_for, ["bright living room", "PS5 gaming", "cricket"]);
-  // Four hours a day for a year at 130 W.
   assert.equal(product.energy.units_per_year_4h_day, 190);
 });
 
@@ -88,7 +83,6 @@ test("our own pack passes through the adapter unchanged", async () => {
   assert.equal(tcl.demo_cue_hi !== undefined, true, "the Hindi cue survives the adapter");
 });
 
-/** One ProductListingDetail as getProducts returns it, with the fields the reference documents. */
 const fdkRow = {
   uid: 7501234,
   name: "Sony Bravia 2 55 inch 4K LED Google TV",
@@ -114,7 +108,6 @@ test("a product from the live catalogue becomes one we can serve", () => {
   assert.equal(product.brand, "Sony");
   assert.equal(product.price_rupees, 62990, "effective, not marked");
   assert.equal(product.mrp_rupees, 79900);
-  // "55 inch" is in the name far more reliably than in a named attribute.
   assert.equal(product.size_inch, 55);
   assert.equal(product.panel, "LED");
   assert.deepEqual(product.good_for, ["bright living room", "OTT", "news"]);
@@ -132,18 +125,15 @@ test("the ranking reasons about a live catalogue row exactly as it does about ou
 test("a product the shop cannot sell today is out of stock, not absent", () => {
   const { product } = adaptProduct(fromFdk({ ...fdkRow, sellable: false }));
   assert.equal(product.stock_units, 0);
-  // Units come from the stock-status endpoint; sellable is only a yes or no.
   assert.equal(adaptProduct(fromFdk(fdkRow)).product.stock_units, 1);
 });
 
 test("the screen size is the number before inch, not the first number in the name", () => {
-  // "Sony Bravia 2 55 inch" — the first number is the model line, not the screen.
   assert.equal(adaptProduct(fromFdk({ ...fdkRow, attributes: {} })).product.size_inch, 55);
   assert.equal(adaptProduct(fromFdk({ name: 'LG 4 Series 65" UHD', price: {} })).product.size_inch, 65);
   assert.equal(adaptProduct(fromFdk({ name: "Samsung Series 7 Washing Machine", price: {} })).product.size_inch, 0);
 });
 
-/** One PromotionOffer as getPromotionOffers returns it, with the fields the reference documents. */
 const promotion = {
   id: "661f0c5d8a",
   offer_text: "10% off up to Rs 8,000 on HDFC credit cards",
@@ -161,7 +151,6 @@ test("a live promotion becomes an offer, with its own words and no figure of our
   assert.equal(offer.title, "10% off up to Rs 8,000 on HDFC credit cards");
   assert.equal(offer.applies_to, "bank");
   assert.match(String(offer.needs), /no-cost EMI/);
-  // discount_rules is undocumented, so nothing is read off it and nothing is computed from it.
   assert.equal(offer.percent, undefined);
   assert.equal(offer.flat_rupees, undefined);
 });
@@ -179,7 +168,6 @@ test("the floor questions a listing can answer come through with the specs", () 
   assert.equal(product.specs.rating, 4.3);
 });
 
-/** A real Reliance Digital promotion, 1 Nov 2026: what the store actually returns. */
 const liveOffer = {
   id: "69b25c62744fd8d69d6c7fd4",
   promotion_type: "free_gift_items",
@@ -193,20 +181,14 @@ const liveOffer = {
 };
 
 test("a live promotion is read for what it does, not for its reference", () => {
-  // offer_text and promotion_name are both the code "MAR29226". What it is — buy the television,
-  // get a Sony wall mount — is only in free_gift_items.
   const offer = fromPromotion(liveOffer);
   assert.equal(offer.title, "Free with it: SONY WALL MOUNT WM 60 65");
   assert.equal(offer.applies_to, "product");
   assert.equal(offer.valid_till, "2027-03-31T18:25:00+00:00");
-  // The description is a TinyMCE table and a block of CSS saying the code again. Keeping it would
-  // put "141" and "100" into allowedNumbers as quotable figures.
   assert.equal(offer.needs, undefined);
   assert.equal(offer.percent, undefined, "no amount is read: discount_rules says the kind, not how much");
 
-  // With no gift and no words, the code is said as a reference rather than as an offer.
   assert.equal(fromPromotion({ ...liveOffer, free_gift_items: [] }).title, "Offer MAR29226");
-  // And a promotion whose text is actually words keeps them.
   assert.equal(
     fromPromotion({ offer_text: "10% off on HDFC cards", free_gift_items: [] }).title,
     "10% off on HDFC cards",
@@ -214,8 +196,6 @@ test("a live promotion is read for what it does, not for its reference", () => {
 });
 
 test("the cue is the highlight worth standing in front of", () => {
-  // The first highlight on a real Sony is "Apps Supported : Prime Video,Netflix,YouTube,Apple
-  // TV,Google TV" — a specification, not a thing to show. Fewest commas wins, then shortest.
   const { product } = adaptProduct(
     fromFdk({
       ...fdkRow,
@@ -228,14 +208,11 @@ test("the cue is the highlight worth standing in front of", () => {
     }),
   );
   assert.equal(product.demo_cue, "Show them Refresh Rate: 120 Hz, beside the one next to it.");
-  // The shop's own words, so its figures are quotable; and the running cost is arithmetic again.
   assert.equal(product.energy.typical_watts, 421.25);
   assert.ok(product.energy.units_per_year_4h_day > 0);
-  // Who the catalogue says it is for joins what it is good for.
   const washer = adaptProduct(
     fromFdk({ ...fdkRow, highlights: ["Top Loading"], attributes: { "recommended-for": "Large Families" } }),
   ).product;
   assert.ok(washer.good_for.includes("Large Families"));
-  // No highlights at all leaves the pack's own fallback cue rather than an empty one.
   assert.match(adaptProduct(fromFdk({ ...fdkRow, highlights: [] })).product.demo_cue, /beside the set next to it/);
 });

@@ -20,27 +20,21 @@ function tap(session: Session, action: string) {
   return deterministic(event, session, pack);
 }
 
-// Four stated facts, one of them a distance: what isAssessed() asks for.
 const HOME_CARD = { distance_m: 3, light: "bright afternoon sun", mount: "wall", content: ["cricket"] };
 
 test("offers are matched by their own applies_to line, or skipped", () => {
-  // "all TVs" and "TVs above 50 inch" both cover a 55 inch set.
   assert.deepEqual(
     applicableOffers(pack, TCL).map((offer) => offer.id),
     ["HDFC-CC", "EXCH-TV"],
   );
-  // The exchange is for 50 inch and up, so the card discount alone survives on a smaller set.
   assert.equal(applicableOffers(pack, { ...TCL, size_inch: 43 }).length, 1);
-  // An applies_to the code cannot parse offers nothing rather than a guessed saving.
   const weird = { ...pack, offers: [{ id: "GOLD", applies_to: "golden homes", percent: 5 }] };
   assert.deepEqual(applicableOffers(weird, TCL), []);
 });
 
 test("an offer is the percent capped, or the flat amount, never anything else", () => {
-  // 54990 at 7.5 percent is 4124.25; the cap on this set never bites.
   assert.equal(offerAmount(TCL, { percent: 7.5, cap_rupees: 8000 }), 4124);
   assert.equal(offerAmount(TCL, { flat_rupees: 3000 }), 3000);
-  // On a dearer set the cap is what keeps the figure honest.
   assert.equal(offerAmount({ ...TCL, price_rupees: 200000 }, { percent: 7.5, cap_rupees: 8000 }), 8000);
   assert.equal(offerAmount(TCL, { title: "an offer without a figure" }), 0);
 });
@@ -52,7 +46,6 @@ test("every closing line carries the pack's figure and the pack's own conditions
 });
 
 test("the net payable is the itemised total less every applicable offer", () => {
-  // 54990 + 1499 wall mount, less 4124 card, less 3000 exchange.
   assert.equal(netPayable(pack, TCL, 54990 + 1499), 49365);
 });
 
@@ -62,11 +55,8 @@ test("with the gate open the summary leads with the MRP saving and the send ends
   session.demonstrated = true;
   tap(session, "select:TCL-55C6KS");
   const draft = tap(session, "add:TV-WALL")!;
-  // 89990 MRP against 54990 today, and only after the home is assessed.
   assert.match(draft.text, /Rs 35,000 off MRP today: listed Rs 89,990, here Rs 54,990/);
   assert.doesNotMatch(draft.text, /Net with those/, "the net waits until after consent");
-  // A wall mount means the site is asked about first, and that turn is only the question: with the
-  // closing figures on it too, the floor's three lines dropped the question itself.
   const asked = tap(session, "consent:yes")!;
   assert.match(asked.text, /Total Rs 56,489/, "the gross stays visible, so both figures are on the table");
   assert.match(asked.text, /wall type/, "the thing to check, not just the reason for checking");
@@ -86,14 +76,12 @@ test("with the gate closed the closing lines wait behind it", () => {
   const sent = tap(session, "consent:yes")!;
   assert.doesNotMatch(sent.text, /− Rs/, "no offer figure before the home is assessed");
   assert.doesNotMatch(sent.text, /Net with those/);
-  // The offer figures are pack-derived, so the guard itself is untouched — the gate is the test.
 });
 
 test("the close adapts to the associate's language, pack figures aside", () => {
   const [hindi, marathi] = [offerLines(pack, TCL, "hi")[0], offerLines(pack, TCL, "mr")[0]];
   assert.match(hindi!, /छूट/);
   assert.match(marathi!, /वजावट/);
-  // The pack's title and needs keep their own words, like every other pack read-back.
   assert.match(hindi!, /HDFC credit card/);
   assert.match(marathi!, /Rs 4,124/);
   assert.deepEqual(closeLines(pack, TCL, 54990, "en", false), [], "gate shut: no closing lines at all");

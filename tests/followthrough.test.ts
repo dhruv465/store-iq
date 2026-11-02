@@ -26,7 +26,6 @@ test("the total is computed from the pack, itemised line by line", () => {
     accessories: ["ACC-SOUNDBAR"],
     charges: ["TV-WALL", "TV-DELIVERY"],
   });
-  // 54990 + 11990 + 1499 + 499
   assert.equal(result!.total, 68978);
   assert.equal(result!.lines.length, 4);
   assert.match(result!.lines[0]!, /^TCL 55 inch C6K QD-Mini LED — Rs 54,990$/);
@@ -34,7 +33,6 @@ test("the total is computed from the pack, itemised line by line", () => {
 });
 
 test("a percentage charge is resolved against the product price", () => {
-  // Extended warranty is 6% of 54990.
   const result = itemisedTotal(pack, { sku: "TCL-55C6KS", accessories: [], charges: ["TV-EXT-WARR"] });
   assert.equal(result!.total, 54990 + 3299);
 });
@@ -74,7 +72,6 @@ test("consent asks the site question before anyone books an installer", () => {
   tap(session, "add:TV-WALL");
   const reply = tap(session, "consent:yes")!;
   assert.match(reply.text, /Total Rs 56,489/);
-  // The October install failed because nobody asked about the wall until the installer arrived.
   assert.match(reply.text, /Before I book the installer — .*concrete or brick/);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
@@ -92,7 +89,6 @@ test("once the site is confirmed, the owner and the check-back are handed over",
   const reply = tap(session, "site:ok")!;
   assert.equal(session.site_checked, true);
   assert.match(reply.text, new RegExp(`Task: follow up this order · owner ${ASSOCIATE}`));
-  // Nobody checked that the October AC worked, so the last task is that check.
   assert.match(reply.text, /after install, check it switches on and the apps work/);
 });
 
@@ -131,7 +127,6 @@ test("a product or accessory outside the pack is refused", () => {
 
 test("a price quoted before the home is known is recorded against the conversation", () => {
   const session = newSession("919820000001");
-  // The store visits' headline measure, so it is counted the same way they counted it.
   assert.equal(pricedEarly(session, { text: "TCL 55 inch · Rs 54,990 · 9 in stock" }), true);
   assert.equal(pricedEarly(session, { text: 'Ask: "How far will you sit from the TV?"' }), false);
   session.assessed = true;
@@ -140,11 +135,9 @@ test("a price quoted before the home is known is recorded against the conversati
 
 test("finance is computed from the pack's own terms, with the full cost", () => {
   const [noCost, standard] = financeOptions(pack, 62990);
-  // No interest: the instalments are the price and the only extra is the processing fee.
   assert.equal(noCost!.monthly, 6999);
   assert.equal(noCost!.fullCost, 6999 * 9 + 299);
   assert.equal(noCost!.exact, true);
-  // 15% a year over 18 months, the standard reducing-balance instalment every bank quotes.
   assert.equal(standard!.monthly, 3930);
   assert.equal(standard!.fullCost, 3930 * 18 + 299);
   assert.equal(standard!.exact, false, "the bank sets the exact figure, so it is not stated as fact");
@@ -155,7 +148,6 @@ test("the finance line names the worst full cost, not the friendliest one", () =
   assert.match(text, /Rs 6,999 a month for 9 months, Rs 63,290 in all/);
   assert.match(text, /about Rs 3,930 a month/);
   assert.match(text, /the bank sets the exact instalment/);
-  // 71,039 against 62,990 today: the number the customer needs to hear.
   assert.match(text, /costs up to Rs 8,049 more than today/);
 });
 
@@ -169,8 +161,6 @@ test("finance waits for the home and the demonstration, like every other money a
     pack,
     notes,
   );
-  // The gate holds; the words that hold it are the manager's. What the code guarantees is that no
-  // figure leaves before the home is known, and that is what the note tells the model.
   assert.equal(early, null);
   assert.match(notes.join(" "), /before the home is known/);
   assert.doesNotMatch(notes.join(" "), /\d{4}/, "no figure before the gate opens");

@@ -6,7 +6,6 @@ import { modelRequest } from "../server/src/http.js";
 const URL_ = "https://generativelanguage.googleapis.com/v1beta/models/x:generateContent";
 const noWait = async () => {};
 
-/** Counts calls and replays the given statuses; 0 means a transport failure. */
 function stubFetch(statuses: number[]) {
   const calls: number[] = [];
   const request = (async () => {

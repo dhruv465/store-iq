@@ -148,9 +148,6 @@ const schema = {
   },
 } as const;
 
-/** Gemini answers 503 UNAVAILABLE under load and sometimes just hangs; both clear on a retry.
- *  429 is deliberately absent: the free tier's limit is per DAY (Google asked for a 19 hour delay
- *  when it was hit), so retrying only spends two more of the day's requests on a certain failure. */
 
 /** Fails loudly for a wrong model name, but never blocks start-up just because Google is unreachable. */
 export async function assertModelAvailable(request: typeof fetch = fetch): Promise<string> {

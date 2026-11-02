@@ -8,7 +8,6 @@ const pack = await loadPack("data/pack.json");
 const allowed = allowedNumbers(pack);
 
 test("the brief's own example objection is matched", () => {
-  // Section 5: "Customer says a larger screen always uses much more electricity."
   const myth = matchMyth(pack, "Customer says a larger screen always uses much more electricity");
   assert.ok(myth);
   assert.match(myth!.claim, /electricity/);

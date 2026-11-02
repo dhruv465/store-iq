@@ -5,9 +5,6 @@ import { ago, floorRows, notice, phoneOf, recipients } from "../server/src/manag
 import { loadPack } from "../server/src/pack.js";
 import { newSession, type Session } from "../server/src/types.js";
 
-/** The manager's view is one row per associate over many conversations, which is the thing the
- *  session table cannot show: it holds one row per associate, overwritten by the next customer. */
-
 function conversation(phone: string, name: string, done: Session["steps_done"], assessed: boolean): Session {
   const session = newSession(phone);
   session.associate = name;
@@ -82,7 +79,6 @@ test("a rostered associate who did nothing today is in the table, not missing fr
   assert.equal(sunil.conversations, 0, "quiet all day, and that is the point of showing him");
   assert.equal(sunil.onRoster, true);
   assert.equal(sunil.lastSeen, "2026-10-28T04:00:00.000Z");
-  // The manager's own spelling wins over whatever WhatsApp has in the profile.
   assert.equal(rows.find((row) => row.phone === "919820000001")!.name, "Ramesh K");
 });
 
@@ -116,8 +112,6 @@ test("a floor notice goes to the manager's own associates, not to whoever messag
     { phone: "919820000001", name: "Ramesh" },
     { phone: "919820000009", name: "Sunil" },
   ];
-  // 919999999999 wrote to the agent but is nobody's associate: a test number, a wrong number, a
-  // customer who found the number. It must not receive the floor's notices.
   const { to, unreachable, rosterEmpty } = recipients(roster, ["919820000001", "919999999999"]);
   assert.deepEqual(to, ["919820000001"]);
   assert.deepEqual(

@@ -46,7 +46,6 @@ test("the scorecard is the judges' seven steps, 0 to 2 each", () => {
   session.steps_done = ["brief", "assess", "translate", "recommend"];
   session.card = { distance_feet: 8, light: "bright", mount: "wall", content: ["cricket"] };
   session.demonstrated = true;
-  // Assessed but never read back is half of that step; translate and demonstrate are whole.
   assert.deepEqual(score(session).marks, {
     assess: 1,
     validate: 0,
@@ -85,7 +84,6 @@ test("picking a product without the full cost is half of Complete", () => {
 test("a claimed step without its evidence does not score", () => {
   const session = newSession("919999999999");
   session.steps_done = ["assess", "translate"];
-  // The model said it assessed and demonstrated; the card and the flag say otherwise.
   assert.equal(score(session).marks.assess, 0, "an empty card is not an assessment");
   assert.equal(score(session).marks.demonstrate, 0);
   assert.ok(score(session).missing.includes("assess"));
@@ -135,7 +133,6 @@ test('"Not sure" is recorded but never read back as a fact about the home', () =
   const text = cardSummary(session).text;
   assert.doesNotMatch(text, /not stated/, "the floor saw: sits not stated m away");
   assert.match(text, /bright afternoon sun/, "what they did answer is still read back");
-  // How far they sit is what sizes the screen, so without it the home is not assessed.
   assert.equal(isAssessed(session.card), false);
   session.card.distance_m = 3;
   assert.equal(isAssessed(session.card), true);
