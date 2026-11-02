@@ -557,6 +557,16 @@ const CARD_FIELDS = new Set([
   "priorities",
   "site_constraints",
 ]);
+/** Card fields that only mean something in front of a screen. An iPhone conversation was asked
+ *  what room it was for and how far they would sit; a washing machine was asked the same. Telling
+ *  the model not to was not enough — it still filled them — so a field that does not apply to what
+ *  is being sold is dropped on the way in, whatever the model says. */
+const SCREEN_ONLY = ["distance_m", "distance_feet", "mount", "light"] as const;
+
+export function fieldApplies(field: string, pack: Pack, session?: Session): boolean {
+  return !SCREEN_ONLY.includes(field as (typeof SCREEN_ONLY)[number]) || needsSizing(pack, session);
+}
+
 const NUMERIC_FIELDS = new Set(["distance_m", "distance_feet", "budget_rupees"]);
 const LIST_FIELDS = new Set(["content", "devices", "priorities", "site_constraints"]);
 
@@ -617,6 +627,10 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string, not
       field === "distance" ? !stated(card.distance_feet) && !stated(card.distance_m) : !stated(card[field]),
     )
     .join(", ");
+  // Named, so the model does not spend a turn asking something the code would throw away.
+  const notThisProduct = needsSizing(pack, session)
+    ? ""
+    : "NOT ABOUT WHAT THEY ARE BUYING — never ask these and never fill them: how far they sit, the wall mount, the light in the room. This has no screen.";
   const gate =
     assessedFor(pack, session) && session.demonstrated
       ? "The home is assessed and a spec has been demonstrated, so offers and finance are open."
@@ -635,6 +649,7 @@ function prompt(event: Event, session: Session, pack: Pack, tapped?: string, not
       : gaps
         ? `STILL BLANK ON THE CARD: ${gaps}`
         : "The card is full.",
+    notThisProduct,
     gate,
     // What the code knows and the model does not: a fact just filed, a gate just hit, a tap. The
     // questions used to be written here in a fixed list of six, which is a questionnaire with a
@@ -1172,6 +1187,9 @@ async function answer(
         };
   for (const [field, value] of Object.entries(decision.card ?? {}))
     if (field === "facts") continue;
+    // A viewing distance on a phone is not a fact about this customer, it is the television
+    // assumption wearing the card's clothes. Dropped here rather than argued with in the prompt.
+    else if (!fieldApplies(field, pack, session)) continue;
     else if (value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
       (session.card as Record<string, unknown>)[field] = value;
   session.shortlist = (decision.shortlist ?? [])

@@ -312,3 +312,20 @@ test("a gate is not a refusal to answer: asked outright, the offer is given", ()
   assert.equal(askedAboutOffers("customer wants a washing machine"), false, "no offer word, no opening");
   assert.equal(askedAboutOffers(undefined), false, "a tap carries no words");
 });
+
+test("a viewing distance is not a fact about a phone", async () => {
+  const { fieldApplies } = await import("../server/src/brain.js");
+  const phones = { products: [{ size_inch: 0, stock_units: 1 }] } as never;
+  const screens = { products: [{ size_inch: 55, stock_units: 1 }] } as never;
+  // The iPhone conversation was asked how far they would sit and what room it was for. Telling the
+  // model not to was not enough — it filled them anyway — so they are dropped on the way in.
+  for (const field of ["distance_feet", "distance_m", "mount", "light"]) {
+    assert.equal(fieldApplies(field, phones), false, `${field} means nothing without a screen`);
+    assert.equal(fieldApplies(field, screens), true, `${field} is the whole point of a television`);
+  }
+  // What a customer uses a thing for applies to anything on the floor.
+  for (const field of ["content", "family", "budget_rupees", "room"]) {
+    assert.equal(fieldApplies(field, phones), true, field);
+    assert.equal(fieldApplies(field, screens), true, field);
+  }
+});
