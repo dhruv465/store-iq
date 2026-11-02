@@ -115,11 +115,16 @@ const searched = new Map<string, Pack>();
  *  later turn asked a washing machine customer about viewing distance. Two or three words of the
  *  thing itself is what the endpoint answers. */
 const FILLER =
-  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|we|us|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|asking|asked|ask|store|shop|shelf|aisle|counter|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range)\b/gi;
+  /\b(customer|customers|wants?|needs?|looking|for|a|an|the|is|are|was|were|we|us|they|their|them|he|she|his|her|and|with|in|on|at|of|to|my|our|about|show|me|please|sir|madam|asking|asked|ask|store|shop|shelf|aisle|counter|new|some|good|best|today|buy|buying|want|have|has|got|ek|chahiye|hai|hain|ka|ke|ki|liye|mein|kuch|grahak|lena|dikhao|batao|bhai|boss|ko|se|par|bhi|wala|wali|kya|koi|iske|uske|kaunsa|konsa|kaun|kitna|kitne|dikhau|dikhaun|hamare|apne|offer|offers|offerings|running|discount|deal|deals|scheme|price|prices|cost|costs|stock|available|availability|any|tell|know|say|said|give|think|see|find|get|what|which|who|whose|how|much|many|does|do|did|can|could|should|would|there|here|that|this|these|those|something|anything|options?|model|models|range|hello|helo|hi|hey|hii|hiii|namaste|namaskar|morning|afternoon|evening|thanks|thank|thankyou|ok|okay|okey|yes|yeah|yep|no|nope|sure|fine|great|cool|sorry|welcome|speak|speaking|talk|english|hindi|marathi|language|you|your|yours|we|us|i|am|it|its|here|right|now|still|also|just|only|been|being|be)\b/gi;
 
 /** Two words the catalogue does not use for the thing the associate means. "ac" on its own
  *  matches TP-Link AC1900 routers, which is a different kind of AC entirely. */
-const MEANS: Record<string, string> = { ac: "air conditioner", washer: "washing machine" };
+const MEANS: Record<string, string> = {
+  ac: "air conditioner",
+  washer: "washing machine",
+  tvs: "tv",
+  televisions: "television",
+};
 
 /** The catalogue is written in English and the associate is not always. Nine words, because a
  *  Devanagari sentence otherwise reduces to nothing and the pack silently stays the stub's. */
@@ -141,7 +146,8 @@ const SAID_IN_HINDI: Record<string, string> = {
 /** A brand the associate names, written the way the catalogue writes the kind. "iphone" shares no
  *  token with the store's own category "smart-phones", and the count-based pick answered an iPhone
  *  question with Apple Watches. So the associate's word is mapped to the kind it is: a phone. */
-const KIND_OF: Record<string, string> = { iphone: "phone", ipad: "tablet", macbook: "laptop" };
+// "tv" is what an associate types and the store files under led-televisions.
+const KIND_OF: Record<string, string> = { iphone: "phone", ipad: "tablet", macbook: "laptop", tv: "television" };
 
 /** Units of measurement. An inch runs country-wide stock, not a kind: the TV refine for
  *  "sony bravia 85 inch" handed back the most popular screens — Samsung 85s — and they were
@@ -196,7 +202,7 @@ function names(text: string, word: string): boolean {
 }
 
 export function aboutTheWords(said: string[], products: { brand: string; name: string }[]): boolean {
-  const kinds = said.filter((word) => word.length > 2 && !/^\d/.test(word) && !UNIT.test(word));
+  const kinds = said.filter((word) => word.length > 1 && !/^\d/.test(word) && !UNIT.test(word));
   if (!kinds.length) return false;
   return products.some((product) =>
     kinds.some((kind) => names(`${product.brand} ${product.name}`.toLowerCase(), kind)),
@@ -211,9 +217,9 @@ export function aboutTheWords(said: string[], products: { brand: string; name: s
  *  products they serve — q="smart watch" answered with a "smart-watch-accessories" shelf of
  *  straps — so they are never the kind the words name, unless the associate asked for one. */
 const ACCESSORY_SHELF =
-  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
+  /accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|power.?bank|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet/;
 const ACCESSORY_WORD =
-  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
+  /\b(accessor|cover|case|strap|band|pouch|sleeve|holder|adapter|charger|cable|batter|power.?bank|backpack|keyboard|mouse|gamepad|controller|headphones?|headsets?|remote|stylus|wallet)/;
 
 export function categoryByWords(filters: Facet[], said: string[]): string | undefined {
   const brands = (filters.find((facet) => facet.key?.name === "brand")?.values ?? []).map((value) =>
@@ -226,7 +232,7 @@ export function categoryByWords(filters: Facet[], said: string[]): string | unde
         .map(of)
         .filter(
           (word) =>
-            word.length > 2 &&
+            word.length > 1 &&
             !/^\d/.test(word) &&
             !UNIT.test(word) &&
             !brands.some((brand) => brand.includes(word) || word.includes(brand)),
@@ -326,15 +332,14 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
   // A fuzzy storefront answers almost any string with something — "paper plane" reached karaoke
   // speakers — so a candidate's rows are only adopted when the catalogue named a category after
   // the words said, or the rows themselves carry them. The first rows the store hands over wait
-  // as the fallback until a later candidate ("printer" after "printer office") answers for real.
+  // for a later candidate ("printer" after "printer office") to answer for real.
   const said = words(asked);
   let won: Record<string, unknown>[] | undefined;
-  let fallback: Record<string, unknown>[] | undefined;
   let wonScore: number[] = [-2, -1, -1, -1];
   const wordsOf = (part: "kind" | "spec" | "unit") =>
     said.filter((word) =>
       part === "kind"
-        ? word.length > 2 && !/^\d/.test(word) && !UNIT.test(word)
+        ? word.length > 1 && !/^\d/.test(word) && !UNIT.test(word)
         : part === "spec"
           ? /^\d/.test(word)
           : UNIT.test(word),
@@ -407,10 +412,7 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
     }
     const adapted = rows.map((row) => adaptProduct(fromFdk(row)).product);
     const fits = (categoryByWords(found.filters, said) !== undefined || aboutTheWords(said, adapted)) && carrying(rows);
-    if (!fits) {
-      fallback = rows;
-      continue;
-    }
+    if (!fits) continue;
     // Try every candidate; prefer the one product carrying the most of what was said, kinds first.
     const candidateScore = score(rows);
     if (beats(candidateScore, wonScore)) {
@@ -418,8 +420,12 @@ export async function searchPack(base: Pack, query: string, request: typeof fetc
       won = rows;
     }
   }
-  // What none of the candidates won: the store answered every one of them with empty pages.
-  const items = [...(won ?? fallback ?? [])].sort((a, b) => {
+  // No fallback to the loose rows. They were kept only in case a later candidate answered for
+  // real; when none does, they are a heap of whatever the store matched on a word that was never
+  // a product. "Hello" returned four Asus laptops, became what the conversation was about, and
+  // every later question — phones, televisions, the iPhone 18 Pro this shop actually stocks — was
+  // answered "I only have details on laptops today". Nothing found has to be said, not substituted.
+  const items = [...(won ?? [])].sort((a, b) => {
     const first = rowScore(a);
     const second = rowScore(b);
     return beats(second, first) ? 1 : beats(first, second) ? -1 : 0;

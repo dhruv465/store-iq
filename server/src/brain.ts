@@ -148,7 +148,6 @@ const schema = {
   },
 } as const;
 
-
 /** Fails loudly for a wrong model name, but never blocks start-up just because Google is unreachable. */
 export async function assertModelAvailable(request: typeof fetch = fetch): Promise<string> {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -881,7 +880,9 @@ async function answer(
   // on its own words — "hot water tap is there, they wash cottons daily" found whatever it found,
   // and that became what the conversation was about, which put screens back in a washing machine
   // pack and left the home unassessable. A new customer clears it; nothing else needs to.
-  if (!session.subject && about.length > 3 && !isCommand) {
+  // A greeting is not a product. "Hello" was searched, matched four Asus laptops, and became what
+  // the conversation was about for every turn after it. Filler-only turns never reach the store.
+  if (!session.subject && words(about).length > 0 && !isCommand) {
     try {
       const found = await searchPack(pack, about);
       if (found !== pack) {
