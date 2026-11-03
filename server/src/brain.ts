@@ -107,7 +107,7 @@ export type Decision = {
   /** The line asking for the customer's name and number, while they have no card. */
   ask_number?: string | null;
   /** Who is standing there, read from the words rather than a fixed phrase. */
-  customer?: { arrived?: "new" | "returning" | null; name?: string | null; phone?: string | null } | null;
+  customer?: { arrived?: "new" | "returning" | null; name?: string | null } | null;
 };
 
 const schema = {
@@ -197,11 +197,6 @@ const schema = {
             "new: the associate says a different person has just walked up. returning: the associate says the person who just walked up has been in before. Being told the name or number of the customer they are already serving is neither, so null",
         },
         name: { type: "STRING", nullable: true, description: "the customer's name, as the associate gave it" },
-        phone: {
-          type: "STRING",
-          nullable: true,
-          description: "the customer's mobile number, as the associate gave it",
-        },
       },
     },
   },
@@ -957,15 +952,12 @@ export type Store = {
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
 
-/** A 10-digit Indian mobile that the associate really said, or null. A number the model wrote that is
- *  not in their words is not taken, the same as an invented price is not.
- *  shortcut: a number spoken as words, not digits, is not taken; upgrade if voice notes miss it. */
-export function mobile(raw: unknown, said: string | undefined): string | null {
-  const digits = String(raw ?? "")
-    .replace(/\D/g, "")
-    .replace(/^(91|0)(?=\d{10}$)/, "");
-  if (!/^[6-9]\d{9}$/.test(digits)) return null;
-  return (said ?? "").replace(/\D/g, "").includes(digits) ? digits : null;
+/** The customer's mobile number in the associate's own words, or null. Read by the code, not the
+ *  model: asked "9876543210 ka data batao", the model passed no number on and nothing was looked up.
+ *  shortcut: a number spoken as words, not digits, is not found; upgrade if voice notes miss it. */
+export function mobileIn(said: string | undefined): string | null {
+  const found = (said ?? "").match(/(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{4}[\s-]?\d{5})(?!\d)/);
+  return found ? found[1]!.replace(/\D/g, "") : null;
 }
 
 export async function decide(
@@ -1129,6 +1121,34 @@ async function answer(
     delete event.image;
   }
 
+  // A number in their words is looked up before the model writes, so it answers with the old card in
+  // front of it instead of "no data on that customer" under a "Welcome back" line.
+  const askedBefore = !!session.customer_asked;
+  const number = mobileIn(event.text);
+  let customerLine = "";
+  let loaded = false;
+  if (number && number !== session.customer?.phone && store?.findCustomer) {
+    const found = await store.findCustomer(number);
+    if (found) {
+      // Another customer's card was open: this number is someone else standing there.
+      if (session.customer) startInteraction(session);
+      session.customer = { id: found.id, phone: number, ...(found.name ? { name: found.name } : {}) };
+      session.card = { ...found.card, ...session.card };
+      session.history = [...found.history, ...session.history].slice(-12);
+      loaded = true;
+      const parts = cardParts(session);
+      customerLine = [
+        t(session.language, "customer.back", { v: found.name ?? "" }),
+        parts.length ? t(session.language, "customer.last", { body: parts.join("; ") }) : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      notes.push(
+        `That number is ${found.name ?? "a customer"} from an earlier visit. What they said then is in WHAT THE CUSTOMER HAS SAID and RECENT TURNS, and the associate has just been shown it, so carry on from it without repeating it.`,
+      );
+    }
+  }
+
   // The turn: what they said becomes a search, the store's answer becomes FACTS, and the model
   // writes the reply from those. Nothing about a product is answered from a written line any more.
   if (event.text && catalogConfig()) {
@@ -1218,6 +1238,7 @@ async function answer(
   if (
     (who?.arrived === "new" || who?.arrived === "returning") &&
     !resetNow &&
+    !loaded &&
     (session.history.length || session.customer)
   ) {
     const search = searchedNow ? session.search : undefined;
@@ -1225,28 +1246,14 @@ async function answer(
     startInteraction(session);
     if (search) session.search = search;
   }
-  let customerLine = "";
-  const number = mobile(who?.phone, event.text);
   const name = typeof who?.name === "string" && who.name.trim() ? who.name.trim().slice(0, 60) : undefined;
-  if (number && number !== session.customer?.phone && store?.findCustomer) {
-    const found = await store.findCustomer(number);
-    const lang = session.language;
-    if (found) {
-      const known = found.name ?? name;
-      session.customer = { id: found.id, phone: number, ...(known ? { name: known } : {}) };
-      session.card = { ...found.card, ...session.card };
-      session.history = [...found.history, ...session.history].slice(-12);
-      const parts = cardParts(session);
-      customerLine = [
-        t(lang, "customer.back", { v: known ?? "" }),
-        parts.length ? t(lang, "customer.last", { body: parts.join("; ") }) : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-    } else if (who?.arrived === "returning") customerLine = t(lang, "customer.notfound", { v: number });
+  if (number && !loaded && number !== session.customer?.phone && store?.findCustomer) {
+    // Not on file. Asked to look it up, it says so; given as this customer's number, it is saved.
+    if (who?.arrived === "returning" || !(askedBefore || name || who?.arrived === "new"))
+      customerLine = t(session.language, "customer.notfound", { v: number });
     else {
       session.customer = { id: randomUUID(), phone: number, ...(name ? { name } : {}) };
-      customerLine = t(lang, "customer.saved", { v: name ?? "" });
+      customerLine = t(session.language, "customer.saved", { v: name ?? "" });
     }
   } else if (name && session.customer && !session.customer.name) session.customer.name = name;
 

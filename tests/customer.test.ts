@@ -2,7 +2,7 @@ import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { decide, mobile, type SavedCustomer } from "../server/src/brain.js";
+import { decide, mobileIn, type SavedCustomer } from "../server/src/brain.js";
 import { openDatabase } from "../server/src/db.js";
 import { newSession, type Event } from "../server/src/types.js";
 import { manager } from "./model.js";
@@ -15,12 +15,14 @@ function cards(saved: Record<string, SavedCustomer> = {}) {
   return { findCustomer: async (phone: string) => saved[phone] ?? null };
 }
 
-test("a mobile number is taken only when the associate said it", () => {
-  assert.equal(mobile("+91 98765 43210", "her number is +91 98765 43210"), "9876543210");
-  assert.equal(mobile("9876543210", "number is 98765-43210"), "9876543210");
-  assert.equal(mobile("9876543210", "her name is Asha"), null, "a number the model made up is not saved");
-  assert.equal(mobile("12345", "12345"), null);
-  assert.equal(mobile("1876543210", "1876543210"), null, "not a mobile");
+test("the customer's number is read from the associate's own words", () => {
+  assert.equal(mobileIn("her number is +91 98765 43210"), "9876543210");
+  assert.equal(mobileIn("number is 98765-43210 ok"), "9876543210");
+  assert.equal(mobileIn("9876543210 ka data batao"), "9876543210");
+  assert.equal(mobileIn("her name is Asha"), null);
+  assert.equal(mobileIn("budget 60000"), null);
+  assert.equal(mobileIn("1876543210"), null, "not a mobile");
+  assert.equal(mobileIn("item 498765432101"), null, "part of a longer number");
 });
 
 test("a new customer is read from the words, not a fixed phrase, and the card is saved", async () => {
@@ -32,7 +34,7 @@ test("a new customer is read from the words, not a fixed phrase, and the card is
   session.card = { room: "hall", budget_rupees: 60000, facts: { "screen size": "55 inch" } };
   // What the live model did: it saw the new customer and copied the last one's card back anyway.
   const model = manager({
-    customer: { arrived: "new", name: "Asha", phone: "9876543210" },
+    customer: { arrived: "new", name: "Asha" },
     card: { budget_rupees: 60000, facts: [{ name: "screen size", value: "55 inch" }] },
   });
   const reply = await decide(
@@ -58,7 +60,7 @@ test("a returning customer gets their old card and history back", async () => {
       history: [{ who: "associate" as const, text: "she wants a double door fridge" }],
     },
   };
-  const model = manager({ customer: { arrived: "returning", phone: "9876543210" } });
+  const model = manager({ customer: { arrived: "returning" } });
   const reply = await decide(said("she came last week, 9876543210"), session, pack, model.fetch, cards(saved) as never);
   assert.equal(session.customer?.id, "c-1");
   assert.equal(session.card.budget_rupees, 30000);
@@ -68,7 +70,7 @@ test("a returning customer gets their old card and history back", async () => {
 
 test("a returning number with no card is said, and no card is made up", async () => {
   const session = newSession(ASSOCIATE);
-  const model = manager({ customer: { arrived: "returning", phone: "9876543210" } });
+  const model = manager({ customer: { arrived: "returning" } });
   const reply = await decide(said("he was here before, 9876543210"), session, pack, model.fetch, cards() as never);
   assert.equal(session.customer, undefined);
   assert.match(reply.text, /^No card on 9876543210\./);
@@ -145,7 +147,29 @@ test("the model's line asking for the name and number goes out once, and not ove
 
 test("given only the number, the reply is the saved line and no filler", async () => {
   const session = newSession(ASSOCIATE);
-  const model = manager({ lines: [], customer: { name: "Asha", phone: "9876543210" } });
+  const model = manager({ lines: [], customer: { name: "Asha" } });
   const reply = await decide(said("Asha, 9876543210"), session, pack, model.fetch, cards() as never);
   assert.equal(reply.text.trim(), "Card saved for Asha.");
+});
+
+test("a number alone brings the card back before the model writes, even when the model passes nothing on", async () => {
+  const session = newSession(ASSOCIATE);
+  const saved = {
+    "9876543210": { id: "c-1", name: "Meena", card: { facts: { "main use": "cricket" } }, history: [] },
+  };
+  // What the live model did with "<number> ka data batao": no customer field at all.
+  const model = manager({ customer: null, lines: ["She was looking at TVs for cricket."] });
+  const reply = await decide(said("9876543210 ka data batao"), session, pack, model.fetch, cards(saved) as never);
+  assert.match(model.prompts[0]!, /cricket/, "the model wrote with her card in front of it");
+  assert.match(model.prompts[0]!, /That number is Meena from an earlier visit/);
+  assert.match(reply.text, /^Welcome back, Meena\. Last time: main use: cricket\./);
+  assert.equal(session.customer?.id, "c-1");
+});
+
+test("a number nobody has saved, asked about out of the blue, is said to be unknown and not saved", async () => {
+  const session = newSession(ASSOCIATE);
+  const model = manager({ customer: null, lines: ["Let me check."] });
+  const reply = await decide(said("9876543210 ka data batao"), session, pack, model.fetch, cards() as never);
+  assert.match(reply.text, /^No card on 9876543210\./);
+  assert.equal(session.customer, undefined);
 });
