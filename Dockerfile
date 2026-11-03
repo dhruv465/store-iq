@@ -28,4 +28,4 @@ COPY --from=portal /app/web/dist ./web/dist
 ENV HOST=0.0.0.0 PORT=10000 LOCAL_DB_PATH=memory:// PACK_PATH=data/pack.json
 EXPOSE 10000
 USER node
-CMD ["node","dist/server/src/index.js"]
+CMD ["node","--env-file-if-exists=/etc/secrets/storeiq.env","dist/server/src/index.js"]
