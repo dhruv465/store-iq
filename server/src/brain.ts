@@ -60,7 +60,7 @@ How to be:
 - With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line asking for the customer's name and mobile number, such as Ask: "Can I note your name and number so we remember you next time?" Your other lines still answer what they asked. When they say this customer has been in before, ask for the number the customer gave then. A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything.
+- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for him? Send me his name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything.
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
@@ -181,7 +181,7 @@ const schema = {
       type: "STRING",
       nullable: true,
       description:
-        'while CUSTOMER NUMBER is "none yet" and they are serving a customer: one line asking for the customer\'s name and mobile number, as Ask: "...", in the language of your reply. null when CUSTOMER NUMBER is anything else, when this message gives the number, or when this is not about a customer',
+        'while CUSTOMER NUMBER is "none yet" and they are serving a customer: one line to the associate, not the customer, offering to make this customer\'s home card and asking them to send the customer\'s name and mobile number, without "Ask:", in the language of your reply. When CUSTOMER NUMBER says a card is saved under a name: one line to the associate asking for the mobile number that customer gave on their earlier visit, so their home card comes back. null when CUSTOMER NUMBER is anything else, when this message gives the number, or when this is not about a customer',
     },
     customer: {
       type: "OBJECT",
@@ -669,7 +669,7 @@ export function wrongScript(reply: string, said: string | undefined, lang: Lang)
   return wantsDevanagari === !/[\u0900-\u097f]/.test(reply) && !!reply.trim();
 }
 
-function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []): string {
+function prompt(event: Event, session: Session, pack: Pack, notes: string[] = [], named: string[] = []): string {
   const gate = askedAboutOffers(event.text)
     ? "They asked about offers or finance outright, so answer it from FACTS."
     : session.assessed && session.demonstrated
@@ -681,7 +681,7 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
     Object.keys(pack.shift_brief ?? {}).length ? `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}` : "",
     Object.keys(session.card).length ? `WHAT THE CUSTOMER HAS SAID:\n${JSON.stringify(session.card)}` : "",
     picked ? `THEY HAVE PICKED: ${picked.name}.` : "",
-    `CUSTOMER NUMBER: ${session.customer ? `given${session.customer.name ? `, by ${session.customer.name}` : ""}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
+    `CUSTOMER NUMBER: ${named.length ? `not given, and a card is saved under the name ${named.join(", ")}` : session.customer ? `given${session.customer.name ? `, by ${session.customer.name}` : ""}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     gate,
     // What the code knows and the model does not: a gate just hit, a tap, a search that came back
@@ -947,6 +947,7 @@ export type SavedCustomer = { id: string; name: string | null; card: HomeCard; h
 export type Store = {
   today(): Promise<Session[]>;
   findCustomer?(phone: string): Promise<SavedCustomer | null>;
+  namesIn?(said: string): Promise<string[]>;
   logVisit(row: { reference: string; phone: string; associate?: string; store: string; body: string }): Promise<void>;
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
@@ -1148,6 +1149,18 @@ async function answer(
       );
     }
   }
+  // Named but no number: the card is not loaded on a name, since two customers share one, but the
+  // model is told it exists, so it asks for the number instead of "no record of Rahul".
+  const named =
+    !number && event.text && store?.namesIn
+      ? (await store.namesIn(event.text)).filter(
+          (saved) => saved.toLowerCase() !== session.customer?.name?.toLowerCase(),
+        )
+      : [];
+  if (named.length)
+    notes.push(
+      `A card from an earlier visit is saved under the name ${named.join(", ")}. Do not say there is no record or treat them as new: it comes back when they give the mobile number that customer gave then.`,
+    );
 
   // The turn: what they said becomes a search, the store's answer becomes FACTS, and the model
   // writes the reply from those. Nothing about a product is answered from a written line any more.
@@ -1215,7 +1228,9 @@ async function answer(
       : decision;
   const written = async (extra: string[] = []): Promise<Decision> =>
     reasonOnly(
-      readJson<Decision>(await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra]), schema, request)),
+      readJson<Decision>(
+        await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra], named), schema, request),
+      ),
     );
   let decision = await written();
   // Told once what it got wrong, it usually just needed to read the figure again. The guard is
@@ -1343,18 +1358,36 @@ async function answer(
     ask &&
     !/\d/.test(ask) &&
     !bad.length &&
-    !session.customer &&
-    !session.customer_asked &&
     !number &&
-    who?.arrived !== "returning"
+    (named.length || (!session.customer && !session.customer_asked && who?.arrived !== "returning"))
   ) {
     session.customer_asked = true;
-    const said = reply.text.split("\n").filter((line) => line.trim() && !line.startsWith("↳"));
-    reply = { ...reply, text: [...said.slice(0, 2), ask].join("\n") };
+    // The model sometimes writes its ask among the lines as well, and it went out twice.
+    const plain = (line: string) => line.replace(/\*/g, "").trim();
+    const said = reply.text
+      .split("\n")
+      .filter((line) => line.trim() && !line.startsWith("↳") && plain(line) !== plain(ask));
+    // First, not last: as the second "Ask:" under a product question it read as one more thing to
+    // say to the customer, and the associate never saw it was the home card being offered.
+    reply = { ...reply, text: [ask, ...said.slice(0, 2)].join("\n") };
   }
   // Given only the number, the model has nothing to add, and its empty answer became "Tell me what
   // the customer said" under "Card saved".
-  const nothingSaid = !decision.lines?.some((line) => typeof line === "string" && line.trim());
+  // Shown the old card, the model wrote "Welcome back, Rahul. Last time: …" again under the code's own.
+  if (loaded) {
+    const welcome = t(session.language, "customer.back", { v: session.customer?.name ?? "" })
+      .replace(/\*/g, "")
+      .toLowerCase();
+    reply = {
+      ...reply,
+      text: reply.text
+        .split("\n")
+        .filter((line) => !line.replace(/\*/g, "").trim().toLowerCase().startsWith(welcome))
+        .join("\n")
+        .trim(),
+    };
+  }
+  const nothingSaid = !reply.text.trim() || !decision.lines?.some((line) => typeof line === "string" && line.trim());
   return remember(
     customerLine ? { ...reply, text: nothingSaid ? customerLine : `${customerLine}\n${reply.text}` } : reply,
   );

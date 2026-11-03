@@ -12,8 +12,47 @@ const ASSOCIATE = "919820000001";
 const said = (text: string): Event => ({ id: `c${Math.random()}`, phone: ASSOCIATE, modality: "text", text });
 
 function cards(saved: Record<string, SavedCustomer> = {}) {
-  return { findCustomer: async (phone: string) => saved[phone] ?? null };
+  return {
+    findCustomer: async (phone: string) => saved[phone] ?? null,
+    namesIn: async (text: string) =>
+      Object.values(saved)
+        .map((row) => row.name)
+        .filter((name): name is string => !!name && text.includes(name)),
+  };
 }
+
+test("a saved customer asked about by name gets the number asked for, not 'no record'", async () => {
+  const session = newSession(ASSOCIATE);
+  const saved = { "9876501234": { id: "c-2", name: "Rahul", card: { budget_rupees: 50000 }, history: [] } };
+  const asking = 'Ask: "What number did Rahul give last time?"';
+  const model = manager({ lines: [asking], ask_number: asking, customer: { arrived: "returning", name: "Rahul" } });
+  const reply = await decide(said("what did Rahul want last time?"), session, pack, model.fetch, cards(saved) as never);
+  assert.match(model.prompts[0]!, /CUSTOMER NUMBER: not given, and a card is saved under the name Rahul/);
+  assert.equal(reply.text.match(/What number did Rahul give/g)?.length, 1, "asked once, not twice");
+  assert.equal(session.customer, undefined, "a name alone does not load a card");
+});
+
+test("the model's copy of the welcome line is not sent under the code's", async () => {
+  const session = newSession(ASSOCIATE);
+  const saved = { "9876501234": { id: "c-2", name: "Rahul", card: { budget_rupees: 50000 }, history: [] } };
+  const model = manager({ lines: ["Welcome back, Rahul. Last time: budget Rs 50,000."] });
+  const reply = await decide(said("9876501234"), session, pack, model.fetch, cards(saved) as never);
+  assert.equal(reply.text.match(/Welcome back/g)?.length, 1);
+});
+
+test("a saved name is found in the words only as a whole name", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    const session = await db.session(ASSOCIATE);
+    session.customer = { id: "c-3", phone: "9876501234", name: "Ram Kumar" };
+    await db.commit(session, []);
+    assert.deepEqual(await db.namesIn("Ram ka data batao"), ["Ram Kumar"]);
+    assert.deepEqual(await db.namesIn("what did ram want"), ["Ram Kumar"]);
+    assert.deepEqual(await db.namesIn("the program is on"), [], "not inside another word");
+  } finally {
+    await db.close();
+  }
+});
 
 test("the customer's number is read from the associate's own words", () => {
   assert.equal(mobileIn("her number is +91 98765 43210"), "9876543210");
@@ -47,7 +86,7 @@ test("a new customer is read from the words, not a fixed phrase, and the card is
   assert.deepEqual(session.card, {}, "the last customer's card is not hers");
   assert.equal(session.customer?.name, "Asha");
   assert.equal(session.customer?.phone, "9876543210");
-  assert.match(reply.text, /^Card saved for Asha\./);
+  assert.match(reply.text, /^Home card saved for Asha\./);
 });
 
 test("a returning customer gets their old card and history back", async () => {
@@ -93,7 +132,7 @@ test("the card is kept under the customer's number, and nothing is ever sent to 
     session.customer = { id: "c-9", phone: "9876543210", name: "Asha" };
     session.card = { budget_rupees: 30000 };
     session.history = [{ who: "associate", text: "fridge" }];
-    assert.equal(await db.commit(session, [{ text: "Card saved for Asha." }]), true);
+    assert.equal(await db.commit(session, [{ text: "Home card saved for Asha." }]), true);
     session.card = { budget_rupees: 40000 };
     assert.equal(await db.commit(session, [{ text: "ok" }]), true);
 
@@ -149,7 +188,7 @@ test("given only the number, the reply is the saved line and no filler", async (
   const session = newSession(ASSOCIATE);
   const model = manager({ lines: [], customer: { name: "Asha" } });
   const reply = await decide(said("Asha, 9876543210"), session, pack, model.fetch, cards() as never);
-  assert.equal(reply.text.trim(), "Card saved for Asha.");
+  assert.equal(reply.text.trim(), "Home card saved for Asha.");
 });
 
 test("a number alone brings the card back before the model writes, even when the model passes nothing on", async () => {

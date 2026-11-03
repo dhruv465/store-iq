@@ -9,7 +9,7 @@ export type Lang = "en" | "hi" | "mr";
 type Phrase = string | ((v: Record<string, string | number>) => string);
 
 const EN: Record<string, Phrase> = {
-  "customer.saved": (v) => (v.v ? `Card saved for ${v.v}.` : "Card saved under this number."),
+  "customer.saved": (v) => (v.v ? `Home card saved for ${v.v}.` : "Home card saved under this number."),
   "customer.back": (v) => (v.v ? `Welcome back, ${v.v}.` : "Welcome back."),
   "customer.last": (v) => `Last time: ${v.body}.`,
   "customer.notfound": (v) => `No card on ${v.v}. Check the number, or treat them as a new customer.`,
@@ -120,7 +120,7 @@ const EN: Record<string, Phrase> = {
 };
 
 const HI: Record<string, Phrase> = {
-  "customer.saved": (v) => (v.v ? `${v.v} का कार्ड सेव हो गया।` : "इस नंबर पर कार्ड सेव हो गया।"),
+  "customer.saved": (v) => (v.v ? `${v.v} का होम कार्ड सेव हो गया।` : "इस नंबर पर होम कार्ड सेव हो गया।"),
   "customer.back": (v) => (v.v ? `${v.v} फिर से आए हैं।` : "ग्राहक फिर से आए हैं।"),
   "customer.last": (v) => `पिछली बार: ${v.body}।`,
   "customer.notfound": (v) => `${v.v} पर कोई कार्ड नहीं है। नंबर फिर से देखिए, या नया ग्राहक मानिए।`,
@@ -229,7 +229,7 @@ const HI: Record<string, Phrase> = {
 };
 
 const MR: Record<string, Phrase> = {
-  "customer.saved": (v) => (v.v ? `${v.v} यांचं कार्ड सेव्ह झालं.` : "या नंबरवर कार्ड सेव्ह झालं."),
+  "customer.saved": (v) => (v.v ? `${v.v} यांचं होम कार्ड सेव्ह झालं.` : "या नंबरवर होम कार्ड सेव्ह झालं."),
   "customer.back": (v) => (v.v ? `${v.v} पुन्हा आले आहेत.` : "ग्राहक पुन्हा आले आहेत."),
   "customer.last": (v) => `मागच्या वेळी: ${v.body}.`,
   "customer.notfound": (v) => `${v.v} वर कार्ड नाही. नंबर पुन्हा तपासा, किंवा नवीन ग्राहक समजा.`,

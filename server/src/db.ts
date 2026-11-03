@@ -222,6 +222,22 @@ export class DB {
     return result.rows[0] ?? null;
   }
 
+  /** Saved customers whose first name is in these words: "what did Rahul want last time?" found
+   *  nothing, because only a number was ever looked up. */
+  async namesIn(said: string): Promise<string[]> {
+    const result = await this.pg.query<{ name: string }>(
+      `select distinct name from customers
+       where length(split_part(name, ' ', 1)) > 2 and position(lower(split_part(name, ' ', 1)) in lower($1)) > 0`,
+      [said],
+    );
+    return result.rows
+      .map((row) => row.name)
+      .filter((name) => {
+        const first = name.split(" ")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`(^|[^\\p{L}\\p{M}])${first}($|[^\\p{L}\\p{M}])`, "iu").test(said);
+      });
+  }
+
   async send(phone: string, reply: Reply): Promise<void> {
     await this.pg.query(`insert into outbox (phone, payload) values ($1, $2)`, [phone, JSON.stringify(reply)]);
   }
