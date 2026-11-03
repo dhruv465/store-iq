@@ -110,3 +110,12 @@ test("a voice note goes to the speech model that hears Hindi, and silence says s
   assert.ok(urls.includes("https://fal.run/fal-ai/elevenlabs/speech-to-text"));
   await assert.rejects(falTranscribe(config, audio, speech("  ")), /Nothing heard/);
 });
+
+test("typed Marathi is Marathi, and typed Hindi is Hindi, though the script is the same", () => {
+  assert.equal(languageFrom("ग्राहकाला हॉलसाठी 55 इंच टीव्ही हवा आहे, बजेट 60 हजार", "en"), "mr");
+  assert.equal(languageFrom("यावर काही ऑफर आहे का?", "hi"), "mr");
+  assert.equal(languageFrom("ग्राहक को 55 इंच का टीवी चाहिए", "mr"), "hi");
+  assert.equal(languageFrom("इसमें क्या है?", "en"), "hi");
+  assert.equal(languageFrom("टीव्ही", "mr"), "mr", "a word that says nothing keeps what was on");
+  assert.equal(languageFrom("टीवी", "en"), "hi");
+});

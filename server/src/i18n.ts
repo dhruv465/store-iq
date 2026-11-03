@@ -360,6 +360,14 @@ export const INDIAN_SCRIPT = /[\u0900-\u097f\u0600-\u06ff]/;
 export const INDIAN_WORDS =
   /\b(hai|hain|tha|thi|ka|ki|ke|ko|kya|kaise|kaisa|kitna|kitne|kitni|nahi|nahin|mein|mujhe|hum|aap|tum|chahiye|batao|bataiye|bolo|dikhao|dikhaiye|aur|bhi|wala|wali|haan|theek|lena|hazar|hazaar|neeche|aahe|ahe|kay|kiti|pahije|mala|ani|nahi|sanga|dakhva)\b/i;
 
+/** The scripts are the same, so the words decide. Each list is the small grammar words one language
+ *  uses all the time and the other does not; whole words only, since \b does not work in Devanagari. */
+const DEVANAGARI_WORD = (words: string): RegExp => new RegExp(`(?<![\u0900-\u097f])(${words})(?![\u0900-\u097f])`, "g");
+const MARATHI = DEVANAGARI_WORD(
+  "आहे|आहेत|नाही|नाहीत|पाहिजे|हवा|हवी|हवे|हवेत|मला|तुम्ही|आम्ही|काय|साठी|आणि|किती|सांगा|दाखवा|करायचा|करायची|बघतात|घ्यायचा|आहोत|काही|यावर|त्यावर",
+);
+const HINDI = DEVANAGARI_WORD("है|हैं|नहीं|चाहिए|मुझे|हम|आप|क्या|के|की|और|बताओ|दिखाओ|लेना|कितना|कितने");
+
 /** The language of what they just said, because that is what they want back: an English question
  *  after a Hindi one was answered in Hindi, every time. An explicit request wins, Devanagari is Hindi
  *  unless Marathi is already on (the scripts look alike), and a Latin sentence is English unless its
@@ -370,7 +378,12 @@ export const INDIAN_WORDS =
 export function languageFrom(text: string | undefined, current: Lang): Lang {
   if (!text) return current;
   for (const [pattern, lang] of EXPLICIT) if (pattern.test(text)) return lang;
-  if (INDIAN_SCRIPT.test(text)) return current === "mr" ? "mr" : "hi";
+  if (INDIAN_SCRIPT.test(text)) {
+    const marathi = text.match(MARATHI)?.length ?? 0;
+    const hindi = text.match(HINDI)?.length ?? 0;
+    // Typed Marathi was filed as Hindi, so a Marathi conversation got its review in Hindi.
+    return marathi > hindi ? "mr" : hindi > marathi ? "hi" : current === "mr" ? "mr" : "hi";
+  }
   const words = text.match(/[a-z]+/gi) ?? [];
   return words.length >= 3 && !INDIAN_WORDS.test(text) ? "en" : current;
 }
