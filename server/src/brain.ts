@@ -1175,6 +1175,9 @@ async function answer(
   if (decision.demonstrated || (decision.reason && session.shortlist.length)) session.demonstrated = true;
   if (decision.objection && !session.objections?.includes(decision.objection))
     session.objections = [...(session.objections ?? []), String(decision.objection).slice(0, 120)];
+  // A wrong belief the customer raised and this reply answered is the Validate step, whatever the
+  // model named the turn: it corrected "bigger is always better" and called it assess.
+  if (decision.objection && !session.steps_done.includes("validate")) session.steps_done.push("validate");
   if (STEPS.includes(decision.step)) {
     session.step = decision.step;
     if (!session.steps_done.includes(decision.step)) session.steps_done.push(decision.step);

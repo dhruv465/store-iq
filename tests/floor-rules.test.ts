@@ -118,4 +118,5 @@ test("a doubt the customer raised reaches the manager's report, in the model's w
     manager({ lines: ['Ask: "Which part feels high?"'], objection: "too costly" }).fetch,
   );
   assert.deepEqual(session.objections, ["too costly"]);
+  assert.ok(session.steps_done.includes("validate"), "answering a doubt is the Validate step");
 });
