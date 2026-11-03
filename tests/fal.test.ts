@@ -151,3 +151,39 @@ test("a shelf-tag photo is uploaded, then read on the router's vision route with
     "no Gemini call",
   );
 });
+
+test("a reply that hangs is asked again, and the first answer wins", async () => {
+  let calls = 0;
+  const fake = (async () => {
+    calls++;
+    const output = calls === 1 ? "slow" : "fast";
+    await new Promise((resolve) => setTimeout(resolve, calls === 1 ? 300 : 5));
+    return new Response(JSON.stringify({ output }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as unknown as typeof fetch;
+  const { text } = await falText({ key: "k", model: "m" }, "s", "u", fake, 20);
+  assert.equal(text, "fast");
+  assert.equal(calls, 2);
+});
+
+test("a quick answer never sends the second request, and a hard failure is not retried by it", async () => {
+  let calls = 0;
+  const ok = (async () => {
+    calls++;
+    return new Response(JSON.stringify({ output: "hi" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+  await falText({ key: "k", model: "m" }, "s", "u", ok, 30);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(calls, 1);
+
+  calls = 0;
+  const refused = (async () => {
+    calls++;
+    return new Response("no", { status: 401 });
+  }) as unknown as typeof fetch;
+  await assert.rejects(falText({ key: "k", model: "m" }, "s", "u", refused, 30));
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(calls, 1);
+});

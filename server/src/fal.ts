@@ -47,30 +47,61 @@ export function falConfig(env = process.env): FalConfig | null {
   return { key, model: env.FAL_MODEL?.trim() || DEFAULT_MODEL };
 }
 
-/** One chat completion, retried on the transient failures every provider has. */
+/** A reply is 1 to 3 s. Measured 3 Nov 2026, the 15 and 25 s turns were one request that hung
+ *  until the 9 s attempt timeout before its retry answered in 2 s. */
+export const HEDGE_MS = 4500;
+
+/** One chat completion, retried on the transient failures every provider has. If it has not
+ *  answered by HEDGE_MS, the same request is sent again and the first answer wins: a hang costs
+ *  a duplicate of a tenth of a cent instead of the customer's patience. */
 export async function falText(
   config: FalConfig,
   system: string,
   user: string,
   request: typeof fetch = fetch,
+  hedgeMs = HEDGE_MS,
 ): Promise<{ text: string; cost: number }> {
-  const response = await modelRequest(
-    request,
-    "https://fal.run/openrouter/router",
-    {
-      method: "POST",
-      // The key goes in the Authorization header with fal's own "Key" prefix, never in the URL.
-      headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: config.model,
-        system_prompt: system,
-        prompt: user,
-        temperature: 0.3,
-        max_tokens: 700,
-      }),
-    },
-    "fal",
-  );
+  const post = (): Promise<Response> =>
+    modelRequest(
+      request,
+      "https://fal.run/openrouter/router",
+      {
+        method: "POST",
+        // The key goes in the Authorization header with fal's own "Key" prefix, never in the URL.
+        headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          model: config.model,
+          system_prompt: system,
+          prompt: user,
+          temperature: 0.3,
+          max_tokens: 700,
+        }),
+      },
+      "fal",
+    );
+  // The second request starts only while the first is still out. A first that answers, or that
+  // fails before then, stands it down; one that fails after it started leaves it running.
+  let started = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let standDown: (reason: Error) => void = () => {};
+  const second = new Promise<Response>((resolve, reject) => {
+    standDown = reject;
+    timer = setTimeout(() => {
+      started = true;
+      post().then(resolve, reject);
+    }, hedgeMs);
+  });
+  const first = post();
+  const stop = (): void => {
+    clearTimeout(timer);
+    standDown(Error("not needed"));
+  };
+  first.then(stop, () => {
+    if (!started) stop();
+  });
+  const response = await Promise.any([first, second]).catch((all: AggregateError) => {
+    throw all.errors[0];
+  });
   const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024))) as {
     output?: string;
     error?: string;
