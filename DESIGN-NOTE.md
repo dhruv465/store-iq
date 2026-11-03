@@ -1,71 +1,68 @@
 # Store IQ — design note
 
-One WhatsApp number. The associate owns the conversation; Store IQ holds the facts.
+One WhatsApp number for the Reliance Digital associate. The associate owns the conversation; Store IQ
+holds the facts, from the live Reliance Digital catalogue, and checks every figure it says.
 
 ## The idea
 
-The store visits found our median associate scores 6 of 14 while our best scored 13, that we spoke
-about price first in 6 of 6 conversations while at the competitors the customer asked first, and
-that a median of 2 questions came before the first product. The problem is not knowledge, it is
-**order**. Store IQ enforces the order our best associate already follows and refuses to skip ahead.
-It scores itself on the visits' own card — Validate, Assess, Translate, Demonstrate, Complete,
-Close, Follow through, 0 to 2 each — so a conversation here and one in that workbook are the same
-number.
+The store visits found a median of 6 of 14 against our best 13, price spoken first in 6 of 6
+conversations, and two questions before the first product. The problem is **order**, not knowledge.
+Store IQ is the floor manager the associate messages by voice, photo or text, and it keeps them in our
+best associate's order without turning the product into a form.
 
-## Three rules, enforced in code rather than asked of a model
+## The turn
 
-1. **No invented figures.** Every amount, percentage and specification must exist in the data pack,
-   be derivable from it, or have been said by the associate. Matching is on exact values, so `999`
-   is not excused by `79990` containing it. Anything else becomes "that figure is not in today's
-   data pack".
-2. **The offer stays shut** until the home is assessed *and* a difference demonstrated. The gate
-   fires on an offer word beside a figure, so declining to discuss offers is not a leak.
-3. **Nothing is sent without consent.** The summary waits for a tap, and changing the product
-   withdraws consent again.
+What the associate said (a voice note is transcribed first) becomes one search of the live catalogue.
+The store's rows, with today's promotions, are the only facts the model sees; the model writes the
+reply. Products already on screen stay in those facts, so "any offers on these" means those three TVs.
+A shelf-tag photo is read for its printed text and treated as if the associate had said it, so a
+misread tag can never become a price.
 
-## The model talks; the code checks every figure
+## Enforced in code, not asked of a model
 
-The associate says what they want in their own words. The model turns that into one search of the
-live store, the store's rows are all the model is given, and the model writes the reply. There is no
-written list of questions and no written product sheet: both were written about a television, and
-both answered about one when the customer wanted an iPhone.
+1. **No invented figures.** Every amount, percentage and spec must be in this turn's rows, derivable
+   from them, or said by the associate. Figures with units are checked as pairs in English, Hindi and
+   Marathi: `2 year` passes, `1 year` does not. One retry; refused twice, it does not go out.
+   Installation, delivery or a mount is never "free" or "included" unless the data says so.
+2. **The offer gate.** No offer, exchange or EMI before needs are known and a difference shown. Asked
+   outright, the associate gets the real offer, or "none is running on it today".
+3. **Consent is a tap.** Nothing reaches a customer without "They agreed". A new product or a new
+   customer withdraws it.
+4. **A reason is the customer's need.** The model names the need it serves; the code prints the
+   customer's own words first ("cricket: a fast-moving ball is the thing to show"). A reason it cannot
+   tie to the customer is not shown.
 
-Every figure in a reply is then checked against what the store returned this turn. A figure with a
-unit is checked as a pair in all three languages, so `2 year` passes and `1 year` does not, however
-many 1s the data holds. A refused figure gets one retry that names it; what is refused twice does not
-go out. That division is the design: the model writes, the store is the source, the code refuses.
+## Section 2, step by step
 
-What the code still composes, in **1–15 ms**, is what is a tap or arithmetic: the consent draft, the
-itemised total, the card read-back, the brief and the score.
-
-## The close, on real offers
-
-The visits found we open with price and then have nothing left to say. Real offers come with each
-row: the bank's no-cost EMI and its saving, the offer line, a free gift from the promotion. They stay
-out of the reply until the associate asks or a difference has been shown. Nothing reaches a customer
-without a tap.
+| Step                    | How                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| Before the shift        | `brief`: televisions in stock, prices and today's offers, live                            |
+| Assess                  | Voice note → needs filed on a card; the model asks only what would change what is shown   |
+| Validate                | Confirms the true part, then corrects; the doubt is logged for the manager                |
+| Translate               | Shelf-tag photo → printed specs → a line for this home                                    |
+| Recommend + demonstrate | Three options from the store, a reason each, and what to show                             |
+| Complete                | Tap a product: itemised total in code, plus the brand's real wall mount at its real price |
+| Close                   | Behind the gate: real bank offers and no-cost EMI where the store lists them              |
+| Follow through          | Consent tap → summary, a task with an owner, a check-back                                 |
+| Review                  | `review`: the visits' 0–14 card from what the session proves, and one thing to try next   |
 
 ## Built for the floor
 
-At most three lines and three buttons, enforced in the renderer rather than asked of a prompt. The
-associate is handed words to say — `Ask: "Which colour would you like?"` — never instructions about
-selling, and Store IQ never addresses the customer. Replies go
-only to numbers that messaged first, inside Meta's 24-hour window. What is noted about a
-customer is interaction-scoped, so the next customer never inherits the last one's. The associate sets the
-starting level; nothing is inferred from appearance.
+At most three lines and three buttons on every reply. Words to say, `Ask:` for a question to the
+customer. Replies in the language just used: English, Hindi or Marathi, typed or spoken. Text turns
+take 3–5 s, and a request that hangs is re-asked at 4.5 s; voice and photo are acknowledged at once
+and answered in 7–8 s. Replies go only to numbers that wrote first, inside Meta's 24-hour window. Each
+customer starts a fresh card.
 
 ## Extra points
 
-**Ask an expert** routes a question by subject and logs it against a named owner with a quotable
-reference. **The department manager view** answers "team" with the visits' own table, computed live,
-and a browser portal adds each associate's seven step marks, so the gap is a person and a step
-rather than a median. Hindi and Marathi throughout, not only the greetings.
+**Hindi and Marathi** throughout. **Ask an expert**: "Find out for me" logs the question to a named
+owner with a reference and a line to say. **Manager view**: `manager` on WhatsApp and a `/manager`
+portal with each associate's step marks. **Store visit log**: `visit`, then speak.
 
 ## Limits, honestly
 
-Built against a stub pack; the real one is read through a single adapter, so its field names are a
-few minutes' work and a restart, and `npm run pack:check` names every row it cannot serve first.
-Ranking weights will need retuning on real data. A voice note and a label photo have not been
-exercised with real media. Hosting is a laptop behind a reserved tunnel: no cold start, but the
-laptop has to be up. No live inventory, payment, CRM or customer messaging, per the brief's
-implementation boundary.
+The catalogue has no installation charges (one TV row at Rs 0, none for ACs), no training video or
+quiz, and no installer site needs; Store IQ says so rather than inventing them. Reads only: the
+catalogue client can call an allowlist of GET paths. One key (fal.ai) runs the turn, the voice note and
+the photo. Hosting is a laptop behind a reserved tunnel.
