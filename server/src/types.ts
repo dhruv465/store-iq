@@ -62,6 +62,8 @@ export type Session = {
   /** The customer's saved card, once the associate has given their mobile number. The number is a
    *  lookup key only: nothing is ever sent to it (Rule 5). */
   customer?: { id: string; phone: string; name?: string };
+  /** The reply has asked for the customer's name and number, so it is not asked again this interaction. */
+  customer_asked?: boolean;
   /** The offer opens only after both are true. */
   assessed: boolean;
   demonstrated: boolean;

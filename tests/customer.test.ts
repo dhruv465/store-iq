@@ -78,10 +78,10 @@ test("the prompt tells the model whether this customer has a card", async () => 
   const session = newSession(ASSOCIATE);
   const model = manager({});
   await decide(said("what do they want"), session, pack, model.fetch, cards() as never);
-  assert.match(model.prompts[0]!, /CUSTOMER CARD: none yet/);
+  assert.match(model.prompts[0]!, /CUSTOMER NUMBER: none yet/);
   session.customer = { id: "c-1", phone: "9876543210", name: "Asha" };
   await decide(said("what next"), session, pack, model.fetch, cards() as never);
-  assert.match(model.prompts[1]!, /CUSTOMER CARD: saved for Asha/);
+  assert.match(model.prompts[1]!, /CUSTOMER NUMBER: given, by Asha/);
 });
 
 test("the card is kept under the customer's number, and nothing is ever sent to it", async () => {
@@ -115,4 +115,37 @@ test("the card is kept under the customer's number, and nothing is ever sent to 
   } finally {
     await db.close();
   }
+});
+
+test("the model's line asking for the name and number goes out once, and not over a saved card", async () => {
+  const session = newSession(ASSOCIATE);
+  const asking = 'Ask: "Can I note your name and number for next time?"';
+  const model = manager([
+    { lines: ["Samsung fridges are in aisle four."], ask_number: asking },
+    { lines: ["Show the double door one."], ask_number: asking },
+  ]);
+  const first = await decide(said("customer wants a fridge"), session, pack, model.fetch, cards() as never);
+  assert.match(model.prompts[0]!, /CUSTOMER NUMBER: none yet/);
+  assert.match(first.text, /Can I note your name and number/);
+  const second = await decide(said("which one is bigger"), session, pack, model.fetch, cards() as never);
+  assert.match(model.prompts[1]!, /CUSTOMER NUMBER: none, already asked for/);
+  assert.doesNotMatch(second.text, /Can I note/, "asked once, not every turn");
+
+  const saved = newSession(ASSOCIATE);
+  saved.customer = { id: "c-1", phone: "9876543210" };
+  const third = await decide(
+    said("which one is bigger"),
+    saved,
+    pack,
+    manager({ ask_number: asking }).fetch,
+    cards() as never,
+  );
+  assert.doesNotMatch(third.text, /Can I note/);
+});
+
+test("given only the number, the reply is the saved line and no filler", async () => {
+  const session = newSession(ASSOCIATE);
+  const model = manager({ lines: [], customer: { name: "Asha", phone: "9876543210" } });
+  const reply = await decide(said("Asha, 9876543210"), session, pack, model.fetch, cards() as never);
+  assert.equal(reply.text.trim(), "Card saved for Asha.");
 });
