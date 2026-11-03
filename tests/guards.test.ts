@@ -425,3 +425,28 @@ test("a new customer does not inherit the last one's pick or their yes", () => {
   assert.equal(session.consent, false);
   assert.equal(session.site_checked, undefined);
 });
+
+test("a typed answer whose meaning was its price is dropped, not left as 'Under'", () => {
+  const base = { step: "assess" as const, card: {}, shortlist: [], demonstrated: false, lines: ["Ask: budget?"] };
+  const reply = render({
+    ...base,
+    buttons: [
+      { id: "", title: "Under Rs 40,000" },
+      { id: "", title: "Gaming" },
+      { id: "select:494749535", title: "BPL 55 (Rs 41,999)" },
+    ],
+  });
+  assert.deepEqual(
+    reply.buttons?.map((button) => button.title),
+    ["Gaming", "BPL 55"],
+  );
+});
+
+test("the store's item codes never reach the words to say", () => {
+  const base = { step: "recommend" as const, card: {}, shortlist: [], demonstrated: false, buttons: [] };
+  const reply = render({
+    ...base,
+    lines: ["Show the BPL 55-inch 4K (494749535) and the TCL 494811849 side by side, Rs 41,999."],
+  });
+  assert.equal(reply.text, "Show the BPL 55-inch 4K and the TCL side by side, Rs 41,999.");
+});

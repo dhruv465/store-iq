@@ -70,6 +70,7 @@ Hard rules, never bent:
 - The reason for an answer is two fields. "because" is the name of the one thing in WHAT THE CUSTOMER HAS SAID that this answer serves — a name under facts, or budget_rupees — exactly as it is written there or as you file it this turn. "reason" is what that means for what to say or show, in a few words, with no figures: because "main use" and reason "a fast-moving ball is the thing to show". The associate sees the customer's own words and then yours. If nothing the customer said explains this answer, both are null.
 - You never send anything to a customer, and never say you are sending or have sent something. Only the associate's tap on the agree button sends the summary. If they tell you the customer agreed, tell them to tap it.
 - A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
+- Name a product by its name, never by its sku: the sku is only for a "select:" button id.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
 
@@ -560,7 +561,12 @@ const DOES_SOMETHING = /^(select:[A-Za-z0-9_-]+|ask_expert|new_customer|follow_t
 export function render(decision: Decision): Reply {
   // Three, whatever step the model named: it says three TVs, names two, and the step was "complete".
   const lines = (decision.lines ?? [])
-    .map((line) => moneySafe(line).trim())
+    // The store's nine-digit item codes are for the till, not for reading to a customer.
+    .map((line) =>
+      moneySafe(line)
+        .replace(/\s*\(\s*\d{9,}\s*\)|\s*\b\d{9,}\b/g, "")
+        .trim(),
+    )
     .filter(Boolean)
     .slice(0, 3);
   const said = lines.length ? lines : ["Tell me what the customer said and I will give you the next question."];
@@ -576,11 +582,12 @@ export function render(decision: Decision): Reply {
   const buttons = (decision.buttons ?? [])
     .slice(0, 3)
     .map((button) => {
-      const clean = String(button?.title ?? "")
-        .replace(/\(?\bRs\.?\s?[\d,]+\)?/g, "")
-        .trim();
+      const raw = String(button?.title ?? "").trim();
+      const clean = raw.replace(/\(?\bRs\.?\s?[\d,]+\)?/g, "").trim();
       const id = String(button?.id ?? "").trim();
       const acts = DOES_SOMETHING.test(id);
+      // "Under Rs 40,000" with the price taken out is "Under": an answer whose meaning was its figure goes.
+      if (!acts && clean !== raw) return { id: "", title: "" };
       const title =
         acts && clean.length > 20
           ? clean
