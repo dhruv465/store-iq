@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "../server/src/fal.js";
+import { falConfig, falText, falTranscribe, falVision, readJson, shapeInstruction } from "../server/src/fal.js";
 import { decide } from "../server/src/brain.js";
 import { loadPack } from "../server/src/pack.js";
 import { newSession, type Event } from "../server/src/types.js";
@@ -120,4 +120,34 @@ test("a voice note is uploaded first, because the speech model takes a URL", asy
   for (const index of [0, 2])
     assert.equal((calls[index]!.init.headers as Record<string, string>).authorization, "Key fal-secret");
   assert.equal((calls[1]!.init.headers as Record<string, string>).authorization, undefined);
+});
+
+test("a shelf-tag photo is uploaded, then read on the router's vision route with the turn's model", async () => {
+  const calls: { url: string; init: RequestInit }[] = [];
+  const fake = (async (url: string | URL, init: RequestInit = {}) => {
+    calls.push({ url: String(url), init });
+    const answer = String(url).includes("initiate")
+      ? { upload_url: "https://v3b.fal.media/files/b/x", file_url: "https://v3b.fal.media/files/b/x" }
+      : String(url).includes("vision")
+        ? { output: 'SAMSUNG 55M70H 55" 4K', usage: { cost: 0.0002 } }
+        : {};
+    return new Response(JSON.stringify(answer), { status: 200, headers: { "content-type": "application/json" } });
+  }) as unknown as typeof fetch;
+
+  const read = await falVision(
+    { key: "fal-secret", model: "google/gemini-2.5-flash" },
+    "read the tag",
+    { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" },
+    fake,
+  );
+  assert.equal(read, 'SAMSUNG 55M70H 55" 4K');
+  const vision = calls.find((call) => call.url.endsWith("/openrouter/router/vision"))!;
+  const body = JSON.parse(String(vision.init.body));
+  assert.equal(body.model, "google/gemini-2.5-flash");
+  assert.deepEqual(body.image_urls, ["https://v3b.fal.media/files/b/x"]);
+  assert.doesNotMatch(vision.url, /fal-secret/);
+  assert.ok(
+    calls.every((call) => !call.url.includes("googleapis")),
+    "no Gemini call",
+  );
 });

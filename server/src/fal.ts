@@ -6,8 +6,9 @@ import { modelRequest, readLimited } from "./http.js";
  *  nearly every turn, so the free tier is no longer a product. This is the paid path: one POST, a
  *  cheap model chosen by slug, charged on tokens actually used.
  *
- *  Two things the router cannot do, which is why the Gemini code stays:
- *   - it takes no image and no audio, so a voice note and a shelf-tag photo still go to Gemini
+ *  What the router cannot do:
+ *   - it takes no audio, so a voice note goes to ElevenLabs Scribe on fal, below; a shelf-tag photo
+ *     goes to the router's own vision route, also below, so neither needs a Gemini key
  *   - it has no response schema, so the shape is asked for in the system prompt and the answer is
  *     read tolerantly below. Gemini's own call keeps its schema and remains the stricter path. */
 
@@ -92,6 +93,7 @@ async function falUpload(
   config: FalConfig,
   audio: { bytes: Uint8Array; mimeType: string },
   request: typeof fetch,
+  name = "note",
 ): Promise<string> {
   const started = await modelRequest(
     request,
@@ -100,7 +102,7 @@ async function falUpload(
       method: "POST",
       headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
       // A neutral name: nothing about the associate or the customer goes into it.
-      body: JSON.stringify({ content_type: audio.mimeType, file_name: "note" }),
+      body: JSON.stringify({ content_type: audio.mimeType, file_name: name }),
     },
     "fal",
   );
@@ -116,6 +118,41 @@ async function falUpload(
     "fal",
   );
   return where.file_url;
+}
+
+/** A shelf-tag photo, read on the router's vision route with the same key and model as the turn.
+ *  Measured 3 Nov 2026 on a rendered tag: every printed figure back in 2.7 s for $0.0002. It only
+ *  reads the tag; the reply is still written from the catalogue, so a misread is never a price. */
+export async function falVision(
+  config: FalConfig,
+  prompt: string,
+  image: { bytes: Uint8Array; mimeType: string },
+  request: typeof fetch = fetch,
+): Promise<string> {
+  const response = await modelRequest(
+    request,
+    "https://fal.run/openrouter/router/vision",
+    {
+      method: "POST",
+      headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: config.model,
+        prompt,
+        image_urls: [await falUpload(config, image, request, "tag")],
+        temperature: 0,
+        max_tokens: 160,
+      }),
+    },
+    "fal",
+  );
+  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 64 * 1024))) as {
+    output?: string;
+    error?: string;
+    usage?: { cost?: number };
+  };
+  if (body.error) throw Error(`fal refused the photo: ${body.error}`);
+  spent += body.usage?.cost ?? 0;
+  return (body.output ?? "").trim();
 }
 
 export const NOTHING_HEARD = "Nothing heard in the voice note";

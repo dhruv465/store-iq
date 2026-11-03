@@ -70,7 +70,8 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   (model in `FAL_MODEL`) and a **voice note through `fal-ai/elevenlabs/speech-to-text`** — uploaded to fal
   storage first, because it takes a URL and not base64 inline. Not Whisper: it dropped clear notes and misheard Hindi. The router has no
   response schema, so the JSON shape is asked for in words and read by `readJson()`.
-  **Gemini is still the label photo**, and answers the turn when there is no `FAL_KEY`.
+  **The label photo is on fal too** (`openrouter/router/vision`, same key and model). Gemini answers
+  the turn and the photo only when there is no `FAL_KEY`.
 - The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and
   `CATALOG_APPLICATION_TOKEN` are set: `searchFrom()` in `brain.ts` asks the model for one search
   and `searchPack()` in `pack.ts` runs it, in FDK `getProducts` parameters, with

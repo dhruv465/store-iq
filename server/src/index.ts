@@ -26,10 +26,9 @@ try {
   // Which model answers a turn, said plainly at startup: the log read "gemini-2.5-flash" while
   // every turn was going to fal, which is the sort of thing that costs an afternoon.
   const fal = falConfig();
-  // The Gemini check only runs when there is a Gemini key. With fal answering the turn and the
-  // voice note, the key is optional: without it a photo says "type the model number" and nothing
-  // else changes, and the server refusing to start over it was the last thing tying us to it.
-  const photo = process.env.GEMINI_API_KEY?.trim() ? await assertModelAvailable() : "off";
+  // With fal, the turn, the voice note and the photo all go through it, so a Gemini key is not
+  // needed at all. Without fal, the photo needs one, and without either it asks for the model number.
+  const photo = fal ? "on fal" : process.env.GEMINI_API_KEY?.trim() ? await assertModelAvailable() : "off";
   const model = fal
     ? `fal ${fal.model} · voice on fal-ai/elevenlabs/speech-to-text · photo ${photo}`
     : await assertModelAvailable();

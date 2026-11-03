@@ -14,7 +14,7 @@ import {
   type Search,
 } from "./pack.js";
 import { catalogConfig } from "./catalog.js";
-import { falConfig, falText, falTranscribe, readJson, shapeInstruction } from "./fal.js";
+import { falConfig, falText, falTranscribe, falVision, readJson, shapeInstruction } from "./fal.js";
 import { greetingReply, isGreeting } from "./ask.js";
 import {
   endVisitLog,
@@ -218,6 +218,11 @@ const LABEL_PROMPT = `Read the shelf tag, the box or the TV label in this photo.
 /** One small vision call, and it only reads the tag. The answer is then written from the data pack,
  *  so a misread model number can never become an invented price. */
 export async function labelText(image: NonNullable<Event["image"]>, request: typeof fetch = fetch): Promise<string> {
+  const fal = falConfig();
+  if (fal) {
+    const read = await falVision(fal, LABEL_PROMPT, image, request);
+    return /^none\b/i.test(read) ? "" : read.slice(0, 200);
+  }
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) return "";
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
