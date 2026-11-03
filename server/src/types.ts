@@ -48,6 +48,9 @@ export type Reply = { text: string; buttons?: Button[] };
 
 export type Turn = { who: "associate" | "storeiq"; text: string };
 
+/** What a customer agreed to buy, kept on their home card for the next visit. */
+export type Purchase = { sku: string; name: string; total: number; on: string };
+
 export type Session = {
   phone: string;
   version: number;
@@ -61,7 +64,7 @@ export type Session = {
   card: HomeCard;
   /** The customer's saved card, once the associate has given their mobile number. The number is a
    *  lookup key only: nothing is ever sent to it (Rule 5). */
-  customer?: { id: string; phone: string; name?: string };
+  customer?: { id: string; phone: string; name?: string; bought?: Purchase[] };
   /** The reply has asked for the customer's name and number, so it is not asked again this interaction. */
   customer_asked?: boolean;
   /** The offer opens only after both are true. */

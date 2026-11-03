@@ -91,6 +91,7 @@ create table if not exists customers (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table customers add column if not exists purchases jsonb not null default '[]';
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -194,15 +195,16 @@ export class DB {
     // The card follows the customer, not the associate: their next visit starts from it.
     if (session.customer)
       await this.pg.query(
-        `insert into customers (id, phone, name, card, history) values ($1, $2, $3, $4, $5)
+        `insert into customers (id, phone, name, card, history, purchases) values ($1, $2, $3, $4, $5, $6)
          on conflict (phone) do update set name = coalesce(excluded.name, customers.name), card = $4, history = $5,
-         updated_at = now()`,
+         purchases = $6, updated_at = now()`,
         [
           session.customer.id,
           session.customer.phone,
           session.customer.name ?? null,
           JSON.stringify(session.card),
           JSON.stringify(session.history),
+          JSON.stringify(session.customer.bought ?? []),
         ],
       );
     for (const reply of replies)
@@ -216,7 +218,7 @@ export class DB {
 
   async findCustomer(phone: string): Promise<SavedCustomer | null> {
     const result = await this.pg.query<SavedCustomer>(
-      `select id, name, card, history from customers where phone = $1`,
+      `select id, name, card, history, purchases from customers where phone = $1`,
       [phone],
     );
     return result.rows[0] ?? null;
