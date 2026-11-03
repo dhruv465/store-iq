@@ -109,6 +109,10 @@ try {
       `Store IQ http://${host}:${port} · pack ${pack.version} (${packSource}) · ${model} · whatsapp ${whatsapp ? "on" : "off"}`,
     ),
   );
+  // Render's free instance sleeps after 15 minutes without inbound traffic, and the next WhatsApp
+  // message then waits a minute for it to wake. A request to its own public URL counts as inbound.
+  const self = process.env.RENDER_EXTERNAL_URL;
+  if (self) setInterval(() => void fetch(`${self}/health`).catch(() => {}), 10 * 60 * 1000).unref();
   let closing = false;
   async function shutdown(code = 0) {
     if (closing) return;
