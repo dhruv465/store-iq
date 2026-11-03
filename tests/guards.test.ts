@@ -58,6 +58,15 @@ test("the reply is capped at three lines and three buttons", () => {
   assert.equal(reply.buttons?.length, 3);
 });
 
+test("the model's reason goes last, marked, and never costs a line to say", () => {
+  const base = { step: "recommend" as const, card: {}, shortlist: [], demonstrated: false, buttons: [] };
+  const reason = "↳ They watch cricket, so motion matters.";
+  assert.equal(render({ ...base, lines: ["A", "B"], reason }).text, `A\nB\n${reason}`);
+  assert.equal(render({ ...base, lines: ["A", "B", "C"], reason }).text, "A\nB\nC");
+  assert.equal(render({ ...base, lines: ["A"], reason: null }).text, "A");
+  assert.equal(render({ ...base, lines: [], reason: "x" }).text.includes("↳"), false);
+});
+
 test("duplicate buttons are dropped", () => {
   const button = (id: string, title: string) => ({ id, title });
   const reply = (buttons: { id: string; title: string }[]) =>

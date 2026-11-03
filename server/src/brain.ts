@@ -65,6 +65,7 @@ Hard rules, never bent:
 - Never OPEN offers, discounts, exchange or finance yourself before you know what the customer needs and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them from FACTS. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines, except three options which take three lines. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
+- "reason" is one short line the associate reads silently: why this question, option, correction or demo fits this customer, or why it comes now. It starts from something this customer said or does, and ends with what it means for what to say or show: "They said the kids watch cartoons all day, so the panel matters more than the sound." and "Dad watches cricket, so a fast-moving ball is the thing to show." are right. It never describes the conversation, what the customer has given or asked, or what you are doing: "Customer has given a budget, so showing options in range", "The customer has a wrong belief" and "The customer has decided and is asking about offers" are all wrong. No figures in it. When the turn is not about a customer, or there is nothing to explain, reason is null.
 - A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
@@ -92,6 +93,8 @@ export type Decision = {
    *  so the reply carries the button that puts the question to a human. */
   unknown?: boolean;
   objection?: string | null;
+  /** Why this is the right thing to say to this customer now: the contest scores a reason in each answer. */
+  reason?: string | null;
 };
 
 const schema = {
@@ -148,6 +151,12 @@ const schema = {
       type: "STRING",
       nullable: true,
       description: "a doubt or wrong belief the customer raised this turn, in plain words, for the manager's report",
+    },
+    reason: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "one short line on why this fits THIS customer or why to do it now, no figures. null when there is no customer move to explain",
     },
   },
 } as const;
@@ -540,7 +549,11 @@ export function render(decision: Decision): Reply {
     .filter(Boolean)
     .slice(0, 3);
   const said = lines.length ? lines : ["Tell me what the customer said and I will give you the next question."];
-  const text = said.join("\n").slice(0, 1000);
+  const reason = typeof decision.reason === "string" ? moneySafe(decision.reason.replace(/^\s*↳\s*/, "")).trim() : "";
+  // Only under three lines: three options already carry a reason each, and floor() would cut the third for it.
+  const text = [...said, ...(reason && lines.length && lines.length < 3 ? [`↳ ${reason}`] : [])]
+    .join("\n")
+    .slice(0, 1000);
   // A tap carries no words, so a button the model wrote carries its own title as what was said: the
   // next turn reads it like typing, and nothing has to match an id the model made up. That makes a
   // cut title a different sentence ("What will they use"), so only a select button is ever cut, and
@@ -982,8 +995,15 @@ async function answer(
       .join(" ");
   const figuresIn = (decision: Decision): string[] =>
     unsupportedNumbers(render(decision).text, allowedNumbers(pack), told(decision.card));
+  // The reason is extra: a figure in it costs the reason, never the answer.
+  const reasonOnly = (decision: Decision): Decision =>
+    figuresIn(decision).length && !figuresIn({ ...decision, reason: null }).length
+      ? { ...decision, reason: null }
+      : decision;
   const written = async (extra: string[] = []): Promise<Decision> =>
-    readJson<Decision>(await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra]), schema, request));
+    reasonOnly(
+      readJson<Decision>(await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra]), schema, request)),
+    );
   let decision = await written();
   // Told once what it got wrong, it usually just needed to read the figure again. The guard is
   // unchanged: what it refuses a second time still does not go out.
