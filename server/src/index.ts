@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
-import { openDatabase, pricedEarly } from "./db.js";
+import { openDatabase, openPostgres, pricedEarly } from "./db.js";
 import { startingPack } from "./pack.js";
 import { falConfig } from "./fal.js";
 import { startWorker } from "./worker.js";
@@ -14,7 +14,7 @@ const host = process.env.HOST || "127.0.0.1";
 const local = ["127.0.0.1", "localhost", "::1"].includes(host);
 
 const { pack, source: packSource } = await startingPack();
-const db = await openDatabase();
+const db = process.env.DATABASE_URL ? await openPostgres(process.env.DATABASE_URL) : await openDatabase();
 try {
   const whatsapp = !!(
     process.env.WHATSAPP_ACCESS_TOKEN &&

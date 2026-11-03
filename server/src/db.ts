@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import pg from "pg";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { IncomingMessage } from "./webhook.js";
@@ -95,9 +96,15 @@ export function pricedEarly(session: Session, reply: Reply): boolean {
   return !session.assessed && /\bRs ?[\d,]{4,}/.test(reply.text);
 }
 
+/** What DB needs from a database: PGlite on the laptop and in tests, Postgres on the server. */
+type Queryable = {
+  query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[]; affectedRows?: number }>;
+  exec(sql: string): Promise<unknown>;
+};
+
 export class DB {
   constructor(
-    private readonly pg: PGlite,
+    private readonly pg: Queryable,
     readonly close: () => Promise<void>,
   ) {}
 
@@ -482,4 +489,26 @@ export async function openDatabase(
     if (lock) await rm(lock, { recursive: true });
     throw error;
   }
+}
+
+/** A real Postgres, for a host whose memory cannot hold PGlite: it needs over 1 GB to start and
+ *  Render's free instance has 512 MB. One connection, so queries run one at a time as they do in
+ *  PGlite, and a pool so a dropped connection is reopened rather than taking the process down. */
+export async function openPostgres(url: string): Promise<DB> {
+  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  pool.on("error", (error) => console.error("Postgres connection lost:", error.message));
+  const db: Queryable = {
+    query: async (sql, params) => {
+      const result = await pool.query(sql, params);
+      return { rows: result.rows, affectedRows: result.rowCount ?? 0 };
+    },
+    exec: (sql) => pool.query(sql),
+  };
+  try {
+    await db.exec(SCHEMA);
+  } catch (error) {
+    await pool.end();
+    throw error;
+  }
+  return new DB(db, () => pool.end());
 }
