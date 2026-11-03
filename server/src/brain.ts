@@ -65,7 +65,8 @@ Hard rules, never bent:
 - Never OPEN offers, discounts, exchange or finance yourself before you know what the customer needs and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them from FACTS. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines, except three options which take three lines. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
-- "reason" is one short line the associate reads silently: why this question, option, correction or demo fits this customer, or why it comes now. It starts from something this customer said or does, and ends with what it means for what to say or show: "They said the kids watch cartoons all day, so the panel matters more than the sound." and "Dad watches cricket, so a fast-moving ball is the thing to show." are right. It never describes the conversation, what the customer has given or asked, or what you are doing: "Customer has given a budget, so showing options in range", "The customer has a wrong belief" and "The customer has decided and is asking about offers" are all wrong. No figures in it. When the turn is not about a customer, or there is nothing to explain, reason is null.
+- The reason for an answer is two fields. "because" is the name of the one thing in WHAT THE CUSTOMER HAS SAID that this answer serves — a name under facts, or budget_rupees — exactly as it is written there or as you file it this turn. "reason" is what that means for what to say or show, in a few words, with no figures: because "main use" and reason "a fast-moving ball is the thing to show". The associate sees the customer's own words and then yours. If nothing the customer said explains this answer, both are null.
+- You never send anything to a customer, and never say you are sending or have sent something. Only the associate's tap on the agree button sends the summary. If they tell you the customer agreed, tell them to tap it.
 - A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
@@ -93,7 +94,10 @@ export type Decision = {
    *  so the reply carries the button that puts the question to a human. */
   unknown?: boolean;
   objection?: string | null;
-  /** Why this is the right thing to say to this customer now: the contest scores a reason in each answer. */
+  /** The contest scores a reason in each answer. Told to explain itself, the model narrated the
+   *  conversation, so a reason is now one of the customer's own needs (`because`, a card entry)
+   *  followed by what it means (`reason`), and a need the card does not hold shows no reason. */
+  because?: string | null;
   reason?: string | null;
 };
 
@@ -152,11 +156,15 @@ const schema = {
       nullable: true,
       description: "a doubt or wrong belief the customer raised this turn, in plain words, for the manager's report",
     },
+    because: {
+      type: "STRING",
+      nullable: true,
+      description: "the name of the entry in WHAT THE CUSTOMER HAS SAID that this answer serves, or null",
+    },
     reason: {
       type: "STRING",
       nullable: true,
-      description:
-        "one short line on why this fits THIS customer or why to do it now, no figures. null when there is no customer move to explain",
+      description: "what that need means for what to say or show, a few words, no figures. null when because is null",
     },
   },
 } as const;
@@ -717,6 +725,33 @@ async function searchFrom(said: string, session: Session, request: typeof fetch)
   }
 }
 
+/** The customer's own words for the need, then what it means. Null when the card holds no such need:
+ *  a reason the model cannot tie to something the customer said is the narration we are avoiding. */
+export function reasonFrom(card: Session["card"], because: unknown, so: unknown): string | null {
+  if (typeof because !== "string" || typeof so !== "string" || !so.trim()) return null;
+  const key = because.trim().toLowerCase();
+  const facts = Object.entries(card.facts ?? {}).find(([name]) => name.trim().toLowerCase() === key);
+  const raw = facts ? facts[1] : key === "facts" ? undefined : (card as Record<string, unknown>)[key];
+  const need =
+    key === "budget_rupees" && typeof raw === "number"
+      ? `Rs ${raw.toLocaleString("en-IN")}`
+      : Array.isArray(raw)
+        ? raw.join(", ")
+        : typeof raw === "string" || typeof raw === "number"
+          ? String(raw)
+          : "";
+  return need.trim() ? `${need.trim()}: ${so.replace(/^\s*↳\s*/, "").trim()}` : null;
+}
+
+/** The agree tap first, then whatever else the reply offered, within the floor's three. */
+export function awaitingConsent(reply: Reply, lang: Lang): NonNullable<Reply["buttons"]> {
+  const others = (reply.buttons ?? []).filter((button) => !button.id.startsWith("consent:"));
+  return [
+    { id: "consent:yes", title: t(lang, "btn.agreed") },
+    ...(others.length ? others : [{ id: "consent:no", title: t(lang, "btn.declined") }]),
+  ].slice(0, 3);
+}
+
 /** What is on the associate's screen goes back into FACTS, first, whatever this turn searched. */
 export function withShown(pack: Pack, session: Session): Pack {
   const missing = (session.shown?.products ?? []).filter(
@@ -1023,6 +1058,11 @@ async function answer(
     notes.push(
       `On the associate's screen from earlier: ${onScreen.map((product) => product.name).join("; ")}. "These", "them", "it" and "the first one" mean those, unless they name something else.`,
     );
+  const picked = session.selection && !session.consent && pack.products.find((p) => p.sku === session.selection?.sku);
+  if (picked)
+    notes.push(
+      `The customer picked ${picked.name} and the summary is waiting for the associate to tap "${t(session.language, "btn.agreed")}". Nothing has been sent, and you cannot send it.`,
+    );
 
   const told = (card: Decision["card"]): string =>
     [
@@ -1073,6 +1113,7 @@ async function answer(
   for (const [field, value] of Object.entries(decision.card ?? {}))
     if (CARD_FIELDS.has(field) && value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
       (session.card as Record<string, unknown>)[field] = value;
+  decision = { ...decision, reason: reasonFrom(session.card, decision.because, decision.reason) };
   session.shortlist = (decision.shortlist ?? [])
     .filter((sku) => pack.products.some((product) => product.sku === sku))
     .slice(0, 3);
@@ -1096,6 +1137,9 @@ async function answer(
     ...(buttons ?? []).filter((button) => button.id.startsWith("select:")).map((button) => button.id.slice(7)),
     ...session.shortlist,
   ]);
+  // Consent is a tap. Typed "he agreed" was answered "sending the summary" with nothing sent, so
+  // while a pick waits, the tap that does send it is always on the reply.
+  if (session.selection && !session.consent) reply = { ...reply, buttons: awaitingConsent(reply, session.language) };
   // A manager who does not know the answer finds out. The question goes to the named expert and
   // comes back as a notice, so the associate is not left with "I do not have that".
   if (decision.unknown && store) reply = unknownReply(reply, session.language);

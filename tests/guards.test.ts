@@ -10,6 +10,8 @@ import {
   askedAboutOffers,
   offerLeaked,
   unknownReply,
+  awaitingConsent,
+  reasonFrom,
   render,
   rememberShown,
   unsupportedNumbers,
@@ -342,4 +344,52 @@ test("what is on the associate's screen stays in FACTS when the next search find
   rememberShown(session, elsewhere, []);
   assert.equal(session.shown?.products.length, 2, "a turn that shows nothing keeps the last ones");
   assert.equal(withShown(pack, session).products.length, pack.products.length, "nothing is added twice");
+});
+
+test("a reason is the customer's own need and what it means, or nothing", () => {
+  const card = {
+    facts: { "Main use": "cricket and cartoons" },
+    budget_rupees: 60000,
+    priorities: ["bright room", "sound"],
+  };
+  assert.equal(
+    reasonFrom(card, "main use", "a fast ball is the thing to show"),
+    "cricket and cartoons: a fast ball is the thing to show",
+  );
+  assert.equal(reasonFrom(card, "budget_rupees", "all three fit"), "Rs 60,000: all three fit");
+  assert.equal(
+    reasonFrom(card, "priorities", "show it with the lights on"),
+    "bright room, sound: show it with the lights on",
+  );
+  assert.equal(
+    reasonFrom(card, "asking about offers", "the customer has decided"),
+    null,
+    "a need the card does not hold",
+  );
+  assert.equal(reasonFrom(card, null, "anything"), null);
+  assert.equal(reasonFrom(card, "main use", "  "), null);
+  assert.equal(reasonFrom(card, "facts", "x"), null);
+});
+
+test("while a pick waits for consent, the agree tap is always on the reply", () => {
+  assert.deepEqual(
+    awaitingConsent({ text: "ok" }, "en").map((b) => b.id),
+    ["consent:yes", "consent:no"],
+  );
+  const kept = awaitingConsent(
+    {
+      text: "ok",
+      buttons: [
+        { id: "say:a", title: "A" },
+        { id: "say:b", title: "B" },
+        { id: "consent:yes", title: "x" },
+      ],
+    },
+    "hi",
+  );
+  assert.deepEqual(
+    kept.map((b) => b.id),
+    ["consent:yes", "say:a", "say:b"],
+  );
+  assert.equal(kept[0]!.title, "हाँ कहा");
 });
