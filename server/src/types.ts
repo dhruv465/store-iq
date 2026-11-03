@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Lang } from "./i18n.js";
-import type { Product, Search } from "./pack.js";
+import type { Pack, Product, Search } from "./pack.js";
 /** Section 4 of the developer brief, A to I, in order. "demonstrate" lives inside recommend, which is
  *  how the brief names that stage, and shows up as the demonstration cue on each option. */
 export const STEPS = [
@@ -64,7 +64,13 @@ export type Session = {
   demonstrated: boolean;
   shortlist: string[];
   /** What the customer actually picked. Set only from an explicit tap, never inferred. */
-  selection?: { sku: string; accessories: string[]; charges: string[] };
+  selection?: {
+    sku: string;
+    accessories: string[];
+    charges: string[];
+    /** Real catalogue lines offered with the pick, such as the brand's wall mount, at their real price. */
+    offered?: Pack["accessories"];
+  };
   /** Section 4H: the customer summary only goes out with consent. */
   consent: boolean;
   /** The next thing they say is a store visit, not a customer. Set by asking to log one, cleared

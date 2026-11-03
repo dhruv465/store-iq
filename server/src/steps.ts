@@ -276,7 +276,10 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   if (!session.consent)
     return {
       text: [
-        t(session.language, "ft.read", { name: product.name, total: itemised.total.toLocaleString("en-IN") }),
+        t(session.language, "ft.read", {
+          name: itemised.lines.length > 1 ? itemised.lines.join("; ") : product.name,
+          total: itemised.total.toLocaleString("en-IN"),
+        }),
         // The saving off MRP is the first figure the close hangs on, and it is pack arithmetic.
         ...(gateOpen && product.mrp_rupees - product.price_rupees > 0
           ? [

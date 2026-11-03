@@ -148,6 +148,68 @@ const priceFilter = (max: number): string => `min_price_effective:[1,INR TO ${ma
 const FRESH_MS = 5 * 60_000;
 const searched = new Map<string, { at: number; pack: Pack }>();
 
+/** A wall mount of the television's own brand, from the store's own mounts shelf, as a line the
+ *  itemised total can carry at its real price. Null for anything that is not a television, or when
+ *  the shelf has none in stock. Which size it fits is not in the data, so its full name is read out. */
+export async function mountFor(
+  product: Product,
+  request: typeof fetch = fetch,
+): Promise<Pack["accessories"][number] | null> {
+  const config = catalogConfig();
+  if (!config || !product.categories.some((category) => /television/i.test(category))) return null;
+  const found = await getProducts(
+    config,
+    { q: `${product.brand} wall mount`, page_size: 24, page_no: 1, page_type: "number", sort_on: "popular" },
+    request,
+  );
+  const brand = product.brand.trim().toLowerCase();
+  for (const row of found.items as Row[]) {
+    const mount = adaptProduct(fromFdk(row)).product;
+    const shelf = (row.categories ?? []).some((category: Row) => /mount/i.test(String(category?.name)));
+    if (
+      shelf &&
+      mount.sku &&
+      mount.price_rupees > 0 &&
+      mount.stock_units > 0 &&
+      mount.brand.trim().toLowerCase() === brand
+    )
+      return { id: mount.sku, title: mount.name, price_rupees: mount.price_rupees, for: product.sku };
+  }
+  return null;
+}
+
+/** The shift brief from the store itself: televisions in stock with their prices, and the offers
+ *  running on them today. The data has no stock history, no video and no quiz, so there are none. */
+const briefs = new Map<string, Pack["shift_brief"]>();
+export async function liveBrief(base: Pack, request: typeof fetch = fetch): Promise<Pack["shift_brief"]> {
+  const day = new Date().toISOString().slice(0, 10);
+  const kept = briefs.get(day);
+  if (kept) return kept;
+  const pack = await searchPack(base, { q: "television", kind: "television" }, request);
+  const short = (product: Product): string =>
+    product.size_inch > 0 ? `${product.brand} ${product.size_inch}"` : product.name.slice(0, 32);
+  const offerOn = (product: Product): string =>
+    String(
+      ["discount", "offer_tag", "bank_offer"].map((key) => product.specs[key]).find(Boolean) ??
+        pack.offers.find((offer) => Array.isArray(offer.on) && offer.on.includes(product.name))?.title ??
+        "",
+    );
+  const stocked = pack.products.filter((product) => product.stock_units > 0);
+  const brief = {
+    stock_changes: stocked
+      .slice(0, 3)
+      .map((product) => `${short(product)} Rs ${product.price_rupees.toLocaleString("en-IN")}`),
+    offer_changes: stocked
+      .filter((product) => offerOn(product))
+      .slice(0, 2)
+      .map((product) => `${short(product)}: ${offerOn(product)}`),
+  };
+  if (!brief.stock_changes.length) return {};
+  briefs.clear();
+  briefs.set(day, brief);
+  return brief;
+}
+
 /** The live catalogue, asked for what this turn is about. Rows are the store's own answer: a miss
  *  comes back as no products, which the model is told, and a failure throws. */
 export async function searchPack(base: Pack, search: Search, request: typeof fetch = fetch): Promise<Pack> {

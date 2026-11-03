@@ -4,6 +4,8 @@ import {
   allowedNumbers,
   canonUnit,
   factsFor,
+  liveBrief,
+  mountFor,
   pairsIn,
   readSearch,
   searchPack,
@@ -752,6 +754,14 @@ export function awaitingConsent(reply: Reply, lang: Lang): NonNullable<Reply["bu
   ].slice(0, 3);
 }
 
+/** A line offered with the pick stays priceable on every later turn, like the pick itself. */
+export function withOffered(pack: Pack, session: Session): Pack {
+  const offered = (session.selection?.offered ?? []).filter(
+    (line) => !pack.accessories.some((accessory) => accessory.id === line.id),
+  );
+  return offered.length ? { ...pack, accessories: [...pack.accessories, ...offered] } : pack;
+}
+
 /** What is on the associate's screen goes back into FACTS, first, whatever this turn searched. */
 export function withShown(pack: Pack, session: Session): Pack {
   const missing = (session.shown?.products ?? []).filter(
@@ -790,6 +800,10 @@ export function startInteraction(session: Session): void {
   session.card = {};
   delete session.search;
   delete session.shown;
+  // The last customer's pick, and their yes, are not this customer's.
+  delete session.selection;
+  session.consent = false;
+  delete session.site_checked;
   session.card_confirmed = false;
   session.assessed = false;
   session.demonstrated = false;
@@ -986,7 +1000,7 @@ async function answer(
     return reply;
   }
   if (!event.action && !event.image && isGreeting(event.text))
-    return greetingReply(session.language, Object.keys(base.shift_brief ?? {}).length > 0);
+    return greetingReply(session.language, Object.keys(base.shift_brief ?? {}).length > 0 || !!catalogConfig());
   for (const [field, value] of Object.entries(heard))
     if (value !== null && value !== undefined) (session.card as Record<string, unknown>)[field] = value;
 
@@ -1001,7 +1015,10 @@ async function answer(
       return { ...base, products: [], offers: [] };
     }
   };
-  let pack = withShown(session.search ? await fetchFor(session.search) : base, session);
+  let pack = withOffered(withShown(session.search ? await fetchFor(session.search) : base, session), session);
+  // No file brief on the live catalogue, so the brief is the store's own: stock and offers today.
+  if (wantsBrief(event.text, event.action) && catalogConfig() && !Object.keys(base.shift_brief ?? {}).length)
+    pack = { ...pack, shift_brief: await liveBrief(base, request).catch(() => ({})) };
   if (store && event.action === "site:problem" && session.selection) {
     const needs = siteNeeds(pack, session.selection).join("; ");
     const reference = newReference();
@@ -1011,6 +1028,26 @@ async function answer(
     return reply;
   }
   const free = deterministic(event, session, pack, notes);
+  // A television just picked: its brand's wall mount, from the store, as a tap that adds it to the total.
+  const product = event.action?.startsWith("select:") && pack.products.find((p) => p.sku === session.selection?.sku);
+  // Not when the store already gives one free with it: that was a paid bracket offered for a TV
+  // whose own promotion was "Free with it: Samsung Wallmount Bracket".
+  const freeMount =
+    !!product &&
+    pack.offers.some(
+      (offer) =>
+        Array.isArray(offer.on) && offer.on.includes(product.name) && /mount|bracket/i.test(String(offer.title)),
+    );
+  if (free && product && session.selection && !session.consent && !freeMount) {
+    const mount = await mountFor(product, request).catch(() => null);
+    if (mount && !session.selection.accessories.includes(mount.id)) {
+      session.selection.offered = [mount];
+      free.buttons = [
+        ...(free.buttons ?? []),
+        { id: `add:${mount.id}`, title: t(session.language, "btn.mount") },
+      ].slice(0, 3);
+    }
+  }
   if (free) return remember(free);
 
   // A photo of a shelf tag: read what is printed, then treat it as being told the same words. The
@@ -1032,7 +1069,7 @@ async function answer(
       if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
       const found = await fetchFor(search);
       // A store that did not answer gets nothing substituted, not even what it said a turn ago.
-      pack = failed ? found : withShown(found, session);
+      pack = failed ? found : withOffered(withShown(found, session), session);
       session.search = search;
       // Changing the product withdraws the consent, and the picked one is not on this search.
       if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {

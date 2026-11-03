@@ -15,9 +15,12 @@ import {
   render,
   rememberShown,
   unsupportedNumbers,
+  startInteraction,
+  withOffered,
   withShown,
 } from "../server/src/brain.js";
 import { newSession } from "../server/src/types.js";
+import { followThrough } from "../server/src/steps.js";
 
 const pack = await loadPack("data/pack.json");
 const allowed = allowedNumbers(pack);
@@ -392,4 +395,33 @@ test("while a pick waits for consent, the agree tap is always on the reply", () 
     ["consent:yes", "say:a", "say:b"],
   );
   assert.equal(kept[0]!.title, "हाँ कहा");
+});
+
+test("a real mount offered with the pick is its own line in the total, at its own price", () => {
+  const session = newSession("910000000000");
+  const tv = pack.products[0]!;
+  const mount = { id: "mount-1", title: "Brand Wall Mount WM-1", price_rupees: 1000, for: tv.sku };
+  session.selection = { sku: tv.sku, accessories: [], charges: [], offered: [mount] };
+  const live = { ...pack, accessories: [] };
+  const priced = withOffered(live, session);
+  assert.equal(priced.accessories.length, 1);
+  assert.equal(withOffered(priced, session).accessories.length, 1, "never added twice");
+
+  session.selection.accessories.push("mount-1");
+  const reply = followThrough(session, priced, "Asha");
+  const total = (tv.price_rupees + 1000).toLocaleString("en-IN");
+  assert.match(reply.text, new RegExp(`Brand Wall Mount WM-1 — Rs 1,000`));
+  assert.match(reply.text, new RegExp(`total Rs ${total}`));
+  assert.equal(reply.buttons?.[0]?.id, "consent:yes");
+});
+
+test("a new customer does not inherit the last one's pick or their yes", () => {
+  const session = newSession("910000000000");
+  session.selection = { sku: pack.products[0]!.sku, accessories: [], charges: [] };
+  session.consent = true;
+  session.site_checked = true;
+  startInteraction(session);
+  assert.equal(session.selection, undefined);
+  assert.equal(session.consent, false);
+  assert.equal(session.site_checked, undefined);
 });
