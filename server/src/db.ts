@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { IncomingMessage } from "./webhook.js";
 import { newSession, type Reply, type Session } from "./types.js";
+import type { SavedCustomer } from "./brain.js";
 
 /** A notice about today's offers is not worth delivering tomorrow, so one waits out a shift and
  *  then stops. */
@@ -81,6 +82,15 @@ create table if not exists conversations (
   updated_at timestamptz not null default now()
 );
 create index if not exists conversations_day on conversations (updated_at);
+create table if not exists customers (
+  id text primary key,
+  phone text not null unique,
+  name text,
+  card jsonb not null default '{}',
+  history jsonb not null default '[]',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -181,6 +191,20 @@ export class DB {
        on conflict (interaction_id) do update set state = $3, updated_at = now()`,
       [session.interaction_id, session.phone, state],
     );
+    // The card follows the customer, not the associate: their next visit starts from it.
+    if (session.customer)
+      await this.pg.query(
+        `insert into customers (id, phone, name, card, history) values ($1, $2, $3, $4, $5)
+         on conflict (phone) do update set name = coalesce(excluded.name, customers.name), card = $4, history = $5,
+         updated_at = now()`,
+        [
+          session.customer.id,
+          session.customer.phone,
+          session.customer.name ?? null,
+          JSON.stringify(session.card),
+          JSON.stringify(session.history),
+        ],
+      );
     for (const reply of replies)
       await this.pg.query(`insert into outbox (phone, payload) values ($1, $2)`, [
         session.phone,
@@ -188,6 +212,14 @@ export class DB {
       ]);
     session.version = next;
     return true;
+  }
+
+  async findCustomer(phone: string): Promise<SavedCustomer | null> {
+    const result = await this.pg.query<SavedCustomer>(
+      `select id, name, card, history from customers where phone = $1`,
+      [phone],
+    );
+    return result.rows[0] ?? null;
   }
 
   async send(phone: string, reply: Reply): Promise<void> {

@@ -25,8 +25,8 @@ export function newCustomerRest(text: string | undefined): string {
   return rest.replace(/^[,.:;\-\s]+/, "").trim();
 }
 
-/** Plain words for what Store IQ believes about this home, in the brief's "I heard" shape. */
-export function cardSummary(session: Session): Reply {
+/** What the card holds, one phrase each, in the associate's language. */
+export function cardParts(session: Session): string[] {
   const card = session.card;
   const lang = session.language;
   const parts: string[] = [];
@@ -54,6 +54,12 @@ export function cardSummary(session: Session): Reply {
   // What this product needed that a television did not, in the words the model filed it under.
   // Not translated: these are the associate's own words coming back, like a free-text room is.
   for (const [name, said] of Object.entries(card.facts ?? {})) parts.push(`${name}: ${said}`);
+  return parts;
+}
+
+/** Plain words for what Store IQ believes about this home, in the brief's "I heard" shape. */
+export function cardSummary(session: Session): Reply {
+  const parts = cardParts(session);
   return {
     text: [
       parts.length

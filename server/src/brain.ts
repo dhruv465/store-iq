@@ -30,6 +30,7 @@ import { askedToSwitchLanguage, INDIAN_SCRIPT, INDIAN_WORDS, languageFrom, t, ty
 import { expertReply, managerView, newReference, wantsExpert, wantsManagerView } from "./extras.js";
 import {
   briefAnswer,
+  cardParts,
   cardSummary,
   followThrough,
   reviewReply,
@@ -41,7 +42,7 @@ import {
   wantsNewCustomer,
   wantsReview,
 } from "./steps.js";
-import type { Event, Reply, Session, Step } from "./types.js";
+import type { Event, HomeCard, Reply, Session, Step, Turn } from "./types.js";
 import { STEPS } from "./types.js";
 
 const SYSTEM = `You are Store IQ. Think of yourself as the floor manager of a Reliance Digital store, on WhatsApp. The person messaging you is one of your associates, on the shop floor, holding their phone in one hand.
@@ -59,6 +60,7 @@ How to be:
 - With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
+- Every customer gets a card saved under their mobile number, so their next visit starts where this one ended. CUSTOMER CARD says whether this one has one. When it is none and they are serving a customer, after answering what they asked, ask once for the customer's name and mobile number, with a line to say first, such as Ask: "Can I note your number so we remember you next time?" When they say this customer has been in before, ask for the number the customer gave then. A message that gives the number is the card being saved, so do not ask for it then. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code saves and looks up the card and tells the associate, so never say you have saved or found it.
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
@@ -102,13 +104,17 @@ export type Decision = {
    *  followed by what it means (`reason`), and a need the card does not hold shows no reason. */
   because?: string | null;
   reason?: string | null;
+  /** Who is standing there, read from the words rather than a fixed phrase. */
+  customer?: { arrived?: "new" | "returning" | null; name?: string | null; phone?: string | null } | null;
 };
 
 const schema = {
   type: "OBJECT",
   // "unknown" is required or the model simply leaves it out: it said "I do not have that"
   // in prose and reported nothing, so no human was ever offered.
-  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "unknown"],
+  // "customer" too: left optional, the model left it out on "naya banda aaya hai" and the last
+  // customer's card stayed on the new one.
+  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "unknown", "customer"],
   properties: {
     step: { type: "STRING", enum: [...STEPS] },
     card: {
@@ -168,6 +174,27 @@ const schema = {
       type: "STRING",
       nullable: true,
       description: "what that need means for what to say or show, a few words, no figures. null when because is null",
+    },
+    customer: {
+      type: "OBJECT",
+      nullable: true,
+      description:
+        "only when this message says a different customer has walked up, says one who came before is back, or gives the customer's name or mobile number; otherwise null",
+      properties: {
+        arrived: {
+          type: "STRING",
+          enum: ["new", "returning"],
+          nullable: true,
+          description:
+            "new: the associate says a different person has just walked up. returning: the associate says the person who just walked up has been in before. Being told the name or number of the customer they are already serving is neither, so null",
+        },
+        name: { type: "STRING", nullable: true, description: "the customer's name, as the associate gave it" },
+        phone: {
+          type: "STRING",
+          nullable: true,
+          description: "the customer's mobile number, as the associate gave it",
+        },
+      },
     },
   },
 } as const;
@@ -651,6 +678,7 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
     Object.keys(pack.shift_brief ?? {}).length ? `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}` : "",
     Object.keys(session.card).length ? `WHAT THE CUSTOMER HAS SAID:\n${JSON.stringify(session.card)}` : "",
     picked ? `THEY HAVE PICKED: ${picked.name}.` : "",
+    `CUSTOMER CARD: ${session.customer ? `saved${session.customer.name ? ` for ${session.customer.name}` : ""}` : "none yet"}.`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     gate,
     // What the code knows and the model does not: a gate just hit, a tap, a search that came back
@@ -810,6 +838,7 @@ export function startInteraction(session: Session): void {
   session.interaction_id = randomUUID();
   session.interaction_started = new Date().toISOString();
   session.card = {};
+  delete session.customer;
   delete session.search;
   delete session.shown;
   // The last customer's pick, and their yes, are not this customer's.
@@ -909,12 +938,26 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   return null;
 }
 
+export type SavedCustomer = { id: string; name: string | null; card: HomeCard; history: Turn[] };
+
 export type Store = {
   today(): Promise<Session[]>;
+  findCustomer?(phone: string): Promise<SavedCustomer | null>;
   logVisit(row: { reference: string; phone: string; associate?: string; store: string; body: string }): Promise<void>;
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
+
+/** A 10-digit Indian mobile that the associate really said, or null. A number the model wrote that is
+ *  not in their words is not taken, the same as an invented price is not.
+ *  shortcut: a number spoken as words, not digits, is not taken; upgrade if voice notes miss it. */
+export function mobile(raw: unknown, said: string | undefined): string | null {
+  const digits = String(raw ?? "")
+    .replace(/\D/g, "")
+    .replace(/^(91|0)(?=\d{10}$)/, "");
+  if (!/^[6-9]\d{9}$/.test(digits)) return null;
+  return (said ?? "").replace(/\D/g, "").includes(digits) ? digits : null;
+}
 
 export async function decide(
   event: Event,
@@ -955,7 +998,9 @@ async function answer(
   // has to be cleared AND the question answered.
   const started = wantsNewCustomer(event.text, event.action) ? newCustomerRest(event.text) : "";
   const notes: string[] = [];
-  if (started.length > 3) {
+  const resetNow = started.length > 3;
+  let searchedNow = false;
+  if (resetNow) {
     startInteraction(session);
     event = { ...event, text: started };
     notes.push("They have just started a new customer, so nothing is known about them yet.");
@@ -1080,6 +1125,7 @@ async function answer(
   if (event.text && catalogConfig()) {
     const search = await searchFrom(event.text, session, request);
     if (search) {
+      searchedNow = true;
       failed = false;
       // A different kind of thing is a different subject: the televisions on screen are not "these phones".
       if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
@@ -1155,16 +1201,66 @@ async function answer(
       `You wrote your last draft in the wrong language. ${languageNote(event.text, session.language)} Give the same answer, translated.`,
     ]);
 
+  // The customer's card. Who is standing there is the model's reading of the words; keeping the card
+  // under a number the associate really said is the code's.
+  const who = decision.customer;
+  // The model writes this turn's card having seen the last customer's, and copies it back.
+  let stale: Session["card"] = {};
+  if (
+    (who?.arrived === "new" || who?.arrived === "returning") &&
+    !resetNow &&
+    (session.history.length || session.customer)
+  ) {
+    const search = searchedNow ? session.search : undefined;
+    stale = session.card;
+    startInteraction(session);
+    if (search) session.search = search;
+  }
+  let customerLine = "";
+  const number = mobile(who?.phone, event.text);
+  const name = typeof who?.name === "string" && who.name.trim() ? who.name.trim().slice(0, 60) : undefined;
+  if (number && number !== session.customer?.phone && store?.findCustomer) {
+    const found = await store.findCustomer(number);
+    const lang = session.language;
+    if (found) {
+      const known = found.name ?? name;
+      session.customer = { id: found.id, phone: number, ...(known ? { name: known } : {}) };
+      session.card = { ...found.card, ...session.card };
+      session.history = [...found.history, ...session.history].slice(-12);
+      const parts = cardParts(session);
+      customerLine = [
+        t(lang, "customer.back", { v: known ?? "" }),
+        parts.length ? t(lang, "customer.last", { body: parts.join("; ") }) : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    } else if (who?.arrived === "returning") customerLine = t(lang, "customer.notfound", { v: number });
+    else {
+      session.customer = { id: randomUUID(), phone: number, ...(name ? { name } : {}) };
+      customerLine = t(lang, "customer.saved", { v: name ?? "" });
+    }
+  } else if (name && session.customer && !session.customer.name) session.customer.name = name;
+
   const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
   if (Array.isArray(extra))
     for (const fact of extra)
-      if (fact?.name && fact?.value)
+      if (
+        fact?.name &&
+        fact?.value &&
+        stale.facts?.[String(fact.name).slice(0, 40)] !== String(fact.value).slice(0, 80)
+      )
         session.card.facts = {
           ...session.card.facts,
           [String(fact.name).slice(0, 40)]: String(fact.value).slice(0, 80),
         };
   for (const [field, value] of Object.entries(decision.card ?? {}))
-    if (CARD_FIELDS.has(field) && value !== null && value !== undefined && !(Array.isArray(value) && !value.length))
+    if (
+      CARD_FIELDS.has(field) &&
+      value !== null &&
+      value !== undefined &&
+      !(Array.isArray(value) && !value.length) &&
+      JSON.stringify((stale as Record<string, unknown>)[field]) !== JSON.stringify(value)
+    )
       (session.card as Record<string, unknown>)[field] = value;
   decision = { ...decision, reason: reasonFrom(session.card, decision.because, decision.reason) };
   session.shortlist = (decision.shortlist ?? [])
@@ -1224,5 +1320,5 @@ async function answer(
           text: `${t(session.language, "gate.offers", { body: t(session.language, "gate.offers.ask") })}\n↳ ${t(session.language, "gate.reason")}`,
         };
   }
-  return remember(reply);
+  return remember(customerLine ? { ...reply, text: `${customerLine}\n${reply.text}` } : reply);
 }

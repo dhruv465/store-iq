@@ -59,6 +59,9 @@ export type Session = {
   language: Lang;
   step: Step;
   card: HomeCard;
+  /** The customer's saved card, once the associate has given their mobile number. The number is a
+   *  lookup key only: nothing is ever sent to it (Rule 5). */
+  customer?: { id: string; phone: string; name?: string };
   /** The offer opens only after both are true. */
   assessed: boolean;
   demonstrated: boolean;
