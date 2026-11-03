@@ -11,7 +11,9 @@ import {
   offerLeaked,
   unknownReply,
   render,
+  rememberShown,
   unsupportedNumbers,
+  withShown,
 } from "../server/src/brain.js";
 import { newSession } from "../server/src/types.js";
 
@@ -315,4 +317,29 @@ test("saying there is no offer is not opening one", () => {
   // But an offer's own name is not a denial, and a real quote is still a leak.
   assert.equal(offerLeaked("No-cost EMI runs 9 months at Rs 6110.", false, false), true);
   assert.equal(offerLeaked("The HDFC offer is 7.5%, capped at Rs 8000.", false, false), true);
+});
+
+test("what is on the associate's screen stays in FACTS when the next search finds other things", () => {
+  const session = newSession("910000000000");
+  const [a, b, c] = pack.products;
+  const tagged = { ...pack, offers: [{ title: "Free wall mount", on: [a!.name] }] };
+  rememberShown(session, tagged, [a!.sku, "not-in-pack", b!.sku]);
+  assert.deepEqual(
+    session.shown?.products.map((p) => p.sku),
+    [a!.sku, b!.sku],
+  );
+  assert.deepEqual(session.shown?.offers, [{ title: "Free wall mount", on: [a!.name] }]);
+
+  const elsewhere = { ...pack, products: [c!], offers: [] };
+  const merged = withShown(elsewhere, session);
+  assert.deepEqual(
+    merged.products.map((p) => p.sku),
+    [a!.sku, b!.sku, c!.sku],
+  );
+  assert.equal(merged.offers.length, 1);
+  assert.ok(allowedNumbers(merged).size >= allowedNumbers(elsewhere).size);
+
+  rememberShown(session, elsewhere, []);
+  assert.equal(session.shown?.products.length, 2, "a turn that shows nothing keeps the last ones");
+  assert.equal(withShown(pack, session).products.length, pack.products.length, "nothing is added twice");
 });

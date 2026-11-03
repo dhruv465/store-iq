@@ -60,7 +60,7 @@ How to be:
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
-- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. FACTS says whether something is available (in_stock), not how many: never state a number of units. A feature FACTS does not mention is not a feature the product lacks: say it is not listed, never "it does not have one". If it is not in FACTS, say this is not showing and tell them who has it — the shelf tag, the ASM, the service desk. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
+- Never invent a figure. Not a price, not an offer, not stock, not a finance term, not a specification, and not a warranty length, a delivery time, a today's target or a count of anything. FACTS says whether something is available (in_stock), not how many: never state a number of units. Installation, delivery, a wall mount or a service is not free, not included and not charged separately unless FACTS says so: when it does not, say the installation charge is not showing and the service desk has it. A feature FACTS does not mention is not a feature the product lacks: say it is not listed, never "it does not have one". If it is not in FACTS, say this is not showing and tell them who has it — the shelf tag, the ASM, the service desk. Set "unknown" true on any turn where you could not answer what they asked, and they will be offered a human who can.
 - Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not file anything about a customer from it, do not steer it back to a product, and "unknown" stays false.
 - Never OPEN offers, discounts, exchange or finance yourself before you know what the customer needs and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them from FACTS. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
@@ -717,12 +717,44 @@ async function searchFrom(said: string, session: Session, request: typeof fetch)
   }
 }
 
+/** What is on the associate's screen goes back into FACTS, first, whatever this turn searched. */
+export function withShown(pack: Pack, session: Session): Pack {
+  const missing = (session.shown?.products ?? []).filter(
+    (product) => !pack.products.some((other) => other.sku === product.sku),
+  );
+  if (!missing.length) return pack;
+  const known = new Set(pack.offers.map((offer) => JSON.stringify(offer)));
+  return {
+    ...pack,
+    products: [...missing, ...pack.products],
+    offers: [...pack.offers, ...(session.shown?.offers ?? []).filter((offer) => !known.has(JSON.stringify(offer)))],
+  };
+}
+
+/** Kept when this turn put products in front of them: the ones they can tap first, then the shortlist.
+ *  A turn that names none, such as "any offers on these", leaves the last ones in place. */
+export function rememberShown(session: Session, pack: Pack, skus: string[]): void {
+  const products = [...new Set(skus)]
+    .map((sku) => pack.products.find((product) => product.sku === sku))
+    .filter((product) => !!product)
+    .slice(0, 3);
+  if (!products.length) return;
+  const names = products.map((product) => product.name);
+  session.shown = {
+    products,
+    offers: pack.offers.filter(
+      (offer) => Array.isArray(offer.on) && offer.on.some((name: string) => names.includes(name)),
+    ),
+  };
+}
+
 /** Section 7: the card is interaction-scoped. A new customer gets an empty card, never the last one's. */
 export function startInteraction(session: Session): void {
   session.interaction_id = randomUUID();
   session.interaction_started = new Date().toISOString();
   session.card = {};
   delete session.search;
+  delete session.shown;
   session.card_confirmed = false;
   session.assessed = false;
   session.demonstrated = false;
@@ -934,7 +966,7 @@ async function answer(
       return { ...base, products: [], offers: [] };
     }
   };
-  let pack = session.search ? await fetchFor(session.search) : base;
+  let pack = withShown(session.search ? await fetchFor(session.search) : base, session);
   if (store && event.action === "site:problem" && session.selection) {
     const needs = siteNeeds(pack, session.selection).join("; ");
     const reference = newReference();
@@ -961,23 +993,36 @@ async function answer(
     const search = await searchFrom(event.text, session, request);
     if (search) {
       failed = false;
-      pack = await fetchFor(search);
+      // A different kind of thing is a different subject: the televisions on screen are not "these phones".
+      if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
+      const found = await fetchFor(search);
+      // A store that did not answer gets nothing substituted, not even what it said a turn ago.
+      pack = failed ? found : withShown(found, session);
       session.search = search;
       // Changing the product withdraws the consent, and the picked one is not on this search.
       if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {
         delete session.selection;
         session.consent = false;
       }
+      if (!failed && !found.products.length)
+        notes.push(
+          pack.products.length
+            ? `The live catalogue search for ${JSON.stringify(search.q)} found nothing new, so FACTS holds only what is already on their screen. If they asked about something else, say it is not coming up and set "unknown" true.`
+            : `The live catalogue search for ${JSON.stringify(search.q)} found no product. Say this one is not coming up in the catalogue, and to check the shelf tag or the ASM; do not name a different product, and set "unknown" true.`,
+        );
     }
     if (failed)
       notes.push(
         'The catalogue did not answer just now, so FACTS has nothing. Say you cannot check it this second and to try again in a moment or use the shelf tag; do not name any product, and set "unknown" true. This is a hiccup, not a missing system.',
       );
-    else if (search && !pack.products.length)
-      notes.push(
-        `The live catalogue search for ${JSON.stringify(search.q)} found no product. Say this one is not coming up in the catalogue, and to check the shelf tag or the ASM; do not name a different product, and set "unknown" true.`,
-      );
   }
+  const onScreen = (session.shown?.products ?? []).filter((product) =>
+    pack.products.some((other) => other.sku === product.sku),
+  );
+  if (onScreen.length)
+    notes.push(
+      `On the associate's screen from earlier: ${onScreen.map((product) => product.name).join("; ")}. "These", "them", "it" and "the first one" mean those, unless they name something else.`,
+    );
 
   const told = (card: Decision["card"]): string =>
     [
@@ -1047,6 +1092,10 @@ async function answer(
       !button.id.startsWith("select:") || pack.products.some((product) => `select:${product.sku}` === button.id),
   );
   reply = { text: reply.text, ...(buttons?.length ? { buttons } : {}) };
+  rememberShown(session, pack, [
+    ...(buttons ?? []).filter((button) => button.id.startsWith("select:")).map((button) => button.id.slice(7)),
+    ...session.shortlist,
+  ]);
   // A manager who does not know the answer finds out. The question goes to the named expert and
   // comes back as a notice, so the associate is not left with "I do not have that".
   if (decision.unknown && store) reply = unknownReply(reply, session.language);

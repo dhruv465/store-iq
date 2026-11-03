@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Lang } from "./i18n.js";
-import type { Search } from "./pack.js";
+import type { Product, Search } from "./pack.js";
 /** Section 4 of the developer brief, A to I, in order. "demonstrate" lives inside recommend, which is
  *  how the brief names that stage, and shows up as the demonstration cue on each option. */
 export const STEPS = [
@@ -81,6 +81,9 @@ export type Session = {
   /** The catalogue search this conversation is on, kept so a tap or a follow-up stays on the same
    *  products. The whole session state is one jsonb column, so this costs no migration. */
   search?: Search;
+  /** The rows on the associate's screen, with their offers. Each turn is a new search, so "offers on
+   *  these" used to be answered from a different set of products than the ones they were looking at. */
+  shown?: { products: Product[]; offers: Record<string, any>[] };
   /** Customer objections / claims validated during this interaction. */
   objections?: string[];
   /** Bounded conversation memory; the full log lives in the database. */
