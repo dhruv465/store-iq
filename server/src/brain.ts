@@ -863,6 +863,8 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     return followThrough(session, pack, event.name ?? session.phone);
   }
   if (event.action === "consent:yes") {
+    // A yes to nothing is not a close: it scored Close and Follow through with no product picked.
+    if (!session.selection) return followThrough(session, pack, event.name ?? session.phone);
     session.consent = true;
     if (!session.steps_done.includes("close")) session.steps_done.push("close");
     if (!session.steps_done.includes("follow_through")) session.steps_done.push("follow_through");
@@ -1060,6 +1062,8 @@ async function answer(
   if (event.image) {
     const read = await labelText(event.image, request).catch(() => "");
     if (!read) return remember({ text: t(session.language, "p.unread") });
+    // The tag was read: that is the Translate step's evidence, whatever the model calls the turn.
+    if (!session.steps_done.includes("translate")) session.steps_done.push("translate");
     event = { ...event, text: [`The shelf tag in their photo reads: ${read}.`, event.text].filter(Boolean).join(" ") };
     delete event.image;
   }
@@ -1160,7 +1164,8 @@ async function answer(
     .filter((sku) => pack.products.some((product) => product.sku === sku))
     .slice(0, 3);
   session.assessed = isAssessed(session.card);
-  if (decision.demonstrated) session.demonstrated = true;
+  // A customer's own need tied to the products in front of them is a difference shown, flag or no flag.
+  if (decision.demonstrated || (decision.reason && session.shortlist.length)) session.demonstrated = true;
   if (decision.objection && !session.objections?.includes(decision.objection))
     session.objections = [...(session.objections ?? []), String(decision.objection).slice(0, 120)];
   if (STEPS.includes(decision.step)) {

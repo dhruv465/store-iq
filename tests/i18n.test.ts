@@ -40,7 +40,7 @@ test("the card read-back speaks the associate's language", () => {
 test("the review score speaks the associate's language", () => {
   const session = filled("mr");
   session.steps_done = ["brief", "validate"];
-  assert.match(reviewReply(session).text, /ही बातचीत: 14 पैकी 3/);
+  assert.match(reviewReply(session).text, /ही बातचीत: 14 पैकी 4/);
   assert.match(reviewReply(session).text, /गाइड 11 पासून सुरू होतो/);
 });
 

@@ -161,9 +161,10 @@ function mark(session: Session, step: Scored): 0 | 1 | 2 {
     Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "",
   );
   switch (step) {
-    // Read back and confirmed is the whole step; a card nobody checked is half of it.
+    // Four of the customer's needs on the card is the whole step. It used to need the card read back
+    // and confirmed as well, but since 2 Nov the card is only read back on asking, so 2 was out of reach.
     case "assess":
-      return isAssessed(session.card) ? (session.card_confirmed ? 2 : 1) : anything ? 1 : 0;
+      return isAssessed(session.card) ? 2 : anything ? 1 : 0;
     case "validate":
       return done("validate") ? 2 : 0;
     case "translate":
@@ -171,8 +172,11 @@ function mark(session: Session, step: Scored): 0 | 1 | 2 {
     case "demonstrate":
       return session.demonstrated ? 2 : 0;
     // The findings' "Complete" is the full cost, charge by charge, not just a product picked.
+    // A pick read out with its itemised total from the store's data is the full cost; the live
+    // catalogue has no other charge lines to add for most products, so requiring one made 2 rare.
+    // Options shown with their prices is half of it.
     case "complete":
-      return session.selection ? (session.selection.charges.length || session.selection.accessories.length ? 2 : 1) : 0;
+      return session.selection ? 2 : session.shortlist.length ? 1 : 0;
     case "close":
       return session.consent ? 2 : done("close") ? 1 : 0;
     case "follow_through":

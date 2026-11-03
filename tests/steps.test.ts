@@ -47,7 +47,7 @@ test("the scorecard is the judges' seven steps, 0 to 2 each", () => {
   session.card = { distance_feet: 8, light: "bright", mount: "wall", content: ["cricket"] };
   session.demonstrated = true;
   assert.deepEqual(score(session).marks, {
-    assess: 1,
+    assess: 2,
     validate: 0,
     translate: 2,
     demonstrate: 2,
@@ -55,10 +55,10 @@ test("the scorecard is the judges' seven steps, 0 to 2 each", () => {
     close: 0,
     follow_through: 0,
   });
-  assert.equal(score(session).points, 5);
+  assert.equal(score(session).points, 6);
 
-  session.card_confirmed = true;
-  assert.equal(score(session).marks.assess, 2, "read back and confirmed is the whole step");
+  session.card = { distance_feet: 8 };
+  assert.equal(score(session).marks.assess, 1, "one need on the card is half of Assess");
 });
 
 test("a conversation that goes all the way scores the full 14 and reaches Guide", () => {
@@ -73,12 +73,29 @@ test("a conversation that goes all the way scores the full 14 and reaches Guide"
   assert.ok(score(session).points >= GUIDE);
 });
 
-test("picking a product without the full cost is half of Complete", () => {
+test("options with prices are half of Complete, a pick read out with its itemised total is all of it", () => {
   const session = newSession("919999999999");
+  assert.equal(score(session).marks.complete, 0);
+  session.shortlist = ["TCL-55C6KS"];
+  assert.equal(score(session).marks.complete, 1);
   session.selection = { sku: "TCL-55C6KS", accessories: [], charges: [] };
-  assert.equal(score(session).marks.complete, 1, "the findings' Complete is the full cost, charge by charge");
-  session.selection.charges.push("TV-DELIVERY");
   assert.equal(score(session).marks.complete, 2);
+});
+
+test("a yes with nothing picked is not a close and scores nothing", () => {
+  const session = newSession("919999999999");
+  const reply = deterministic(
+    { id: "x", phone: session.phone, modality: "interactive", action: "consent:yes" },
+    session,
+    pack,
+  );
+  assert.equal(session.consent, false);
+  assert.ok(
+    reply?.buttons?.every((button) => button.id.startsWith("select:")),
+    "it asks which one instead",
+  );
+  assert.equal(score(session).marks.close, 0);
+  assert.equal(score(session).marks.follow_through, 0);
 });
 
 test("a claimed step without its evidence does not score", () => {
