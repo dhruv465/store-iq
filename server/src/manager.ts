@@ -79,6 +79,8 @@ const COOKIE = "storeiq_manager";
 const SESSION = 12 * 60 * 60 * 1000;
 const LOCKOUT = 15 * 60 * 1000;
 const MAX_FAILURES = 5;
+/** Across every address, so trying from many addresses still meets a ceiling. */
+const MAX_FAILURES_ALL = 30;
 
 /** Compared as fixed-length digests, so neither the answer nor its length leaks through timing. */
 function same(given: string, want: string): boolean {
@@ -122,9 +124,12 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     const now = Date.now();
     for (const [id, expires] of sessions) if (expires <= now) sessions.delete(id);
     for (const [ip, tries] of failures) if (now - tries.since >= LOCKOUT) failures.delete(ip);
-    const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "direct";
+    // The last address is the one the proxy in front of us added; the ones before it are whatever the
+    // client chose to send, so counting by the first would let every try pick a fresh address.
+    const ip = c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim() || "direct";
     const tries = failures.get(ip);
-    if (tries && tries.count >= MAX_FAILURES)
+    const all = failures.get("*");
+    if ((tries && tries.count >= MAX_FAILURES) || (all && all.count >= MAX_FAILURES_ALL))
       return c.json({ error: "Too many tries. Wait 15 minutes and try again." }, 429);
 
     const body = await c.req
@@ -135,6 +140,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     const passwordOk = same(String(body.password ?? ""), password);
     if (!userOk || !passwordOk) {
       failures.set(ip, { count: (tries?.count ?? 0) + 1, since: tries?.since ?? now });
+      failures.set("*", { count: (all?.count ?? 0) + 1, since: all?.since ?? now });
       return c.json({ error: "That username and password do not match." }, 401);
     }
     failures.delete(ip);

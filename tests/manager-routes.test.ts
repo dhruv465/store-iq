@@ -140,6 +140,42 @@ test("five wrong tries from one address lock it out for a while, and others are 
   await signIn(app, { "x-forwarded-for": "198.51.100.4" });
 });
 
+test("an address the client writes into x-forwarded-for does not dodge the lockout", async () => {
+  const { app } = await harness();
+  for (let attempt = 1; attempt <= 5; attempt++)
+    await app.request(
+      ...post(
+        "/api/manager/login",
+        { username: "manager", password: "no" },
+        { "x-forwarded-for": `192.0.2.${attempt}, 10.0.0.7` },
+      ),
+    );
+  const locked = await app.request(
+    ...post(
+      "/api/manager/login",
+      { username: "manager", password: PASSWORD },
+      { "x-forwarded-for": "192.0.2.99, 10.0.0.7" },
+    ),
+  );
+  assert.equal(locked.status, 429, "the proxy's own address is what counts");
+});
+
+test("thirty wrong tries across many addresses close sign-in for everyone for a while", async () => {
+  const { app } = await harness();
+  for (let attempt = 1; attempt <= 30; attempt++)
+    await app.request(
+      ...post(
+        "/api/manager/login",
+        { username: "manager", password: "no" },
+        { "x-forwarded-for": `10.1.0.${attempt}` },
+      ),
+    );
+  const locked = await app.request(
+    ...post("/api/manager/login", { username: "manager", password: PASSWORD }, { "x-forwarded-for": "10.2.0.1" }),
+  );
+  assert.equal(locked.status, 429);
+});
+
 test("signing in needs the username and the password, and hands back a cookie script cannot read", async () => {
   const { app } = await harness();
   for (const wrong of [
