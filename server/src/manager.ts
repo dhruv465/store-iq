@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { basicAuth } from "hono/basic-auth";
-import { getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Hono } from "hono";
@@ -125,6 +125,11 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     return c.json({ ok: true });
   });
 
+  app.post("/api/manager/logout", (c) => {
+    deleteCookie(c, COOKIE, { path: "/" });
+    return c.json({ ok: true });
+  });
+
   app.use("/api/manager/*", csrf());
 
   app.use("/api/manager/*", async (c, next) => {
@@ -133,7 +138,6 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     await next();
   });
   app.use("/api/manager/*", guard);
- 
 
   app.get("/api/manager/floor", async (c) => {
     const packData = pack ?? (await loadPack().catch(() => undefined));
@@ -153,9 +157,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
       maxScore: MAX_SCORE,
       guide: GUIDE,
       from,
-      // What the model has cost since this process started, and which one is answering. A store
-      // runs on margins: "the floor cost 4 cents today" is the sentence that makes an AI copilot
-      // an easy yes. It resets on restart, and fal's dashboard is the ledger.
+
       spend: Number(falSpend().toFixed(6)),
       model: catalogModel(),
       objections: objectionInsights(sessions, packData),
@@ -231,9 +233,16 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     // no approval, and the associate who has been quiet all morning still gets told.
     const held = unreachable.map((person) => person.phone);
     if (held.length) await db.queueNotice(line, held);
+    await db.logBroadcast({ kind: "notice", body: text, queued: to.length, waiting: held.length });
     // Each message is checked against the window again as it leaves, so one that closed a moment
     // ago means that associate is skipped rather than failed.
     return c.json({ queued: to.length, waiting: held.length });
+  });
+
+  app.get("/api/manager/broadcasts/:kind", async (c) => {
+    const kind = c.req.param("kind");
+    if (kind !== "notice" && kind !== "video") return c.json({ error: "No such history." }, 404);
+    return c.json({ sent: await db.broadcasts(kind) });
   });
 
   // The video brief: made on the manager's click, watched in the portal, and sent only on a second,
@@ -280,6 +289,13 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     // Held like a text notice, and released when they next write, which is what opens their window.
     const held = unreachable.map((person) => person.phone);
     if (held.length) await db.queueNotice(caption, held, job.video);
+    await db.logBroadcast({
+      kind: "video",
+      body: job.script,
+      video: job.video,
+      queued: to.length,
+      waiting: held.length,
+    });
     return c.json({ queued: to.length, waiting: held.length });
   });
 

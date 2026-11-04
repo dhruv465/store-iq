@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { applyTheme, savedTheme, type Theme } from "./theme.ts";
 import {
   AlertTriangle,
@@ -8,11 +8,12 @@ import {
   Clock,
   HelpCircle,
   LayoutDashboard,
+  LogOut,
   Loader2,
   MessageSquare,
+  Package,
   Monitor,
   Moon,
-  Package,
   Radio,
   RefreshCw,
   Send,
@@ -32,6 +33,7 @@ import {
   type OpenQuestion,
   type Preview,
   type ProductInsight,
+  type SentBroadcast,
   type VideoBriefView,
 } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -627,20 +629,32 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
   );
 }
 
-function AddAssociate({ onAdded }: { onAdded: () => void }) {
+/** Adding an associate, opened from the header wherever the manager is. */
+function AddAssociateDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (open && !element.open) element.showModal();
+    if (!open && element.open) element.close();
+  }, [open]);
+  const close = () => {
+    setName("");
+    setPhone("");
+    setError(null);
+    onClose();
+  };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     try {
       await api.addAssociate(name, phone);
-      setName("");
-      setPhone("");
-      setError(null);
       onAdded();
+      close();
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "That did not work.");
     } finally {
@@ -648,39 +662,50 @@ function AddAssociate({ onAdded }: { onAdded: () => void }) {
     }
   };
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add an associate to roster</CardTitle>
-        <CardDescription>
-          Adding somebody here does not let the number message them on its own: WhatsApp only carries a message to a
-          person who wrote to it in the last 24 hours, whoever is on the roster.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-wrap items-center gap-3" onSubmit={submit}>
+    <dialog
+      ref={dialog}
+      aria-labelledby="add-associate-title"
+      onClose={close}
+      // A click on the dimmed backdrop lands on the dialog itself, outside its padded content.
+      onClick={(event) => event.target === dialog.current && close()}
+      className="bg-card text-card-foreground m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg border p-0 backdrop:bg-black/50"
+    >
+      <form className="flex flex-col gap-4 p-5" onSubmit={submit}>
+        <div className="flex flex-col gap-1.5">
+          <h2 id="add-associate-title" className="font-semibold">
+            Add an associate
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            They join the roster now. WhatsApp only carries a message to someone who wrote to the number in the last 24
+            hours, so they get notices once they first write.
+          </p>
+        </div>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Name
+          <Input maxLength={60} required autoFocus value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          WhatsApp number
           <Input
-            className="w-44"
-            placeholder="Name"
-            maxLength={60}
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <Input
-            className="w-64"
-            placeholder="WhatsApp number, e.g. 919820000001"
+            placeholder="e.g. 919820000001"
+            inputMode="tel"
             maxLength={20}
             required
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
           />
-          <Button type="submit" disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" /> : <UserPlus />} Add
+        </label>
+        {error ? <p className="text-destructive text-sm">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={close} disabled={busy}>
+            Cancel
           </Button>
-        </form>
-        {error ? <p className="text-destructive mt-3 text-sm">{error}</p> : null}
-      </CardContent>
-    </Card>
+          <Button type="submit" disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" /> : <UserPlus />} Add associate
+          </Button>
+        </div>
+      </form>
+    </dialog>
   );
 }
 
@@ -744,7 +769,71 @@ function SentCard({ sent, onAgain }: { sent: { queued: number; waiting: number }
   );
 }
 
-function TellTheFloor({ floor }: { floor: Floor }) {
+/** Everything sent from one page, newest first, so the manager can see what the floor was told. */
+function History({ kind, version }: { kind: SentBroadcast["kind"]; version: number }) {
+  const [sent, setSent] = useState<SentBroadcast[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .history(kind)
+      .then((body) => setSent(body.sent))
+      .catch((problem) => setError(problem instanceof Error ? problem.message : "Could not read the history."));
+  }, [kind, version]);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sent before</CardTitle>
+        <CardDescription>
+          {kind === "notice" ? "Every notice you sent to the floor." : "Every morning brief you approved and sent."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <p className="text-destructive text-sm">{error}</p>
+        ) : !sent ? (
+          <p className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin" /> Reading…
+          </p>
+        ) : !sent.length ? (
+          <p className="text-muted-foreground text-sm">Nothing sent yet. What you send appears here.</p>
+        ) : (
+          <ol className="flex flex-col divide-y">
+            {sent.map((row) => (
+              <li key={row.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
+                <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <time dateTime={row.sent_at}>
+                    {new Date(row.sent_at).toLocaleString([], {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                  <span>
+                    Sent to {row.queued}
+                    {row.waiting ? `, held for ${row.waiting}` : ""}
+                  </span>
+                </div>
+                {row.video ? (
+                  <video
+                    src={row.video}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="max-h-64 w-36 rounded-md bg-black"
+                  />
+                ) : null}
+                <p className="text-sm whitespace-pre-wrap">{row.body}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TellTheFloor({ floor, onSent }: { floor: Floor; onSent: () => void }) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [sent, setSent] = useState<{ queued: number; waiting: number } | null>(null);
@@ -778,7 +867,7 @@ function TellTheFloor({ floor }: { floor: Floor }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tell the floor</CardTitle>
+        <CardTitle>Write a notice</CardTitle>
         <CardDescription>
           Today's offers, a stock change, anything everyone needs. It goes straight to the {floor.reachable}{" "}
           {floor.reachable === 1 ? "associate" : "associates"} who messaged the number in the last 24 hours; anyone else
@@ -806,6 +895,7 @@ function TellTheFloor({ floor }: { floor: Floor }) {
                 onClick={() =>
                   run(async () => {
                     setSent(await api.broadcast(text));
+                    onSent();
                   })
                 }
               >
@@ -841,7 +931,7 @@ const MAKING: Record<string, string> = {
 
 /** Today's brief as a short video: the manager writes it roughly, the server scripts, voices and
  *  renders it, and it is watched here before a separate, explicit tap sends it to the floor. */
-function VideoBriefCard() {
+function VideoBriefCard({ onSent }: { onSent: () => void }) {
   const [brief, setBrief] = useState("");
   const [view, setView] = useState<VideoBriefView | null>(null);
   const [sent, setSent] = useState<{ queued: number; waiting: number } | null>(null);
@@ -897,7 +987,7 @@ function VideoBriefCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Video brief</CardTitle>
+        <CardTitle>Make the morning brief</CardTitle>
         <CardDescription>
           Write today's brief roughly. The agent writes a 20 second script from it, using only the figures you wrote,
           and the store's presenter reads it on video. You watch it here first; nothing goes out until you approve it.
@@ -957,7 +1047,12 @@ function VideoBriefCard() {
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={busy || !((view?.to?.length ?? 0) + (view?.unreachable?.length ?? 0))}
-                onClick={() => run(async () => setSent(await api.sendVideoBrief(job.video!)))}
+                onClick={() =>
+                  run(async () => {
+                    setSent(await api.sendVideoBrief(job.video!));
+                    onSent();
+                  })
+                }
               >
                 {busy ? <Loader2 className="animate-spin" /> : <Send />} Approve and send to{" "}
                 {(view?.to?.length ?? 0) + (view?.unreachable?.length ?? 0)}
@@ -1021,9 +1116,9 @@ function SignIn({ onDone }: { onDone: () => void }) {
   );
 }
 
-type Section = "overview" | "floor" | "feed" | "objections" | "products" | "broadcast";
+type Section = "overview" | "floor" | "feed" | "objections" | "notify" | "brief";
 
-const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string }[] = [
+const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string; group?: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, about: "" },
   { id: "floor", label: "Associates", icon: Users, about: "Scores, customers taken and who is quiet today." },
   { id: "feed", label: "Live floor", icon: Radio, about: "Conversations as the associates have them." },
@@ -1033,12 +1128,19 @@ const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string 
     icon: MessageSquare,
     about: "What customers push back on, and how to coach it.",
   },
-  { id: "products", label: "Products", icon: Package, about: "What customers ask for, and how far each one got." },
   {
-    id: "broadcast",
-    label: "Broadcast",
+    id: "notify",
+    label: "Notify associates",
     icon: Send,
-    about: "Tell the floor what is on, as a notice or a video brief.",
+    about: "A text notice to every associate on the floor.",
+    group: "Broadcast",
+  },
+  {
+    id: "brief",
+    label: "Morning brief",
+    icon: Video,
+    about: "A short presenter video, watched here before it goes out.",
+    group: "Broadcast",
   },
 ];
 
@@ -1047,7 +1149,6 @@ function count(floor: Floor | null, section: Section): number | undefined {
   if (section === "floor") return floor.rows.length;
   if (section === "feed") return floor.feed?.length;
   if (section === "objections") return floor.objections?.length;
-  if (section === "products") return floor.products?.length;
   return undefined;
 }
 
@@ -1135,6 +1236,10 @@ function NavItem({
 export default function App() {
   const { floor, error, needsSignIn, updatedAt, reload } = useFloor();
   const [active, setActive] = useState<Section>("overview");
+  const [adding, setAdding] = useState(false);
+  const [sentVersion, setSentVersion] = useState(0);
+  const onSent = () => setSentVersion((version) => version + 1);
+  const signOut = () => void api.signOut().finally(() => window.location.reload());
 
   if (needsSignIn) return <SignIn onDone={reload} />;
 
@@ -1149,14 +1254,18 @@ export default function App() {
             <Brand />
           </div>
           <nav aria-label="Sections" className="flex flex-col gap-0.5 p-3">
-            {SECTIONS.map((item) => (
-              <NavItem
-                key={item.id}
-                section={item}
-                active={item.id === active}
-                badge={count(floor, item.id)}
-                onSelect={() => setActive(item.id)}
-              />
+            {SECTIONS.map((item, index) => (
+              <div key={item.id} className="contents">
+                {item.group && item.group !== SECTIONS[index - 1]?.group ? (
+                  <p className="text-muted-foreground px-3 pt-4 pb-1 text-xs font-medium">{item.group}</p>
+                ) : null}
+                <NavItem
+                  section={item}
+                  active={item.id === active}
+                  badge={count(floor, item.id)}
+                  onSelect={() => setActive(item.id)}
+                />
+              </div>
             ))}
           </nav>
           <div className="mt-auto flex flex-col gap-3 border-t p-5 text-xs">
@@ -1170,10 +1279,14 @@ export default function App() {
                 {escalations === 1 ? "question waits" : "questions wait"} for an expert
               </button>
             ) : null}
-            <div className="text-muted-foreground">
-              <span className="text-foreground block font-medium break-all">{floor?.model ?? "Model"}</span>
-              answering the floor
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground justify-start gap-2 px-2"
+              onClick={signOut}
+            >
+              <LogOut className="size-4" /> Log out
+            </Button>
           </div>
         </div>
       </aside>
@@ -1184,8 +1297,14 @@ export default function App() {
             <Brand />
             <div className="flex items-center gap-2">
               <ThemeSwitch />
+              <Button variant="outline" size="sm" onClick={() => setAdding(true)} aria-label="Add associate">
+                <UserPlus className="size-3.5" />
+              </Button>
               <Button variant="outline" size="sm" onClick={() => void reload()} aria-label="Refresh">
                 <RefreshCw className="size-3.5" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={signOut} aria-label="Log out">
+                <LogOut className="size-3.5" />
               </Button>
             </div>
           </div>
@@ -1214,6 +1333,9 @@ export default function App() {
                 </span>
               ) : null}
               <ThemeSwitch />
+              <Button variant="outline" size="sm" onClick={() => setAdding(true)} className="gap-1.5">
+                <UserPlus className="size-3.5" /> Add associate
+              </Button>
               <Button variant="outline" size="sm" onClick={() => void reload()} className="gap-1.5">
                 <RefreshCw className="size-3.5" /> Refresh
               </Button>
@@ -1244,30 +1366,27 @@ export default function App() {
                 <LiveFloorFeed feed={floor.feed} />
               </div>
               <ObjectionHeatmap objections={floor.objections} />
-              <details className="text-muted-foreground text-xs">
-                <summary className="cursor-pointer">Shift summary as text</summary>
-                <pre className="mt-2 border-l-2 pl-3 whitespace-pre-wrap">{floor.summary}</pre>
-              </details>
             </>
           ) : active === "floor" ? (
-            <>
-              <AssociateTable floor={floor} onChange={reload} />
-              <AddAssociate onAdded={reload} />
-            </>
+            <AssociateTable floor={floor} onChange={reload} />
           ) : active === "feed" ? (
             <LiveFloorFeed feed={floor.feed} />
           ) : active === "objections" ? (
             <ObjectionHeatmap objections={floor.objections} />
-          ) : active === "products" ? (
-            <ProductDemandTable products={floor.products} />
+          ) : active === "notify" ? (
+            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <TellTheFloor floor={floor} onSent={onSent} />
+              <History kind="notice" version={sentVersion} />
+            </div>
           ) : (
-            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-2">
-              <TellTheFloor floor={floor} />
-              <VideoBriefCard />
+            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <VideoBriefCard onSent={onSent} />
+              <History kind="video" version={sentVersion} />
             </div>
           )}
         </main>
       </div>
+      <AddAssociateDialog open={adding} onClose={() => setAdding(false)} onAdded={reload} />
     </div>
   );
 }

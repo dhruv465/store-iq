@@ -110,6 +110,7 @@ test("the video goes only on approval, now to who can be reached and held for wh
   Object.assign(process.env, { ADMIN_PASSWORD: "pw", FAL_KEY: "k", PRESENTER_IMAGE_URL: "https://x/p.png" });
   const sent: { phone: string; reply: Reply }[] = [];
   const held: { body: string; phones: string[]; video?: string | undefined }[] = [];
+  const logged: unknown[] = [];
   const db = {
     roster: async () => [
       { phone: "919820000001", name: "Ramesh" },
@@ -119,6 +120,7 @@ test("the video goes only on approval, now to who can be reached and held for wh
     today: async () => [],
     send: async (phone: string, reply: Reply) => void sent.push({ phone, reply }),
     queueNotice: async (body: string, phones: string[], video?: string) => held.push({ body, phones, video }),
+    logBroadcast: async (row: unknown) => void logged.push(row),
   } as unknown as DB;
   const app = new Hono();
   managerRoutes(app, db, undefined, fal);
@@ -173,6 +175,11 @@ test("the video goes only on approval, now to who can be reached and held for wh
     );
     assert.match(sent[0]!.reply.text, /Today's video brief[\s\S]*Rs 54,990/);
     assert.deepEqual(held, [{ body: sent[0]!.reply.text, phones: ["919820000002"], video: VIDEO }]);
+    assert.deepEqual(
+      logged,
+      [{ kind: "video", body: SCRIPT, video: VIDEO, queued: 1, waiting: 1 }],
+      "kept in its history",
+    );
     assert.equal((await call("/send", { video: VIDEO })).status, 409, "and only once");
   } finally {
     process.env = saved;

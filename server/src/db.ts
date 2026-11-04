@@ -71,6 +71,15 @@ create table if not exists notice_deliveries (
 );
 alter table notices add column if not exists video text;
 create index if not exists notice_waiting on notice_deliveries (phone) where delivered_at is null;
+create table if not exists broadcasts (
+  id serial primary key,
+  kind text not null,
+  body text not null,
+  video text,
+  queued integer not null,
+  waiting integer not null,
+  sent_at timestamptz not null default now()
+);
 create table if not exists associates (
   phone text primary key,
   name text not null,
@@ -112,6 +121,16 @@ export function pricedEarly(session: Session, reply: Reply): boolean {
 type Queryable = {
   query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[]; affectedRows?: number }>;
   exec(sql: string): Promise<unknown>;
+};
+
+export type SentBroadcast = {
+  id: number;
+  kind: "notice" | "video";
+  body: string;
+  video?: string | null;
+  queued: number;
+  waiting: number;
+  sent_at: string;
 };
 
 export class DB {
@@ -449,6 +468,25 @@ export class DB {
       id,
       phone,
     ]);
+  }
+
+  /** What the manager sent to the floor, kept so each page can show its own history. */
+  async logBroadcast(row: Omit<SentBroadcast, "id" | "sent_at">): Promise<void> {
+    await this.pg.query(`insert into broadcasts (kind, body, video, queued, waiting) values ($1, $2, $3, $4, $5)`, [
+      row.kind,
+      row.body,
+      row.video ?? null,
+      row.queued,
+      row.waiting,
+    ]);
+  }
+
+  async broadcasts(kind: SentBroadcast["kind"], limit = 30): Promise<SentBroadcast[]> {
+    const rows = await this.pg.query<SentBroadcast>(
+      `select id, kind, body, video, queued, waiting, sent_at from broadcasts where kind = $1 order by sent_at desc limit $2`,
+      [kind, limit],
+    );
+    return rows.rows;
   }
 
   /** How many notices are still waiting on somebody, so the manager is not left wondering. */

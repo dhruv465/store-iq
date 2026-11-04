@@ -101,6 +101,17 @@ export type VideoBrief = {
   cost: number;
 };
 
+/** A notice or a morning brief the manager sent, newest first. */
+export type SentBroadcast = {
+  id: number;
+  kind: "notice" | "video";
+  body: string;
+  video?: string | null;
+  queued: number;
+  waiting: number;
+  sent_at: string;
+};
+
 /** The current video brief, and once it is ready, who it would reach. */
 export type VideoBriefView = { job: VideoBrief | null; caption: string | null } & Partial<Omit<Preview, "message">>;
 
@@ -123,6 +134,8 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   signIn: (password: string) => call<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ password }) }),
+  signOut: () => call<{ ok: true }>("/logout", { method: "POST" }),
+  history: (kind: SentBroadcast["kind"]) => call<{ sent: SentBroadcast[] }>(`/broadcasts/${kind}`),
   floor: () => call<Floor>("/floor"),
   addAssociate: (name: string, phone: string) =>
     call<{ ok: true }>("/roster", { method: "POST", body: JSON.stringify({ name, phone }) }),

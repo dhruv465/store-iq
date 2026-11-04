@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
-import type { DB } from "../server/src/db.js";
+import type { DB, SentBroadcast } from "../server/src/db.js";
 import { managerRoutes, sessionToken } from "../server/src/manager.js";
 import { newSession, type Reply, type Session } from "../server/src/types.js";
 
@@ -18,6 +18,7 @@ function harness(options: { reachable?: string[] } = {}): {
   const sent: { phone: string; reply: Reply }[] = [];
   const removed: string[] = [];
   const held: { body: string; phones: string[] }[] = [];
+  const history: SentBroadcast[] = [];
   const session: Session = Object.assign(newSession("919820000001"), { associate: "Ramesh" });
   const db = {
     today: async (): Promise<Session[]> => [session],
@@ -46,6 +47,8 @@ function harness(options: { reachable?: string[] } = {}): {
       return 1;
     },
     resolveQuestion: async (ref: string): Promise<boolean> => ref === "SIQ-1234",
+    logBroadcast: async (row: SentBroadcast): Promise<void> => void history.push(row),
+    broadcasts: async (kind: string) => history.filter((row) => row.kind === kind),
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
@@ -172,6 +175,23 @@ test("the manager's own click reaches every associate inside the window", async 
     "the stranger who messaged the number is not on the floor and is not sent to",
   );
   assert.match(sent[0]!.reply.text, /^📢 .*:\n\nTCL 55 inch is Rs 54,990 today only$/s);
+});
+
+test("a sent notice is kept in the notice history, and not in the morning brief's", async () => {
+  const { app } = harness({ reachable: ["919820000001"] });
+  await app.request(...post("/api/manager/broadcast", { text: "Two LG 65 inch left" }));
+  const notices = (await (
+    await app.request("/api/manager/broadcasts/notice", { headers: { authorization: AUTH } })
+  ).json()) as any;
+  assert.deepEqual(
+    notices.sent.map((row: SentBroadcast) => [row.body, row.queued, row.waiting]),
+    [["Two LG 65 inch left", 1, 1]],
+  );
+  const videos = (await (
+    await app.request("/api/manager/broadcasts/video", { headers: { authorization: AUTH } })
+  ).json()) as any;
+  assert.deepEqual(videos.sent, []);
+  assert.equal((await app.request("/api/manager/broadcasts/other", { headers: { authorization: AUTH } })).status, 404);
 });
 
 test("an empty notice is not sent to anyone", async () => {
