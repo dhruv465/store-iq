@@ -170,9 +170,10 @@ though it is full of rooms and prices and brands.
 ## The manager portal
 
 `web/` is a React app (Vite, Tailwind, shadcn/ui components) served by the same server at
-`/manager`. The manager signs in with `ADMIN_PASSWORD` and sees one row per associate — customers
-taken, home cards actually made, median and best out of 14, conversations at Guide, how often the
-home came before the price, and when they were last seen — plus a box to tell the floor what is on.
+`/manager`. The manager signs in with `ADMIN_USER` (default `manager`) and `ADMIN_PASSWORD` and
+sees one row per associate — customers taken, home cards actually made, median and best out of 14,
+conversations at Guide, how often the home came before the price, and when they were last seen —
+plus a box to tell the floor what is on.
 
 ```bash
 npm run build:web     # build it; the server serves web/dist at /manager
@@ -181,7 +182,9 @@ npm run dev:web       # or run it on :5173 with the API proxied, for working on 
 
 The portal is off unless `ADMIN_PASSWORD` is set, because it rides the same tunnel as the webhook
 and it can message the whole floor. Its own files are public and hold no data; everything they ask
-for needs the session cookie, which is `HttpOnly` and `SameSite=Strict`. Writes also need the
+for needs the session cookie, which is `HttpOnly` and `SameSite=Strict`, lasts 12 hours and ends on
+the server at log out (sessions are kept in memory, so a restart signs the manager out). There is
+no Basic auth. Five wrong tries from one address lock it out for 15 minutes. Writes also need the
 portal's own request header, which a page on another site cannot set.
 
 ## Hosting

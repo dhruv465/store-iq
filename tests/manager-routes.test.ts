@@ -2,19 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
 import type { DB, SentBroadcast } from "../server/src/db.js";
-import { managerRoutes, sessionToken } from "../server/src/manager.js";
+import { managerRoutes } from "../server/src/manager.js";
 import { newSession, type Reply, type Session } from "../server/src/types.js";
 
 const PASSWORD = "test-password";
-const AUTH = `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}`;
+// The session cookie of the last harness to sign in; the tests in a file run one after another.
+let AUTH = "";
 const ORIGIN = "http://localhost";
 
-function harness(options: { reachable?: string[] } = {}): {
+async function harness(options: { reachable?: string[] } = {}): Promise<{
   app: Hono;
   sent: { phone: string; reply: Reply }[];
   removed: string[];
   held: { body: string; phones: string[] }[];
-} {
+}> {
   const sent: { phone: string; reply: Reply }[] = [];
   const removed: string[] = [];
   const held: { body: string; phones: string[] }[] = [];
@@ -53,7 +54,16 @@ function harness(options: { reachable?: string[] } = {}): {
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
   managerRoutes(app, db);
+  AUTH = await signIn(app);
   return { app, sent, removed, held };
+}
+
+async function signIn(app: Hono, headers: Record<string, string> = {}): Promise<string> {
+  const response = await app.request(
+    ...post("/api/manager/login", { username: "manager", password: PASSWORD }, headers),
+  );
+  assert.equal(response.status, 200);
+  return (response.headers.get("set-cookie") ?? "").split(";")[0]!;
 }
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}): [string, RequestInit] {
@@ -62,7 +72,7 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
     {
       method: "POST",
       headers: {
-        authorization: AUTH,
+        cookie: AUTH,
         origin: ORIGIN,
         "content-type": "application/json",
         "x-store-iq": "portal",
@@ -74,41 +84,86 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
 }
 
 test("the floor cannot be read without signing in", async () => {
-  const { app } = harness();
+  const { app } = await harness();
   for (const path of ["/api/manager/floor", "/api/manager/roster"]) {
     const response = await app.request(path);
     assert.equal(response.status, 401, path);
   }
 });
 
-test("a signed cookie is accepted, and a forged or expired one is not", async () => {
-  const { app } = harness();
-  const good = sessionToken(PASSWORD, Date.now() + 60_000);
-  const signedIn = await app.request("/api/manager/floor", { headers: { cookie: `storeiq_manager=${good}` } });
+test("a session cookie is accepted, and a made-up one or Basic auth is not", async () => {
+  const { app } = await harness();
+  const signedIn = await app.request("/api/manager/floor", { headers: { cookie: AUTH } });
   assert.equal(signedIn.status, 200);
+  assert.equal(signedIn.headers.get("cache-control"), "no-store");
+  assert.equal(signedIn.headers.get("x-frame-options"), "DENY");
 
-  for (const bad of [
-    sessionToken("the wrong password", Date.now() + 60_000),
-    sessionToken(PASSWORD, Date.now() - 1),
-    `${Date.now() + 60_000}.not-a-signature`,
-    "rubbish",
-  ]) {
-    const response = await app.request("/api/manager/floor", { headers: { cookie: `storeiq_manager=${bad}` } });
+  for (const bad of ["storeiq_manager=rubbish", `storeiq_manager=${AUTH.split("=")[1]}x`]) {
+    const response = await app.request("/api/manager/floor", { headers: { cookie: bad } });
     assert.equal(response.status, 401, bad);
   }
+  const basic = await app.request("/api/manager/floor", {
+    headers: { authorization: `Basic ${Buffer.from(`manager:${PASSWORD}`).toString("base64")}` },
+  });
+  assert.equal(basic.status, 401);
+  assert.equal(basic.headers.get("www-authenticate"), null, "so the browser never caches a password prompt");
 });
 
-test("signing in needs the password, and hands back a cookie that is not readable by script", async () => {
-  const { app } = harness();
-  const refused = await app.request(...post("/api/manager/login", { password: "nearly-the-password" }));
-  assert.equal(refused.status, 401);
+test("logging out ends the session on the server, so the old cookie is refused", async () => {
+  const { app } = await harness();
+  const out = await app.request(...post("/api/manager/logout", {}));
+  assert.equal(out.status, 200);
+  assert.match(out.headers.get("set-cookie") ?? "", /Max-Age=0/i);
+  const after = await app.request("/api/manager/floor", { headers: { cookie: AUTH } });
+  assert.equal(after.status, 401);
+});
 
-  const response = await app.request(...post("/api/manager/login", { password: PASSWORD }));
+test("a session ends by itself after 12 hours", async (t) => {
+  const { app } = await harness();
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  t.mock.timers.tick(12 * 60 * 60 * 1000 - 1000);
+  assert.equal((await app.request("/api/manager/floor", { headers: { cookie: AUTH } })).status, 200);
+  t.mock.timers.tick(1000);
+  assert.equal((await app.request("/api/manager/floor", { headers: { cookie: AUTH } })).status, 401);
+});
+
+test("five wrong tries from one address lock it out for a while, and others are not", async () => {
+  const { app } = await harness();
+  const from = { "x-forwarded-for": "203.0.113.9, 10.0.0.1" };
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const response = await app.request(...post("/api/manager/login", { username: "manager", password: "no" }, from));
+    assert.equal(response.status, 401, `try ${attempt}`);
+  }
+  const locked = await app.request(...post("/api/manager/login", { username: "manager", password: PASSWORD }, from));
+  assert.equal(locked.status, 429, "even the right password waits");
+  assert.match(((await locked.json()) as any).error, /Wait 15 minutes/);
+  await signIn(app, { "x-forwarded-for": "198.51.100.4" });
+});
+
+test("signing in needs the username and the password, and hands back a cookie script cannot read", async () => {
+  const { app } = await harness();
+  for (const wrong of [
+    { username: "manager", password: "nearly-the-password" },
+    { username: "admin", password: PASSWORD },
+    { password: PASSWORD },
+  ]) {
+    const refused = await app.request(...post("/api/manager/login", wrong));
+    assert.equal(refused.status, 401, JSON.stringify(wrong));
+    assert.equal(((await refused.json()) as any).error, "That username and password do not match.");
+  }
+
+  const response = await app.request(...post("/api/manager/login", { username: "manager", password: PASSWORD }));
   assert.equal(response.status, 200);
   const cookie = response.headers.get("set-cookie") ?? "";
   assert.match(cookie, /^storeiq_manager=/);
   assert.match(cookie, /HttpOnly/i);
   assert.match(cookie, /SameSite=Strict/i, "so it is never attached to somebody else's request");
+  assert.doesNotMatch(cookie, /Secure/i, "plain http on localhost");
+
+  const behindProxy = await app.request(
+    ...post("/api/manager/login", { username: "manager", password: PASSWORD }, { "x-forwarded-proto": "https" }),
+  );
+  assert.match(behindProxy.headers.get("set-cookie") ?? "", /Secure/i, "https at Render's proxy");
 });
 
 test("somebody else's page cannot send to the floor with the manager's cached credentials", async () => {
@@ -116,7 +171,7 @@ test("somebody else's page cannot send to the floor with the manager's cached cr
     { origin: "https://evil.example.com", "content-type": "application/x-www-form-urlencoded" },
     { origin: "https://evil.example.com", "x-store-iq": "" },
   ]) {
-    const { app, sent } = harness();
+    const { app, sent } = await harness();
     const response = await app.request(...post("/api/manager/broadcast", { text: "free TVs, come now" }, headers));
     assert.equal(response.status, 403, `refused before anything is queued: ${JSON.stringify(headers)}`);
     assert.deepEqual(sent, [], "and nothing was queued");
@@ -124,15 +179,15 @@ test("somebody else's page cannot send to the floor with the manager's cached cr
 });
 
 test("even same-origin, a request that did not come from the portal is refused", async () => {
-  const { app, sent } = harness();
+  const { app, sent } = await harness();
   const response = await app.request(...post("/api/manager/broadcast", { text: "hello" }, { "x-store-iq": "" }));
   assert.equal(response.status, 403);
   assert.deepEqual(sent, []);
 });
 
 test("the floor data carries the rows, the summary and who can be reached", async () => {
-  const { app } = harness();
-  const response = await app.request("/api/manager/floor", { headers: { authorization: AUTH } });
+  const { app } = await harness();
+  const response = await app.request("/api/manager/floor", { headers: { cookie: AUTH } });
   const body = (await response.json()) as Record<string, any>;
   assert.equal(response.status, 200);
   assert.equal(body.maxScore, 14);
@@ -150,7 +205,7 @@ test("the floor data carries the rows, the summary and who can be reached", asyn
 });
 
 test("the preview says who it reaches and queues nothing", async () => {
-  const { app, sent } = harness();
+  const { app, sent } = await harness();
   const response = await app.request(...post("/api/manager/broadcast/preview", { text: "two LG 65 inch left" }));
   const body = (await response.json()) as Record<string, any>;
   assert.equal(response.status, 200);
@@ -163,7 +218,7 @@ test("the preview says who it reaches and queues nothing", async () => {
 });
 
 test("the manager's own click reaches every associate inside the window", async () => {
-  const { app, sent } = harness();
+  const { app, sent } = await harness();
   const response = await app.request(
     ...post("/api/manager/broadcast", { text: "TCL 55 inch is Rs 54,990 today only" }),
   );
@@ -178,50 +233,50 @@ test("the manager's own click reaches every associate inside the window", async 
 });
 
 test("a sent notice is kept in the notice history, and not in the morning brief's", async () => {
-  const { app } = harness({ reachable: ["919820000001"] });
+  const { app } = await harness({ reachable: ["919820000001"] });
   await app.request(...post("/api/manager/broadcast", { text: "Two LG 65 inch left" }));
   const notices = (await (
-    await app.request("/api/manager/broadcasts/notice", { headers: { authorization: AUTH } })
+    await app.request("/api/manager/broadcasts/notice", { headers: { cookie: AUTH } })
   ).json()) as any;
   assert.deepEqual(
     notices.sent.map((row: SentBroadcast) => [row.body, row.queued, row.waiting]),
     [["Two LG 65 inch left", 1, 1]],
   );
   const videos = (await (
-    await app.request("/api/manager/broadcasts/video", { headers: { authorization: AUTH } })
+    await app.request("/api/manager/broadcasts/video", { headers: { cookie: AUTH } })
   ).json()) as any;
   assert.deepEqual(videos.sent, []);
-  assert.equal((await app.request("/api/manager/broadcasts/other", { headers: { authorization: AUTH } })).status, 404);
+  assert.equal((await app.request("/api/manager/broadcasts/other", { headers: { cookie: AUTH } })).status, 404);
 });
 
 test("an empty notice is not sent to anyone", async () => {
-  const { app, sent } = harness();
+  const { app, sent } = await harness();
   const response = await app.request(...post("/api/manager/broadcast", { text: "   " }));
   assert.equal(response.status, 400);
   assert.deepEqual(sent, []);
 });
 
 test("a roster entry that is not a phone number is refused with a line the manager can act on", async () => {
-  const { app } = harness();
+  const { app } = await harness();
   const response = await app.request(...post("/api/manager/roster", { name: "Ramesh", phone: "not a phone" }));
   assert.equal(response.status, 400);
   assert.match(((await response.json()) as any).error, /country code/);
 });
 
 test("an associate is added as typed and removed by number", async () => {
-  const { app, removed } = harness();
+  const { app, removed } = await harness();
   const added = await app.request(...post("/api/manager/roster", { name: "  Sunil  ", phone: "+91 98200 00099" }));
   assert.deepEqual((await added.json()) as unknown, { ok: true, phone: "919820000099", name: "Sunil" });
   const gone = await app.request("/api/manager/roster/919820000099", {
     method: "DELETE",
-    headers: { authorization: AUTH, origin: ORIGIN, "x-store-iq": "portal" },
+    headers: { cookie: AUTH, origin: ORIGIN, "x-store-iq": "portal" },
   });
   assert.equal(gone.status, 200);
   assert.deepEqual(removed, ["919820000099"]);
 });
 
 test("an associate outside the window is held rather than dropped", async () => {
-  const { app, sent, held } = harness({ reachable: ["919820000001"] });
+  const { app, sent, held } = await harness({ reachable: ["919820000001"] });
   const response = await app.request(...post("/api/manager/broadcast", { text: "TCL 55 inch is Rs 54,990 today" }));
   assert.deepEqual((await response.json()) as unknown, { queued: 1, waiting: 1 });
   assert.deepEqual(
@@ -237,7 +292,7 @@ test("an associate outside the window is held rather than dropped", async () => 
 });
 
 test("an expert question can be marked resolved from the portal", async () => {
-  const { app } = harness();
+  const { app } = await harness();
   const res = await app.request(...post("/api/manager/expert/SIQ-1234/resolve", {}));
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()) as unknown, { ok: true, reference: "SIQ-1234" });

@@ -1,9 +1,8 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { basicAuth } from "hono/basic-auth";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Hono } from "hono";
+import type { Hono, MiddlewareHandler } from "hono";
 import type { DB } from "./db.js";
 import {
   floorFeed,
@@ -77,19 +76,14 @@ export function floorRows(rows: AssociateRow[], now = Date.now()): FloorRow[] {
 }
 
 const COOKIE = "storeiq_manager";
-const DAY = 24 * 60 * 60 * 1000;
+const SESSION = 12 * 60 * 60 * 1000;
+const LOCKOUT = 15 * 60 * 1000;
+const MAX_FAILURES = 5;
 
-export function sessionToken(password: string, expires: number): string {
-  return `${expires}.${createHmac("sha256", password).update(String(expires)).digest("base64url")}`;
-}
-
-export function validSession(password: string, raw: string | undefined, now = Date.now()): boolean {
-  const [expires, mac] = (raw ?? "").split(".");
-  if (!expires || !mac || !/^\d+$/.test(expires) || Number(expires) < now) return false;
-  const expected = createHmac("sha256", password).update(expires).digest("base64url");
-  const given = Buffer.from(mac);
-  const want = Buffer.from(expected);
-  return given.length === want.length && timingSafeEqual(given, want);
+/** Compared as fixed-length digests, so neither the answer nor its length leaks through timing. */
+function same(given: string, want: string): boolean {
+  const digest = (text: string) => createHash("sha256").update(text).digest();
+  return timingSafeEqual(digest(given), digest(want));
 }
 
 /** Which model is answering turns, for the portal to name. */
@@ -101,31 +95,64 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
   const user = process.env.ADMIN_USER?.trim() || "manager";
   const password = process.env.ADMIN_PASSWORD!;
   const from = process.env.ADMIN_NAME?.trim() || "Store manager";
-  const basic = basicAuth({ username: user, password });
+  // shortcut: sessions and failed tries live in memory, so a restart signs the manager out; move them
+  // to the database if the server ever runs as several instances.
+  const sessions = new Map<string, number>();
+  const failures = new Map<string, { count: number; since: number }>();
 
-  const guard = async (c: Parameters<typeof basic>[0], next: Parameters<typeof basic>[1]) => {
-    if (validSession(password, getCookie(c, COOKIE))) return next();
-    return basic(c, next);
+  // The portal and its data are never framed, sniffed or cached, and a link out does not carry the path.
+  const hardened: MiddlewareHandler = async (c, next) => {
+    await next();
+    c.header("X-Frame-Options", "DENY");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Referrer-Policy", "same-origin");
+    if (c.req.path.startsWith("/api/")) c.header("Cache-Control", "no-store");
+  };
+  for (const path of ["/api/manager/*", "/manager", "/manager/*"]) app.use(path, hardened);
+
+  // No Basic auth fallback: a browser caches Basic credentials and re-sends them after log out.
+  const guard: MiddlewareHandler = async (c, next) => {
+    const id = getCookie(c, COOKIE);
+    if (id && (sessions.get(id) ?? 0) > Date.now()) return next();
+    if (id) sessions.delete(id);
+    return c.json({ error: "Sign in to see the floor." }, 401);
   };
 
   app.post("/api/manager/login", async (c) => {
-    const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as Record<string, unknown>);
-    const given = Buffer.from(String(body.password ?? ""));
-    const want = Buffer.from(password);
-    if (given.length !== want.length || !timingSafeEqual(given, want))
-      return c.json({ error: "That is not the password." }, 401);
-    const expires = Date.now() + DAY;
-    setCookie(c, COOKIE, sessionToken(password, expires), {
+    const now = Date.now();
+    for (const [id, expires] of sessions) if (expires <= now) sessions.delete(id);
+    for (const [ip, tries] of failures) if (now - tries.since >= LOCKOUT) failures.delete(ip);
+    const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "direct";
+    const tries = failures.get(ip);
+    if (tries && tries.count >= MAX_FAILURES)
+      return c.json({ error: "Too many tries. Wait 15 minutes and try again." }, 429);
+
+    const body = await c.req
+      .json<{ username?: unknown; password?: unknown }>()
+      .catch(() => ({}) as Record<string, unknown>);
+    // Both are checked every time, so a right username does not answer faster than a wrong one.
+    const userOk = same(String(body.username ?? ""), user);
+    const passwordOk = same(String(body.password ?? ""), password);
+    if (!userOk || !passwordOk) {
+      failures.set(ip, { count: (tries?.count ?? 0) + 1, since: tries?.since ?? now });
+      return c.json({ error: "That username and password do not match." }, 401);
+    }
+    failures.delete(ip);
+    const id = randomBytes(32).toString("base64url");
+    sessions.set(id, now + SESSION);
+    setCookie(c, COOKIE, id, {
       httpOnly: true,
       sameSite: "Strict",
       path: "/",
-      maxAge: DAY / 1000,
-      secure: c.req.url.startsWith("https://"),
+      maxAge: SESSION / 1000,
+      // TLS ends at Render's proxy, so the request reaches us as http with the scheme in a header.
+      secure: c.req.url.startsWith("https://") || c.req.header("x-forwarded-proto") === "https",
     });
     return c.json({ ok: true });
   });
 
   app.post("/api/manager/logout", (c) => {
+    sessions.delete(getCookie(c, COOKIE) ?? "");
     deleteCookie(c, COOKIE, { path: "/" });
     return c.json({ ok: true });
   });

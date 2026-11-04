@@ -76,7 +76,12 @@ function useFloor() {
     const timer = setInterval(() => void load(), 15_000);
     return () => clearInterval(timer);
   }, [load]);
-  return { floor, error, needsSignIn, updatedAt, reload: load };
+  // The server has already ended the session; the portal drops what it was showing, without a reload.
+  const signedOut = useCallback(() => {
+    setFloor(null);
+    setNeedsSignIn(true);
+  }, []);
+  return { floor, error, needsSignIn, updatedAt, reload: load, signedOut };
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -1073,6 +1078,7 @@ function VideoBriefCard({ onSent }: { onSent: () => void }) {
 }
 
 function SignIn({ onDone }: { onDone: () => void }) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1080,7 +1086,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
     event.preventDefault();
     setBusy(true);
     try {
-      await api.signIn(password);
+      await api.signIn(username, password);
       onDone();
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "That did not work.");
@@ -1098,14 +1104,24 @@ function SignIn({ onDone }: { onDone: () => void }) {
         <CardContent>
           <form className="flex flex-col gap-3" onSubmit={submit}>
             <Input
-              type="password"
               autoFocus
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              aria-label="Username"
+              placeholder="manager"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+            <Input
+              type="password"
               autoComplete="current-password"
+              aria-label="Password"
               placeholder="Password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <Button type="submit" disabled={busy || !password}>
+            <Button type="submit" disabled={busy || !username || !password}>
               {busy ? <Loader2 className="animate-spin" /> : null} Sign in
             </Button>
           </form>
@@ -1234,12 +1250,16 @@ function NavItem({
 }
 
 export default function App() {
-  const { floor, error, needsSignIn, updatedAt, reload } = useFloor();
+  const { floor, error, needsSignIn, updatedAt, reload, signedOut } = useFloor();
   const [active, setActive] = useState<Section>("overview");
   const [adding, setAdding] = useState(false);
   const [sentVersion, setSentVersion] = useState(0);
   const onSent = () => setSentVersion((version) => version + 1);
-  const signOut = () => void api.signOut().finally(() => window.location.reload());
+  const signOut = () =>
+    void api
+      .signOut()
+      .catch(() => {})
+      .then(signedOut);
 
   if (needsSignIn) return <SignIn onDone={reload} />;
 

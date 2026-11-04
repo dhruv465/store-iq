@@ -124,16 +124,17 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: { "content-type": "application/json", "x-store-iq": "portal", ...init.headers },
   });
-  if (response.status === 401) throw new NeedsSignIn("Sign in to see the floor.");
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
+    if (response.status === 401) throw new NeedsSignIn(body.error ?? "Sign in to see the floor.");
     throw new Error(body.error ?? `The server answered ${response.status}.`);
   }
   return (await response.json()) as T;
 }
 
 export const api = {
-  signIn: (password: string) => call<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ password }) }),
+  signIn: (username: string, password: string) =>
+    call<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   signOut: () => call<{ ok: true }>("/logout", { method: "POST" }),
   history: (kind: SentBroadcast["kind"]) => call<{ sent: SentBroadcast[] }>(`/broadcasts/${kind}`),
   floor: () => call<Floor>("/floor"),

@@ -124,8 +124,13 @@ test("the video goes only on approval, now to who can be reached and held for wh
   } as unknown as DB;
   const app = new Hono();
   managerRoutes(app, db, undefined, fal);
+  const login = await app.request("/api/manager/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "manager", password: "pw" }),
+  });
   const headers = {
-    authorization: `Basic ${Buffer.from("manager:pw").toString("base64")}`,
+    cookie: (login.headers.get("set-cookie") ?? "").split(";")[0]!,
     origin: "http://localhost",
     "content-type": "application/json",
     "x-store-iq": "portal",
