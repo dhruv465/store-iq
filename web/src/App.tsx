@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Clock,
   HelpCircle,
+  LayoutDashboard,
   Loader2,
   MessageSquare,
   Package,
@@ -37,6 +38,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 /** The department manager's floor: who is working, how they are doing, real-time floor activity,
  *  customer objections, and broadcast notices. Nothing here computes a number — the server does
@@ -46,9 +48,11 @@ function useFloor() {
   const [floor, setFloor] = useState<Floor | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const load = useCallback(async () => {
     try {
       setFloor(await api.floor());
+      setUpdatedAt(new Date());
       setNeedsSignIn(false);
       setError(null);
     } catch (problem) {
@@ -66,19 +70,20 @@ function useFloor() {
     const timer = setInterval(() => void load(), 15_000);
     return () => clearInterval(timer);
   }, [load]);
-  return { floor, error, needsSignIn, reload: load };
+  return { floor, error, needsSignIn, updatedAt, reload: load };
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="text-2xl font-semibold">{value}</span>
-      {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
+    <div className="flex min-w-0 flex-col gap-1 px-5 py-4">
+      <span className="text-muted-foreground text-[13px]">{label}</span>
+      <span className="text-[28px] leading-tight font-semibold tracking-tight">{value}</span>
+      {hint ? <span className="text-muted-foreground truncate text-xs">{hint}</span> : null}
     </div>
   );
 }
 
+/** The shift board: the six numbers a floor manager glances at, in one panel. */
 function TodayOverview({ floor }: { floor: Floor }) {
   const total = floor.rows.reduce((sum, row) => sum + row.conversations, 0);
   const cards = floor.rows.reduce((sum, row) => sum + row.homeCards, 0);
@@ -88,47 +93,42 @@ function TodayOverview({ floor }: { floor: Floor }) {
   const homeFirstPercent = total > 0 ? Math.round((homeFirst / total) * 100) : 100;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Today on the floor</CardTitle>
-            <CardDescription>Shift metrics across the last 12 hours from real customer interactions.</CardDescription>
-          </div>
-          <Badge variant="outline" className="flex items-center gap-1">
-            <Radio className="text-emerald-500 animate-pulse size-3" /> Live
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-6 sm:grid-cols-6">
-        <Stat label="Customers taken" value={String(total)} hint="total interactions started" />
+    <section aria-label="Today on the floor" className="bg-card overflow-hidden rounded-lg border">
+      <div className="flex items-center justify-between border-b px-5 py-3">
+        <h2 className="text-sm font-semibold">Today on the floor</h2>
+        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <span className="bg-brand size-2 rounded-full motion-safe:animate-pulse" /> Live, last 12 hours
+        </span>
+      </div>
+      <div className="grid grid-cols-2 divide-y sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-6 xl:divide-x [&>*]:border-border sm:[&>*:nth-child(n+4)]:border-t xl:[&>*:nth-child(n+4)]:border-t-0">
+        <Stat label="Customers taken" value={String(total)} hint="conversations started" />
         <Stat
           label="Home cards made"
           value={String(cards)}
-          hint={total > 0 ? `${Math.round((cards / total) * 100)}% of customers assessed` : "largest store visit gap"}
+          hint={total > 0 ? `${Math.round((cards / total) * 100)}% of customers` : "none yet today"}
         />
-        <Stat label={`Guide reached (${floor.guide}+)`} value={String(guides)} hint="target standard (11 of 14)" />
+        <Stat label={`Reached Guide (${floor.guide}+)`} value={String(guides)} hint="out of 14 on the scale" />
         <Stat
           label="Home before price"
           value={`${homeFirstPercent}%`}
-          hint={total > 0 ? `${homeFirst} of ${total} conversations` : "visits saw 6 of 6 price first"}
+          hint={total > 0 ? `${homeFirst} of ${total} conversations` : "store visits saw 6 of 6 price first"}
         />
         <Stat
-          label="Quiet on roster"
+          label="Quiet associates"
           value={String(quiet)}
-          hint={quiet ? "associates with 0 customers" : "everyone has served"}
+          hint={quiet ? "no customers yet" : "everyone has served"}
         />
         <Stat
           label="Model cost"
-          value={floor.spend === undefined ? "—" : `$${floor.spend.toFixed(4)}`}
+          value={floor.spend === undefined ? "—" : `$${floor.spend.toFixed(2)}`}
           hint={
             floor.spend !== undefined && total > 0
-              ? `$${(floor.spend / total).toFixed(4)} a customer · ${floor.model ?? ""}`
-              : `since the server started · ${floor.model ?? ""}`
+              ? `$${(floor.spend / total).toFixed(4)} a customer`
+              : "since the server started"
           }
         />
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -1013,134 +1013,216 @@ function SignIn({ onDone }: { onDone: () => void }) {
   );
 }
 
+type Section = "overview" | "floor" | "feed" | "objections" | "products" | "broadcast";
+
+const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string }[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard, about: "" },
+  { id: "floor", label: "Associates", icon: Users, about: "Scores, customers taken and who is quiet today." },
+  { id: "feed", label: "Live floor", icon: Radio, about: "Conversations as the associates have them." },
+  {
+    id: "objections",
+    label: "Objections",
+    icon: MessageSquare,
+    about: "What customers push back on, and how to coach it.",
+  },
+  { id: "products", label: "Products", icon: Package, about: "What customers ask for, and how far each one got." },
+  {
+    id: "broadcast",
+    label: "Broadcast",
+    icon: Send,
+    about: "Tell the floor what is on, as a notice or a video brief.",
+  },
+];
+
+function count(floor: Floor | null, section: Section): number | undefined {
+  if (!floor) return undefined;
+  if (section === "floor") return floor.rows.length;
+  if (section === "feed") return floor.feed?.length;
+  if (section === "objections") return floor.objections?.length;
+  if (section === "products") return floor.products?.length;
+  return undefined;
+}
+
+function Brand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="bg-brand flex size-8 items-center justify-center rounded-md text-[13px] font-bold text-white">
+        IQ
+      </span>
+      <span className="leading-tight">
+        <span className="block text-sm font-semibold">Store IQ</span>
+        <span className="text-muted-foreground block text-xs">Reliance Digital</span>
+      </span>
+    </div>
+  );
+}
+
+function NavItem({
+  section,
+  active,
+  badge,
+  onSelect,
+  compact,
+}: {
+  section: (typeof SECTIONS)[number];
+  active: boolean;
+  badge?: number | undefined;
+  onSelect: () => void;
+  compact?: boolean;
+}) {
+  const Icon = section.icon;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "focus-visible:ring-ring flex shrink-0 items-center gap-2.5 rounded-md text-sm transition-colors outline-none focus-visible:ring-2",
+        compact ? "px-3 py-1.5" : "w-full px-3 py-2",
+        active
+          ? "bg-brand-soft text-foreground font-medium"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <Icon className={cn("size-4", active && "text-brand")} />
+      <span className="flex-1 text-left">{section.label}</span>
+      {badge !== undefined && !compact ? <span className="text-muted-foreground text-xs">{badge}</span> : null}
+    </button>
+  );
+}
+
 export default function App() {
-  const { floor, error, needsSignIn, reload } = useFloor();
-  const [activeTab, setActiveTab] = useState<"floor" | "feed" | "objections" | "products" | "broadcast">("floor");
+  const { floor, error, needsSignIn, updatedAt, reload } = useFloor();
+  const [active, setActive] = useState<Section>("overview");
 
   if (needsSignIn) return <SignIn onDone={reload} />;
 
+  const section = SECTIONS.find((item) => item.id === active)!;
+  const escalations = floor?.openQuestions?.length ?? 0;
+
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 pb-24">
-      <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Store IQ · Manager Dashboard</h1>
-            <Badge variant="outline" className="text-xs">
-              Reliance Digital
-            </Badge>
+    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+      <aside className="bg-card hidden border-r lg:block">
+        <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+          <div className="border-b px-5 py-4">
+            <Brand />
           </div>
-          <p className="text-muted-foreground text-sm mt-1">
-            {floor ? floor.summary.split("\n")[0] : "Reading the floor…"}
-          </p>
+          <nav aria-label="Sections" className="flex flex-col gap-0.5 p-3">
+            {SECTIONS.map((item) => (
+              <NavItem
+                key={item.id}
+                section={item}
+                active={item.id === active}
+                badge={count(floor, item.id)}
+                onSelect={() => setActive(item.id)}
+              />
+            ))}
+          </nav>
+          <div className="mt-auto flex flex-col gap-3 border-t p-5 text-xs">
+            {escalations ? (
+              <button
+                type="button"
+                onClick={() => setActive("overview")}
+                className="text-brand flex items-center gap-2 text-left font-medium"
+              >
+                <HelpCircle className="size-4" /> {escalations}{" "}
+                {escalations === 1 ? "question waits" : "questions wait"} for an expert
+              </button>
+            ) : null}
+            <div className="text-muted-foreground">
+              <span className="text-foreground block font-medium">{floor?.model ?? "Model"}</span>
+              answering the floor
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void reload()} className="flex items-center gap-1.5">
-            <RefreshCw className="size-3.5" /> Refresh
-          </Button>
-        </div>
-      </header>
+      </aside>
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTriangle />
-          <AlertTitle>Cannot read the floor</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {floor ? (
-        <>
-          {/* Always-visible top level floor statistics */}
-          <TodayOverview floor={floor} />
-
-          {/* Any active open escalations call for attention */}
-          <OpenEscalations questions={floor.openQuestions} onResolved={reload} />
-
-          {/* Navigation tabs for high-density workflow */}
-          <div className="flex flex-wrap items-center gap-2 border-b pb-2">
-            <Button
-              variant={activeTab === "floor" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("floor")}
-              className="flex items-center gap-1.5"
-            >
-              <Users className="size-4" /> Associates & Scorecards
-            </Button>
-            <Button
-              variant={activeTab === "feed" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("feed")}
-              className="flex items-center gap-1.5"
-            >
-              <Radio className="size-4" /> Live Floor Stream ({floor.feed?.length ?? 0})
-            </Button>
-            <Button
-              variant={activeTab === "objections" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("objections")}
-              className="flex items-center gap-1.5"
-            >
-              <MessageSquare className="size-4" /> Objections & Coaching
-            </Button>
-            <Button
-              variant={activeTab === "products" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("products")}
-              className="flex items-center gap-1.5"
-            >
-              <Package className="size-4" /> Product Pipeline
-            </Button>
-            <Button
-              variant={activeTab === "broadcast" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("broadcast")}
-              className="flex items-center gap-1.5"
-            >
-              <Send className="size-4" /> Broadcast & Roster
+      <div className="flex min-w-0 flex-col">
+        <header className="bg-background/90 sticky top-0 z-10 border-b backdrop-blur">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 lg:hidden">
+            <Brand />
+            <Button variant="outline" size="sm" onClick={() => void reload()} aria-label="Refresh">
+              <RefreshCw className="size-3.5" />
             </Button>
           </div>
+          <nav aria-label="Sections" className="flex gap-1 overflow-x-auto px-4 pb-2 lg:hidden">
+            {SECTIONS.map((item) => (
+              <NavItem
+                key={item.id}
+                section={item}
+                active={item.id === active}
+                onSelect={() => setActive(item.id)}
+                compact
+              />
+            ))}
+          </nav>
+          <div className="hidden items-center justify-between gap-4 px-8 py-4 lg:flex">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight">{section.label}</h1>
+              <p className="text-muted-foreground truncate text-sm">
+                {section.about || (floor ? floor.summary.split("\n")[0] : "Reading the floor…")}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              {updatedAt ? (
+                <span className="text-muted-foreground text-xs">
+                  Updated {updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => void reload()} className="gap-1.5">
+                <RefreshCw className="size-3.5" /> Refresh
+              </Button>
+            </div>
+          </div>
+        </header>
 
-          {/* Tab Content */}
-          {activeTab === "floor" && (
-            <div className="space-y-6">
+        <main className="flex flex-col gap-6 px-4 py-6 pb-24 lg:px-8">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTriangle />
+              <AlertTitle>Cannot read the floor</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {!floor ? (
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="animate-spin" /> Reading the floor…
+            </p>
+          ) : active === "overview" ? (
+            <>
+              <TodayOverview floor={floor} />
+              <OpenEscalations questions={floor.openQuestions} onResolved={reload} />
+              <AssociateTable floor={floor} onChange={reload} />
+              <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+                <ProductDemandTable products={floor.products} />
+                <LiveFloorFeed feed={floor.feed} />
+              </div>
+              <ObjectionHeatmap objections={floor.objections} />
+              <details className="text-muted-foreground text-xs">
+                <summary className="cursor-pointer">Shift summary as text</summary>
+                <pre className="mt-2 border-l-2 pl-3 whitespace-pre-wrap">{floor.summary}</pre>
+              </details>
+            </>
+          ) : active === "floor" ? (
+            <>
               <AssociateTable floor={floor} onChange={reload} />
               <AddAssociate onAdded={reload} />
-            </div>
-          )}
-
-          {activeTab === "feed" && (
-            <div className="space-y-6">
-              <LiveFloorFeed feed={floor.feed} />
-            </div>
-          )}
-
-          {activeTab === "objections" && (
-            <div className="space-y-6">
-              <ObjectionHeatmap objections={floor.objections} />
-            </div>
-          )}
-
-          {activeTab === "products" && (
-            <div className="space-y-6">
-              <ProductDemandTable products={floor.products} />
-            </div>
-          )}
-
-          {activeTab === "broadcast" && (
-            <div className="space-y-6">
+            </>
+          ) : active === "feed" ? (
+            <LiveFloorFeed feed={floor.feed} />
+          ) : active === "objections" ? (
+            <ObjectionHeatmap objections={floor.objections} />
+          ) : active === "products" ? (
+            <ProductDemandTable products={floor.products} />
+          ) : (
+            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-2">
               <TellTheFloor floor={floor} />
               <VideoBriefCard />
-              <AddAssociate onAdded={reload} />
             </div>
           )}
-
-          <pre className="text-muted-foreground border-l-2 pl-3 text-xs whitespace-pre-wrap">{floor.summary}</pre>
-        </>
-      ) : (
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="animate-spin" /> Reading the floor…
-        </p>
-      )}
+        </main>
+      </div>
     </div>
   );
 }
