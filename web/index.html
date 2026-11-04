@@ -11,6 +11,13 @@
       rel="stylesheet"
     />
     <title>Store IQ manager</title>
+    <script>
+      try {
+        const theme = localStorage.getItem("theme");
+        if (theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

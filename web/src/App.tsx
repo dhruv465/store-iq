@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { applyTheme, savedTheme, type Theme } from "./theme.ts";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,11 +10,14 @@ import {
   LayoutDashboard,
   Loader2,
   MessageSquare,
+  Monitor,
+  Moon,
   Package,
   Radio,
   RefreshCw,
   Send,
   ShieldAlert,
+  Sun,
   Trash2,
   UserPlus,
   Users,
@@ -78,7 +82,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <div className="flex min-w-0 flex-col gap-1 px-5 py-4">
       <span className="text-muted-foreground text-[13px]">{label}</span>
       <span className="text-[28px] leading-tight font-semibold tracking-tight">{value}</span>
-      {hint ? <span className="text-muted-foreground truncate text-xs">{hint}</span> : null}
+      {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
     </div>
   );
 }
@@ -135,18 +139,16 @@ function TodayOverview({ floor }: { floor: Floor }) {
 function ScoreBadge({ score }: { score: number }) {
   if (score >= 1.8)
     return (
-      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600">
-        {score.toFixed(1)}/2
-      </span>
+      <span className="rounded bg-success/10 px-1.5 py-0.5 text-xs font-medium text-success">{score.toFixed(1)}/2</span>
     );
   if (score >= 1.0)
     return (
-      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-600">
-        {score.toFixed(1)}/2
-      </span>
+      <span className="rounded bg-warning/10 px-1.5 py-0.5 text-xs font-medium text-warning">{score.toFixed(1)}/2</span>
     );
   return (
-    <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-xs font-medium text-rose-600">{score.toFixed(1)}/2</span>
+    <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+      {score.toFixed(1)}/2
+    </span>
   );
 }
 
@@ -173,7 +175,7 @@ function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => voi
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Floor Scorecard</CardTitle>
+            <CardTitle>Floor scorecard</CardTitle>
             <CardDescription>
               Ranked strongest first. Click an associate to inspect their 7-step coaching marks.
             </CardDescription>
@@ -217,16 +219,12 @@ function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => voi
                       <TableCell className="text-right">{row.conversations}</TableCell>
                       <TableCell className="text-right">{row.homeCards}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        <span className={row.median >= floor.guide ? "text-emerald-600" : ""}>{row.median}</span>
+                        <span className={row.median >= floor.guide ? "text-success" : ""}>{row.median}</span>
                       </TableCell>
                       <TableCell className="text-right">{row.guide}</TableCell>
                       <TableCell className="text-right">
                         {row.conversations ? (
-                          <span
-                            className={
-                              row.homeBeforePrice === row.conversations ? "text-emerald-600" : "text-amber-600"
-                            }
-                          >
+                          <span className={row.homeBeforePrice === row.conversations ? "text-success" : "text-warning"}>
                             {row.homeBeforePrice} of {row.conversations}
                           </span>
                         ) : (
@@ -339,7 +337,7 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Live Floor Stream</CardTitle>
+          <CardTitle>Live floor stream</CardTitle>
           <CardDescription>Real-time customer interaction feed as associates talk on the floor.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -355,7 +353,7 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Live Floor Stream</CardTitle>
+            <CardTitle>Live floor stream</CardTitle>
             <CardDescription>Recent customer interactions, active stage, and pricing discipline.</CardDescription>
           </div>
           <Badge variant="outline" className="text-xs">
@@ -374,7 +372,7 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
                     {item.step}
                   </Badge>
                   {item.score >= 11 ? (
-                    <Badge variant="default" className="bg-emerald-600 text-xs">
+                    <Badge variant="outline" className="bg-success/10 text-success border-transparent text-xs">
                       Guide ({item.score}/14)
                     </Badge>
                   ) : item.score > 0 ? (
@@ -385,11 +383,11 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
                 </div>
                 <div className="flex items-center gap-2">
                   {item.pricedBeforeHome ? (
-                    <Badge variant="outline" className="border-rose-400 text-rose-600 flex items-center gap-1">
+                    <Badge variant="outline" className="border-destructive/40 text-destructive flex items-center gap-1">
                       <ShieldAlert className="size-3" /> Price quoted first
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="border-emerald-400 text-emerald-600 flex items-center gap-1">
+                    <Badge variant="outline" className="border-success/40 text-success flex items-center gap-1">
                       <CheckCircle2 className="size-3" /> Home first
                     </Badge>
                   )}
@@ -406,19 +404,19 @@ function LiveFloorFeed({ feed }: { feed?: FeedItem[] }) {
                 {item.distance ? <Badge variant="outline">{item.distance}</Badge> : null}
                 {item.budget ? <Badge variant="outline">Budget: Rs {item.budget.toLocaleString("en-IN")}</Badge> : null}
                 {item.selectionSku ? (
-                  <Badge variant="default" className="bg-blue-600">
+                  <Badge variant="outline" className="bg-info/10 text-info border-transparent">
                     Selected: {item.selectionSku}
                   </Badge>
                 ) : item.shortlist.length ? (
                   <Badge variant="secondary">Pitched: {item.shortlist.join(", ")}</Badge>
                 ) : null}
                 {item.consent ? (
-                  <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                  <Badge variant="outline" className="text-success border-success/40">
                     Consent given
                   </Badge>
                 ) : null}
                 {item.siteChecked ? (
-                  <Badge variant="outline" className="text-blue-600 border-blue-300">
+                  <Badge variant="outline" className="text-info border-info/40">
                     Site checked
                   </Badge>
                 ) : null}
@@ -447,7 +445,7 @@ function ObjectionHeatmap({ objections }: { objections?: ObjectionInsight[] }) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Customer Objections & Floor Coaching</CardTitle>
+            <CardTitle>Customer objections and what to say</CardTitle>
             <CardDescription>
               Customer pushback raised today, with exact counter-arguments from the data pack for shift briefings.
             </CardDescription>
@@ -478,7 +476,7 @@ function ObjectionHeatmap({ objections }: { objections?: ObjectionInsight[] }) {
 
               {obj.confirm || obj.correct ? (
                 <div className="rounded bg-muted/60 p-2.5 text-xs flex flex-col gap-1 border-l-2 border-primary">
-                  <span className="font-semibold text-primary">Floor Coaching Script:</span>
+                  <span className="font-semibold text-primary">What to say:</span>
                   {obj.confirm ? (
                     <div>
                       <span className="text-muted-foreground">1. Confirm what's true: </span>"{obj.confirm}"
@@ -507,7 +505,7 @@ function ProductDemandTable({ products }: { products?: ProductInsight[] }) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Product Demand & Floor Pipeline</CardTitle>
+            <CardTitle>Product demand</CardTitle>
             <CardDescription>
               Which sets associates are shortlisting and closing against current floor stock.
             </CardDescription>
@@ -537,12 +535,12 @@ function ProductDemandTable({ products }: { products?: ProductInsight[] }) {
                 <TableCell>{p.brand}</TableCell>
                 <TableCell className="text-right">Rs {p.price.toLocaleString("en-IN")}</TableCell>
                 <TableCell className="text-right">
-                  <span className={p.stock <= 2 ? "text-amber-600 font-semibold" : ""}>{p.stock} units</span>
+                  <span className={p.stock <= 2 ? "text-warning font-semibold" : ""}>{p.stock} units</span>
                 </TableCell>
                 <TableCell className="text-right">{p.shortlistedCount}</TableCell>
                 <TableCell className="text-right font-semibold">
                   {p.selectedCount > 0 ? (
-                    <Badge variant="default" className="bg-emerald-600">
+                    <Badge variant="outline" className="bg-success/10 text-success border-transparent">
                       {p.selectedCount}
                     </Badge>
                   ) : (
@@ -574,13 +572,13 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
   };
 
   return (
-    <Card className="border-amber-300 bg-amber-500/5">
+    <Card className="border-warning/40 bg-warning/5">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle className="text-amber-600 size-5" />
+            <HelpCircle className="text-warning size-5" />
             <div>
-              <CardTitle>Open Expert Escalations ({questions.length})</CardTitle>
+              <CardTitle>Waiting for an expert ({questions.length})</CardTitle>
               <CardDescription>
                 Questions associates could not answer on the floor, waiting on a specialist.
               </CardDescription>
@@ -617,7 +615,7 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
                 {resolving === q.reference ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : (
-                  <CheckCircle2 className="size-3.5 text-emerald-600" />
+                  <CheckCircle2 className="size-3.5 text-success" />
                 )}
                 Mark Answered
               </Button>
@@ -948,7 +946,7 @@ function VideoBriefCard() {
             {job.heard ? (
               <details className="text-muted-foreground text-xs">
                 <summary className="cursor-pointer">
-                  <CheckCircle2 className="mr-1 inline size-3.5 text-emerald-600" />
+                  <CheckCircle2 className="mr-1 inline size-3.5 text-success" />
                   Checked: he says nothing that is not in the script
                 </summary>
                 <p className="mt-2 border-l-2 pl-3 whitespace-pre-wrap">{job.heard}</p>
@@ -1053,6 +1051,39 @@ function count(floor: Floor | null, section: Section): number | undefined {
   return undefined;
 }
 
+const THEMES = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "dark", label: "Dark", icon: Moon },
+  { id: "system", label: "Same as this device", icon: Monitor },
+] as const satisfies readonly { id: Theme; label: string; icon: unknown }[];
+
+function ThemeSwitch() {
+  const [theme, setTheme] = useState<Theme>(savedTheme);
+  return (
+    <div role="group" aria-label="Theme" className="bg-muted inline-flex rounded-md p-0.5">
+      {THEMES.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          title={label}
+          aria-label={label}
+          aria-pressed={theme === id}
+          onClick={() => {
+            applyTheme(id);
+            setTheme(id);
+          }}
+          className={cn(
+            "focus-visible:ring-ring flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-2",
+            theme === id ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Icon className="size-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Brand() {
   return (
     <div className="flex items-center gap-2.5">
@@ -1140,7 +1171,7 @@ export default function App() {
               </button>
             ) : null}
             <div className="text-muted-foreground">
-              <span className="text-foreground block font-medium">{floor?.model ?? "Model"}</span>
+              <span className="text-foreground block font-medium break-all">{floor?.model ?? "Model"}</span>
               answering the floor
             </div>
           </div>
@@ -1151,9 +1182,12 @@ export default function App() {
         <header className="bg-background/90 sticky top-0 z-10 border-b backdrop-blur">
           <div className="flex items-center justify-between gap-4 px-4 py-3 lg:hidden">
             <Brand />
-            <Button variant="outline" size="sm" onClick={() => void reload()} aria-label="Refresh">
-              <RefreshCw className="size-3.5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <ThemeSwitch />
+              <Button variant="outline" size="sm" onClick={() => void reload()} aria-label="Refresh">
+                <RefreshCw className="size-3.5" />
+              </Button>
+            </div>
           </div>
           <nav aria-label="Sections" className="flex gap-1 overflow-x-auto px-4 pb-2 lg:hidden">
             {SECTIONS.map((item) => (
@@ -1179,6 +1213,7 @@ export default function App() {
                   Updated {updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
               ) : null}
+              <ThemeSwitch />
               <Button variant="outline" size="sm" onClick={() => void reload()} className="gap-1.5">
                 <RefreshCw className="size-3.5" /> Refresh
               </Button>
