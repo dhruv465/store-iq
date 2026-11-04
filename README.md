@@ -72,8 +72,9 @@ and sync's lipsync-2, `fal-ai/sync-lipsync/v2` ($3 a minute), moves the lips of 
 in `PRESENTER_VIDEO_URL` to it, through fal's queue. The clip is made once by `scripts/presenter.ts`:
 nano-banana-pro draws the presenter and Kling AI Avatar films 22 s of him talking. A 19 s brief took
 about 2 to 3 minutes and about $1. lipsync-2 sets its bitrate by resolution, so the clip is 540x960:
-7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice hears every figure in English, as the floor says prices
-("one lakh nineteen thousand nine hundred ninety rupees", "ten percent"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
+7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice says prices and percentages in English, as the floor says them
+("one lakh nineteen thousand nine hundred ninety rupees", "ten percent"), and a number before a Hindi word
+in Hindi ("बारह महीने तक"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
 goes out only on "Approve and send", to the same people as a text notice, held for anyone outside the
 window.
 

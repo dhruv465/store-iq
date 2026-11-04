@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { openDatabase, type DB } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
-import { spokenScript, writeScript } from "../server/src/video.js";
+import { HINDI_UNDER_100, spokenScript, writeScript } from "../server/src/video.js";
 import { sendWhatsApp } from "../server/src/whatsapp.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 import type { Reply } from "../server/src/types.js";
@@ -162,16 +162,23 @@ test("a held video reaches the associate when they next write", async () => {
   }
 });
 
-test("the voice hears every figure in English, the way the floor says prices, and the caption keeps Rs", () => {
+test("the voice says prices and percentages in English, a number before a Hindi word in Hindi, and the caption keeps Rs", () => {
   assert.equal(
     spokenScript(
-      "LG 55 inch OLED पर Rs 1,19,990, SBI card पर 10% instant off. Sony Rs. 89,990/-, 12 महीने no cost EMI.",
+      "LG 55 inch OLED पर Rs 1,19,990, SBI card पर 10% instant off. Sony Rs. 89,990/- में, 12 महीने तक no cost EMI.",
     ),
     "LG fifty-five inch OLED पर one lakh nineteen thousand nine hundred ninety rupees, SBI card पर ten percent instant off. " +
-      "Sony eighty-nine thousand nine hundred ninety rupees, twelve महीने no cost EMI.",
+      "Sony eighty-nine thousand nine hundred ninety rupees में, बारह महीने तक no cost EMI.",
   );
   assert.equal(
-    spokenScript("Rs 1,00,000 और Rs 2,50,00,000, ₹999, 7.5% cashback, buy 1 get 1"),
-    "one lakh rupees और two crore fifty lakh rupees, nine hundred ninety-nine rupees, seven point five percent cashback, buy one get one",
+    spokenScript("Rs 1,00,000 और Rs 2,50,00,000, ₹999, 7.5% cashback, buy 1 get 1 है"),
+    "one lakh rupees और two crore fifty lakh rupees, nine hundred ninety-nine rupees, seven point five percent cashback, buy one get one है",
   );
+  assert.equal(
+    spokenScript("iPhone 16 पर exchange, Galaxy S25 और 4K TV, सिर्फ 3 दिन, 1,19,990 लोग, 45 मिनट"),
+    "iPhone sixteen पर exchange, Galaxy S25 और 4K TV, सिर्फ तीन दिन, एक लाख उन्नीस हज़ार नौ सौ नब्बे लोग, पैंतालीस मिनट",
+    "a model name stays English and a model code is left alone",
+  );
+  assert.equal(HINDI_UNDER_100.length, 100, "one Hindi word for each of 0 to 99");
+  assert.equal(HINDI_UNDER_100[99], "निन्यानबे");
 });

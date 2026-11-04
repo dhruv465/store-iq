@@ -49,42 +49,64 @@ const ONES =
     " ",
   );
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+/** 0 to 99 in Hindi: no rule makes them, so they are listed. */
+export const HINDI_UNDER_100 = (
+  "शून्य एक दो तीन चार पाँच छह सात आठ नौ दस ग्यारह बारह तेरह चौदह पंद्रह सोलह सत्रह अठारह उन्नीस " +
+  "बीस इक्कीस बाईस तेईस चौबीस पच्चीस छब्बीस सत्ताईस अट्ठाईस उनतीस तीस इकतीस बत्तीस तैंतीस चौंतीस पैंतीस छत्तीस सैंतीस अड़तीस उनतालीस " +
+  "चालीस इकतालीस बयालीस तैंतालीस चवालीस पैंतालीस छियालीस सैंतालीस अड़तालीस उनचास पचास इक्यावन बावन तिरपन चौवन पचपन छप्पन सत्तावन अट्ठावन उनसठ " +
+  "साठ इकसठ बासठ तिरसठ चौंसठ पैंसठ छियासठ सड़सठ अड़सठ उनहत्तर सत्तर इकहत्तर बहत्तर तिहत्तर चौहत्तर पचहत्तर छिहत्तर सतहत्तर अठहत्तर उन्यासी " +
+  "अस्सी इक्यासी बयासी तिरासी चौरासी पचासी छियासी सत्तासी अट्ठासी नवासी नब्बे इक्यानबे बानबे तिरानबे चौरानबे पंचानबे छियानबे सत्तानबे अट्ठानबे निन्यानबे"
+).split(" ");
 
-function underThousand(n: number): string {
-  const rest = n % 100;
-  const tens = rest < 20 ? ONES[rest] : TENS[Math.floor(rest / 10)] + (rest % 10 ? `-${ONES[rest % 10]}` : "");
-  return [n >= 100 ? `${ONES[Math.floor(n / 100)]} hundred` : "", rest ? tens : ""].filter(Boolean).join(" ");
+const WORDS = {
+  en: { hundred: "hundred", thousand: "thousand", lakh: "lakh", crore: "crore", point: "point" },
+  hi: { hundred: "सौ", thousand: "हज़ार", lakh: "लाख", crore: "करोड़", point: "दशमलव" },
+};
+type Tongue = keyof typeof WORDS;
+
+function underHundred(n: number, tongue: Tongue): string {
+  // n is 0 to 99, so the lists always have it
+  if (tongue === "hi") return HINDI_UNDER_100[n]!;
+  return n < 20 ? ONES[n]! : TENS[Math.floor(n / 10)] + (n % 10 ? `-${ONES[n % 10]}` : "");
 }
 
-/** A whole number in English words, counted the Indian way: 119990 is "one lakh nineteen thousand nine
- *  hundred ninety". */
-function inWords(n: number): string {
-  if (n === 0) return "zero";
+/** A whole number in words, counted the Indian way: 119990 is "one lakh nineteen thousand nine hundred
+ *  ninety", and 12 in Hindi is "बारह". */
+function inWords(n: number, tongue: Tongue): string {
+  if (n === 0) return underHundred(0, tongue);
+  const words = WORDS[tongue];
   const parts: string[] = [];
   for (const [size, word] of [
-    [1e7, "crore"],
-    [1e5, "lakh"],
-    [1e3, "thousand"],
+    [1e7, words.crore],
+    [1e5, words.lakh],
+    [1e3, words.thousand],
+    [100, words.hundred],
   ] as const) {
-    if (n >= size) parts.push(`${inWords(Math.floor(n / size))} ${word}`);
+    if (n >= size) parts.push(`${inWords(Math.floor(n / size), tongue)} ${word}`);
     n %= size;
   }
-  if (n) parts.push(underThousand(n));
+  if (n) parts.push(underHundred(n, tongue));
   return parts.join(" ");
 }
 
-/** A figure as written in the script ("1,19,990", "4.5") said in English. */
-function sayNumber(written: string): string {
+/** A figure as written in the script ("1,19,990", "4.5") said in words. */
+function sayNumber(written: string, tongue: Tongue = "en"): string {
   const [whole, decimals] = written.replace(/,/g, "").split(".");
-  return inWords(Number(whole)) + (decimals ? ` point ${[...decimals].map((d) => ONES[+d]).join(" ")}` : "");
+  const point = decimals
+    ? ` ${WORDS[tongue].point} ${[...decimals].map((d) => underHundred(+d, tongue)).join(" ")}`
+    : "";
+  return inWords(Number(whole), tongue) + point;
 }
 
-const FIGURE = String.raw`\d+(?:,\d{2,3})*(?:\.\d+)?`;
+// A figure on its own, not part of a model code like S25 or 4K.
+const FIGURE = String.raw`(?<![\w.])\d+(?:,\d{2,3})*(?:\.\d+)?(?!\w|\.\d)`;
 
-/** The script as the voice should read it: every figure spelt out in English, the way the floor says
- *  prices ("one lakh nineteen thousand nine hundred ninety rupees", "ten percent"). With the voice set
- *  to Hindi a bare digit comes out in Hindi, and "Rs" and Indian commas are read as letters ("R S
- *  100,199,000"). The caption keeps "Rs 1,19,990"; only the audio changes. */
+/** The script as the voice should read it, every figure spelt out because the voice is set to Hindi
+ *  and reads "Rs" and Indian commas as letters ("R S 100,199,000"). Prices and percentages are said
+ *  in English, the way the floor says them ("one lakh nineteen thousand nine hundred ninety rupees",
+ *  "ten percent"); a number that counts a Hindi word is said in Hindi ("बारह महीने तक"), unless it
+ *  follows an English name (iPhone 16 पर); any other number is English. The caption keeps
+ *  "Rs 1,19,990"; only the audio changes. */
 export function spokenScript(script: string): string {
   return script
     .replace(
@@ -92,7 +114,8 @@ export function spokenScript(script: string): string {
       (_, n: string) => `${sayNumber(n)} rupees`,
     )
     .replace(new RegExp(String.raw`(${FIGURE})\s*%`, "g"), (_, n: string) => `${sayNumber(n)} percent`)
-    .replace(new RegExp(FIGURE, "g"), sayNumber);
+    .replace(new RegExp(String.raw`(?<![A-Za-z][\w-]*\s+)${FIGURE}(?=\s*[ऀ-ॿ])`, "g"), (n) => sayNumber(n, "hi"))
+    .replace(new RegExp(FIGURE, "g"), (n) => sayNumber(n));
 }
 
 /** The script, held to Rule 1: every figure in it must be in the manager's own words. Refused once,
