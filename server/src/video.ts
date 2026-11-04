@@ -239,10 +239,33 @@ const ADDED_SYSTEM = [
   'Answer with JSON only: {"added": ["the added words, as he said them"]}, and an empty list when he added nothing.',
 ].join("\n");
 
+const tokens = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}\p{M}]/gu, ""))
+    .filter(Boolean);
+
+/** A word or a phrase of up to four words he said twice in a row ("65, 65 inch" on 4 Nov 2026), unless
+ *  the script says it twice too. A stumble is no new fact, but it is not what the manager approved. */
+export function repeated(heard: string, script: string): string[] {
+  const said = tokens(heard);
+  const written = ` ${tokens(`${script} ${spokenScript(script)}`).join(" ")} `;
+  const found = new Set<string>();
+  for (let n = 1; n <= 4; n++)
+    for (let i = 0; i + 2 * n <= said.length; i++) {
+      const phrase = said.slice(i, i + n).join(" ");
+      const twice = `${phrase} ${phrase}`;
+      if (said.slice(i + n, i + 2 * n).join(" ") === phrase && !written.includes(` ${twice} `)) found.add(twice);
+    }
+  return [...found];
+}
+
 /** What the presenter actually said, checked against his script before the manager can approve it.
  *  He is filmed by a model that adds words it is told not to (it offered "smart TV pe best deals" on
  *  4 Nov 2026), so nothing he says goes out unread. Figures are checked in code, as every reply is;
- *  a product or an offer he made up is found by the model, since the words never match exactly. */
+ *  a product or an offer he made up is found by the model, since the words never match exactly. A word
+ *  he says twice in a row is found in code, and like a figure only when both hearings have it. */
 export async function addedToScript(
   config: FalConfig,
   script: string,
@@ -259,8 +282,10 @@ export async function addedToScript(
   );
   if (!text || !again)
     throw Error("What the presenter said could not be heard, so the video was not checked. Make it again.");
-  const heardTwice = new Set(unsupportedNumbers(again, new Set(), script));
-  const figures = unsupportedNumbers(text, new Set(), script).filter((figure) => heardTwice.has(figure));
+  const heardTwice = new Set([...unsupportedNumbers(again, new Set(), script), ...repeated(again, script)]);
+  const figures = [...unsupportedNumbers(text, new Set(), script), ...repeated(text, script)].filter((found) =>
+    heardTwice.has(found),
+  );
   const compared = await falText(config, ADDED_SYSTEM, `SCRIPT:\n${script}\n\nWHAT HE SAID:\n${text}`, request);
   const { added } = readJson<{ added?: unknown }>(compared.text);
   if (!Array.isArray(added)) throw Error("The check of what the presenter said came back unreadable. Make it again.");

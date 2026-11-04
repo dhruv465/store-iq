@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { openDatabase, type DB } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
-import { HINDI_UNDER_100, addedToScript, clipLines, spokenScript, writeScript } from "../server/src/video.js";
+import { HINDI_UNDER_100, addedToScript, clipLines, repeated, spokenScript, writeScript } from "../server/src/video.js";
 import { sendWhatsApp } from "../server/src/whatsapp.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 import type { Reply } from "../server/src/types.js";
@@ -282,4 +282,28 @@ test("what the presenter said is checked against his script: a figure heard wron
     check(["... smart TV पे best deals"], ["smart TV पे best deals"]),
   );
   assert.deepEqual(offer.added, ["smart TV पे best deals"], "an offer he made up is caught");
+
+  const stumble = await addedToScript(
+    config,
+    script,
+    video,
+    check(["Sony Bravia 65, 65 inch ₹89,990 में 12 महीने तक no cost EMI है।"], []),
+  );
+  assert.deepEqual(stumble.added, ["65 65"], "a word he says twice in a row is caught");
+
+  const once = await addedToScript(
+    config,
+    script,
+    video,
+    check(["Sony Bravia 65, 65 inch ₹89,990 में", "Sony Bravia 65 inch ₹89,990 में"], []),
+  );
+  assert.deepEqual(once.added, [], "a repeat heard in only one hearing does not block it");
+});
+
+test("a repeat is a word or phrase said twice in a row that the script does not say twice", () => {
+  assert.deepEqual(repeated("हर TV sale पे, हर TV sale पे warranty", "हर TV sale पर warranty"), [
+    "हर tv sale पे हर tv sale पे",
+  ]);
+  assert.deepEqual(repeated("Very very good offer", "Very very good offer!"), [], "a repeat the script has passes");
+  assert.deepEqual(repeated("Boat earbuds पे buy one get one है", "Boat earbuds पर buy 1 get 1 है."), []);
 });
