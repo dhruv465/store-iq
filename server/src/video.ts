@@ -44,33 +44,55 @@ const SCRIPT_SYSTEM = [
   "Answer with the script only, no quotes around it.",
 ].join("\n");
 
-/** An amount as it is said aloud in an Indian store: 1,19,990 is "1 लाख 19 हज़ार 990". The
- *  voice reads digits well and "Rs" and Indian commas badly ("R S 100,199,000"), so the figures stay
- *  the checked ones and only the way they are written changes. */
-function sayAmount(written: string): string {
-  const plain = written.replace(/,/g, "");
-  if (!/^\d+$/.test(plain)) return plain;
-  const n = Number(plain);
-  const parts = [
-    [Math.floor(n / 1e7), "करोड़"],
-    [Math.floor((n % 1e7) / 1e5), "लाख"],
-    [Math.floor((n % 1e5) / 1e3), "हज़ार"],
-  ]
-    .filter(([count]) => count)
-    .map(([count, word]) => `${count} ${word}`);
-  if (n % 1000 || !parts.length) parts.push(String(n % 1000));
+const ONES =
+  "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(
+    " ",
+  );
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+function underThousand(n: number): string {
+  const rest = n % 100;
+  const tens = rest < 20 ? ONES[rest] : TENS[Math.floor(rest / 10)] + (rest % 10 ? `-${ONES[rest % 10]}` : "");
+  return [n >= 100 ? `${ONES[Math.floor(n / 100)]} hundred` : "", rest ? tens : ""].filter(Boolean).join(" ");
+}
+
+/** A whole number in English words, counted the Indian way: 119990 is "one lakh nineteen thousand nine
+ *  hundred ninety". */
+function inWords(n: number): string {
+  if (n === 0) return "zero";
+  const parts: string[] = [];
+  for (const [size, word] of [
+    [1e7, "crore"],
+    [1e5, "lakh"],
+    [1e3, "thousand"],
+  ] as const) {
+    if (n >= size) parts.push(`${inWords(Math.floor(n / size))} ${word}`);
+    n %= size;
+  }
+  if (n) parts.push(underThousand(n));
   return parts.join(" ");
 }
 
-/** The script as the voice should read it. The caption keeps "Rs 54,990"; only the audio changes. */
+/** A figure as written in the script ("1,19,990", "4.5") said in English. */
+function sayNumber(written: string): string {
+  const [whole, decimals] = written.replace(/,/g, "").split(".");
+  return inWords(Number(whole)) + (decimals ? ` point ${[...decimals].map((d) => ONES[+d]).join(" ")}` : "");
+}
+
+const FIGURE = String.raw`\d+(?:,\d{2,3})*(?:\.\d+)?`;
+
+/** The script as the voice should read it: every figure spelt out in English, the way the floor says
+ *  prices ("one lakh nineteen thousand nine hundred ninety rupees", "ten percent"). With the voice set
+ *  to Hindi a bare digit comes out in Hindi, and "Rs" and Indian commas are read as letters ("R S
+ *  100,199,000"). The caption keeps "Rs 1,19,990"; only the audio changes. */
 export function spokenScript(script: string): string {
   return script
     .replace(
-      /(?:\bRs\.?|₹|\bINR)\s*(\d+(?:,\d{2,3})*(?:\.\d+)?)(?:\s*\/-)?/gi,
-      (_, amount: string) => `${sayAmount(amount)} रुपये`,
+      new RegExp(String.raw`(?:\bRs\.?|₹|\bINR)\s*(${FIGURE})(?:\s*\/-)?`, "gi"),
+      (_, n: string) => `${sayNumber(n)} rupees`,
     )
-    .replace(/\b\d{1,3}(?:,\d{2,3})+\b/g, sayAmount)
-    .replace(/(\d)\s*%/g, "$1 परसेंट");
+    .replace(new RegExp(String.raw`(${FIGURE})\s*%`, "g"), (_, n: string) => `${sayNumber(n)} percent`)
+    .replace(new RegExp(FIGURE, "g"), sayNumber);
 }
 
 /** The script, held to Rule 1: every figure in it must be in the manager's own words. Refused once,

@@ -162,10 +162,16 @@ test("a held video reaches the associate when they next write", async () => {
   }
 });
 
-test("the voice hears figures the way a store says them in Hindi, and the caption keeps Rs", () => {
+test("the voice hears every figure in English, the way the floor says prices, and the caption keeps Rs", () => {
   assert.equal(
-    spokenScript("LG OLED पर Rs 1,19,990, SBI कार्ड पर 10% ऑफ। Sony Rs. 89,990/- और boat ₹999, बोनस Rs 5,000।"),
-    "LG OLED पर 1 लाख 19 हज़ार 990 रुपये, SBI कार्ड पर 10 परसेंट ऑफ। Sony 89 हज़ार 990 रुपये और boat 999 रुपये, बोनस 5 हज़ार रुपये।",
+    spokenScript(
+      "LG 55 inch OLED पर Rs 1,19,990, SBI card पर 10% instant off. Sony Rs. 89,990/-, 12 महीने no cost EMI.",
+    ),
+    "LG fifty-five inch OLED पर one lakh nineteen thousand nine hundred ninety rupees, SBI card पर ten percent instant off. " +
+      "Sony eighty-nine thousand nine hundred ninety rupees, twelve महीने no cost EMI.",
   );
-  assert.equal(spokenScript("Rs 1,00,000 और Rs 2,50,00,000"), "1 लाख रुपये और 2 करोड़ 50 लाख रुपये");
+  assert.equal(
+    spokenScript("Rs 1,00,000 और Rs 2,50,00,000, ₹999, 7.5% cashback, buy 1 get 1"),
+    "one lakh rupees और two crore fifty lakh rupees, nine hundred ninety-nine rupees, seven point five percent cashback, buy one get one",
+  );
 });

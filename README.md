@@ -24,13 +24,13 @@ curl -s localhost:3000/try -H 'content-type: application/json' \
 
 ## Shape
 
-| File | What it does |
-| --- | --- |
-| `server/src/webhook.ts` | Verifies Meta's HMAC over the original bytes, persists to the inbox, returns 200 |
-| `server/src/worker.ts` | Leased inbox/outbox loops, instant acknowledgement for voice and photo, send-once |
-| `server/src/brain.ts` | The turn: one model request for the search, one for the reply from what the store returned, then the guards |
-| `server/src/pack.ts` | The live catalogue search, what the model is given, and every figure it is allowed to say |
-| `server/src/db.ts` | PGlite: inbox, outbox, associate session with compare-and-set |
+| File                    | What it does                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `server/src/webhook.ts` | Verifies Meta's HMAC over the original bytes, persists to the inbox, returns 200                            |
+| `server/src/worker.ts`  | Leased inbox/outbox loops, instant acknowledgement for voice and photo, send-once                           |
+| `server/src/brain.ts`   | The turn: one model request for the search, one for the reply from what the store returned, then the guards |
+| `server/src/pack.ts`    | The live catalogue search, what the model is given, and every figure it is allowed to say                   |
+| `server/src/db.ts`      | PGlite: inbox, outbox, associate session with compare-and-set                                               |
 
 ## What stops a reply reaching the wrong person
 
@@ -72,8 +72,8 @@ and sync's lipsync-2, `fal-ai/sync-lipsync/v2` ($3 a minute), moves the lips of 
 in `PRESENTER_VIDEO_URL` to it, through fal's queue. The clip is made once by `scripts/presenter.ts`:
 nano-banana-pro draws the presenter and Kling AI Avatar films 22 s of him talking. A 19 s brief took
 about 2 to 3 minutes and about $1. lipsync-2 sets its bitrate by resolution, so the clip is 540x960:
-7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice hears figures as a store says them
-("1 लाख 19 हज़ार 990 रुपये"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
+7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice hears every figure in English, as the floor says prices
+("one lakh nineteen thousand nine hundred ninety rupees", "ten percent"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
 goes out only on "Approve and send", to the same people as a text notice, held for anyone outside the
 window.
 
@@ -91,7 +91,7 @@ Everything about a product is written by the model from what the store returned 
 figure in it is then checked against that. There are no written questions: the model asks.
 
 The self-score uses the judges' scale: two marks per step of section 2, 14 in all. A step the model
-*claims* does not score — `assess` needs four home facts on the card and `translate` needs the
+_claims_ does not score — `assess` needs four home facts on the card and `translate` needs the
 demonstrated flag, or the mark is withheld.
 
 ## The guards are the product
