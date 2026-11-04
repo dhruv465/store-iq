@@ -9,16 +9,21 @@ import { modelRequest, providerRequest, readLimited } from "./http.js";
  *
  *  Chosen by the store on 4 Nov 2026 over ElevenLabs plus lipsync-2 on a pre-filmed clip (about 2
  *  minutes): it moved more naturally and took 46 s. It films 10 s at most and takes no audio, so the
- *  script is cut into pieces that fit 10 s, every piece is filmed at once, each starting and ending on
- *  the same photo so the cuts meet, and fal's ffmpeg joins them. The voice is Google's, described the
+ *  script is cut into pieces that fit 10 s and fal's ffmpeg joins them. Filmed all at once from the
+ *  photo, each piece paused, settled and started again, and the store heard the joins; so each piece
+ *  starts on the last frame of the one before and is told he is mid-talk, which costs a minute more.
+ *  The voice is Google's, described the
  *  same way every time; the store's ElevenLabs voice cannot be given to it. Prices from fal, 4 Nov 2026. */
 const FILM = "google/gemini-omni-flash/v1.1/image-to-video"; // $0.10 a second at 720p
 const JOIN = "fal-ai/ffmpeg-api/merge-videos"; // $0 a compute second
+const LAST_FRAME = "fal-ai/ffmpeg-api/extract-frame"; // $0 a compute second
 const FILM_PER_SECOND = 0.1;
 const CLIP_SECONDS = 10; // the most it films
 // Measured 4 Nov 2026: 26 spoken words took 9 s, so 24 leaves room for a breath.
 const WORDS_PER_CLIP = 24;
-const WORDS_PER_SECOND = 2.6;
+// He speaks about 3 words a second. A clip longer than its words gets padded: told to keep talking, he
+// repeated phrases and added an offer nobody gave ("smart TV pe best deals"), so a clip is cut close.
+const WORDS_PER_SECOND = 3;
 /** Meta refuses a video message over 16 MB. */
 const WHATSAPP_VIDEO_BYTES = 16 * 1024 * 1024;
 
@@ -26,9 +31,21 @@ const WHATSAPP_VIDEO_BYTES = 16 * 1024 * 1024;
 const SCENE = [
   "A Reliance Digital store manager in his red shirt speaks straight to the camera at the morning team huddle: warm, confident and natural, small head movements, at most one light hand gesture. Static camera, framing unchanged. His lips match every word.",
   "Voice: a warm, clear Indian male voice in his thirties, speaking natural Hinglish the way managers in Indian stores talk: English words in an Indian English accent, Hindi words in natural Hindi. Brisk, friendly pace. Always the same voice.",
-  "He starts and ends still, mouth closed, looking at the camera, exactly as in the photo.",
   "Audio: only his voice and a faint, quiet showroom ambience. No music, no subtitles, no text on screen.",
 ].join("\n");
+
+/** Where in the talk a piece falls, so the joins sound like one man talking and not clips restarting. */
+function partOf(index: number, count: number): string {
+  const opens =
+    index === 0
+      ? "He starts still, exactly as in the photo, and begins speaking straight away."
+      : "This picks up exactly where the previous shot ended, mid-talk: he goes straight on with no pause, no fresh start and no greeting, in the same voice and at the same pace.";
+  const closes =
+    index === count - 1
+      ? "When he finishes he smiles and stays looking at the camera."
+      : "He does not wind down or smile to finish, since he is about to go on to his next point; if his words end before the clip does, he simply keeps a natural, attentive look at the camera.";
+  return `${opens} ${closes}`;
+}
 
 export type VideoBrief = {
   status: "scripting" | "rendering" | "ready" | "failed";
@@ -252,34 +269,38 @@ export function startVideoBrief(
       // falText has already counted the script in the spend; the clips are counted below.
       job.cost = written.cost;
       job.status = "rendering";
-      const filmed = await Promise.allSettled(
-        clipLines(job.script).map(async (line) => {
-          const seconds = Math.min(CLIP_SECONDS, Math.max(4, Math.ceil(spokenWords(line) / WORDS_PER_SECOND) + 1));
-          const made = await falQueue(
-            config,
-            FILM,
-            {
-              prompt: `${SCENE}\nHe says exactly this, word for word, adding nothing before or after: "${spokenScript(line)}"`,
-              image_url: presenter,
-              end_image_url: presenter,
-              aspect_ratio: "9:16",
-              resolution: "720p",
-              duration: seconds,
-            },
-            request,
-            wait,
-          );
-          billed += seconds * FILM_PER_SECOND;
-          job.cost = written.cost + billed;
-          const url = made.video?.url;
-          if (typeof url !== "string" || !url.startsWith("https://")) throw Error("A clip came back empty.");
-          return made.video as { url: string; file_size?: number };
-        }),
-      );
-      // Settled, not all, so a clip still filming when another fails is counted before the spend is.
-      const failed = filmed.find((clip) => clip.status === "rejected");
-      if (failed) throw failed.reason;
-      const clips = filmed.map((clip) => (clip as PromiseFulfilledResult<{ url: string; file_size?: number }>).value);
+      // One after another: each piece starts on the frame the one before ended on.
+      const lines = clipLines(job.script);
+      const clips: { url: string; file_size?: number }[] = [];
+      let from = presenter;
+      for (const [index, line] of lines.entries()) {
+        const seconds = Math.min(CLIP_SECONDS, Math.max(4, Math.ceil(spokenWords(line) / WORDS_PER_SECOND) + 1));
+        const made = await falQueue(
+          config,
+          FILM,
+          {
+            prompt: `${SCENE}\n${partOf(index, lines.length)}\nHe says exactly this, word for word, once: "${spokenScript(line)}"\nHe never repeats a phrase and never adds a word, a product or an offer of his own; anything beyond these words is wrong.`,
+            image_url: from,
+            aspect_ratio: "9:16",
+            resolution: "720p",
+            duration: seconds,
+          },
+          request,
+          wait,
+        );
+        billed += seconds * FILM_PER_SECOND;
+        job.cost = written.cost + billed;
+        const clip = made.video;
+        if (typeof clip?.url !== "string" || !clip.url.startsWith("https://")) throw Error("A clip came back empty.");
+        clips.push(clip);
+        if (index < lines.length - 1) {
+          const frame = (await falQueue(config, LAST_FRAME, { video_url: clip.url, frame_type: "last" }, request, wait))
+            .images?.[0]?.url;
+          if (typeof frame !== "string" || !frame.startsWith("https://"))
+            throw Error("A clip's last frame came back empty.");
+          from = frame;
+        }
+      }
       const made =
         clips.length === 1
           ? clips[0]!

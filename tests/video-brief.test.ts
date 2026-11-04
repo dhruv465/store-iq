@@ -83,10 +83,14 @@ const fal = (async (url: string, init?: RequestInit) => {
     });
   if (url === "https://queue.fal.run/google/gemini-omni-flash/v1.1/image-to-video") return queued(`c${++clipsAsked}`);
   if (url === "https://queue.fal.run/fal-ai/ffmpeg-api/merge-videos") return queued("join");
+  if (url === "https://queue.fal.run/fal-ai/ffmpeg-api/extract-frame")
+    return queued(`f${JSON.parse(String(init?.body)).video_url.match(/clip(\d)/)[1]}`);
   if (url.endsWith("/status")) return Response.json({ status: "COMPLETED" });
   const clip = url.match(/requests\/c(\d)$/);
   if (clip)
     return Response.json({ video: { url: `https://v3.fal.media/files/clip${clip[1]}.mp4`, file_size: 3_000_000 } });
+  const frame = url.match(/requests\/f(\d)$/);
+  if (frame) return Response.json({ images: [{ url: `https://v3.fal.media/files/last${frame[1]}.jpg` }] });
   if (url.endsWith("/requests/join")) return Response.json({ video: { url: VIDEO, file_size: 9_000_000 } });
   throw Error(`unexpected ${url}`);
 }) as unknown as typeof fetch;
@@ -127,15 +131,19 @@ test("the video goes only on approval, now to who can be reached and held for wh
     assert.equal(view.job.video, VIDEO);
     const clips = falBodies["https://queue.fal.run/google/gemini-omni-flash/v1.1/image-to-video"]!;
     assert.equal(clips.length, 3, "a script over 10 s is filmed in pieces");
+    assert.deepEqual(
+      clips.map((clip) => clip.image_url),
+      ["https://x/p.png", "https://v3.fal.media/files/last1.jpg", "https://v3.fal.media/files/last2.jpg"],
+      "the first piece starts on the presenter, each next one on the frame the one before ended on",
+    );
+    assert.match(clips[1].prompt, /mid-talk/, "a later piece is told it carries on");
     for (const clip of clips) {
-      assert.equal(clip.image_url, "https://x/p.png", "every piece starts on the presenter");
-      assert.equal(clip.end_image_url, "https://x/p.png", "and ends on him, so the cuts meet");
       assert.equal(clip.aspect_ratio, "9:16");
       assert.ok(clip.duration >= 4 && clip.duration <= 10, `a clip fits what the model films: ${clip.duration}`);
     }
     assert.match(
       clips[1].prompt,
-      /word for word, adding nothing before or after: "LG fifty-five inch OLED fifty-four thousand nine hundred ninety rupees/,
+      /word for word, once: "LG fifty-five inch OLED fifty-four thousand nine hundred ninety rupees/,
     );
     assert.deepEqual(
       falBodies["https://queue.fal.run/fal-ai/ffmpeg-api/merge-videos"]![0].video_urls,
