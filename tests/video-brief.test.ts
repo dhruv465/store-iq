@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { openDatabase, type DB } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
-import { HINDI_UNDER_100, clipLines, spokenScript, writeScript } from "../server/src/video.js";
+import { HINDI_UNDER_100, addedToScript, clipLines, spokenScript, writeScript } from "../server/src/video.js";
 import { sendWhatsApp } from "../server/src/whatsapp.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 import type { Reply } from "../server/src/types.js";
@@ -75,7 +75,17 @@ const falBodies: Record<string, any[]> = {};
 let clipsAsked = 0;
 const fal = (async (url: string, init?: RequestInit) => {
   if (typeof init?.body === "string") (falBodies[url] ??= []).push(JSON.parse(init.body));
-  if (url === "https://fal.run/openrouter/router") return Response.json({ output: SCRIPT, usage: { cost: 0.001 } });
+  if (url === "https://fal.run/openrouter/router")
+    return Response.json({
+      // the script, or the check of what the presenter said against it
+      output: String(init?.body).includes("WHAT HE SAID") ? '{"added": []}' : SCRIPT,
+      usage: { cost: 0.001 },
+    });
+  if (url === VIDEO) return new Response(new Uint8Array([0, 0, 0, 24]));
+  if (url.includes("storage/upload/initiate"))
+    return Response.json({ upload_url: "https://v3b.fal.media/u", file_url: "https://v3b.fal.media/heard" });
+  if (url === "https://v3b.fal.media/u") return new Response(null);
+  if (url === "https://fal.run/fal-ai/elevenlabs/speech-to-text") return Response.json({ text: SCRIPT });
   const queued = (id: string) =>
     Response.json({
       status_url: `https://queue.fal.run/requests/${id}/status`,
@@ -128,6 +138,7 @@ test("the video goes only on approval, now to who can be reached and held for wh
       view = await (await app.request("/api/manager/video-brief", { headers })).json();
     }
     assert.equal(view.job.status, "ready");
+    assert.equal(view.job.heard, SCRIPT, "what he said was heard and checked before the manager sees it");
     assert.equal(view.job.video, VIDEO);
     const clips = falBodies["https://queue.fal.run/google/gemini-omni-flash/v1.1/image-to-video"]!;
     assert.equal(clips.length, 3, "a script over 10 s is filmed in pieces");
@@ -220,4 +231,55 @@ test("a script is cut into whole sentences that each fit one 10 s clip, and noth
   const long =
     "Ek, do, teen, char, paanch, chhe, saat, aath, nau, das, gyaarah, baarah, terah, chaudah, pandrah, solah, satrah, athaarah, unnees, bees, ikkees, baees, teis, chaubees, pachchees, chhabbees.";
   assert.ok(clipLines(long).length > 1, "a sentence too long for one clip is cut at its commas");
+});
+
+test("what the presenter said is checked against his script: a figure heard wrong twice, or an offer he added, is caught", async () => {
+  const script = "Sony Bravia 65 inch Rs 89,990 में, 12 महीने तक no cost EMI है.";
+  const check = (hearings: string[], added: string[]) => {
+    let heard = 0;
+    return (async (url: string, init?: RequestInit) => {
+      if (url === "https://v3.fal.media/files/v.mp4") return new Response(new Uint8Array([1]));
+      if (url.includes("storage/upload/initiate"))
+        return Response.json({ upload_url: "https://v3b.fal.media/u", file_url: "https://v3b.fal.media/h" });
+      if (url === "https://v3b.fal.media/u") return new Response(null);
+      if (url.endsWith("speech-to-text")) return Response.json({ text: hearings[heard++ % hearings.length] });
+      if (url === "https://fal.run/openrouter/router") {
+        assert.match(String(init?.body), /WHAT HE SAID/);
+        return Response.json({ output: JSON.stringify({ added }), usage: { cost: 0.0001 } });
+      }
+      throw Error(`unexpected ${url}`);
+    }) as unknown as typeof fetch;
+  };
+  const config = { key: "k", model: "m" } as Parameters<typeof addedToScript>[0];
+  const video = "https://v3.fal.media/files/v.mp4";
+
+  const clean = await addedToScript(
+    config,
+    script,
+    video,
+    check(["Sony Bravia 65 inch ₹89,990 में 12 महीने तक no cost EMI है।"], []),
+  );
+  assert.deepEqual(clean.added, [], "the same words, written differently, pass");
+
+  const wrong = await addedToScript(config, script, video, check(["Sony Bravia 65 inch ₹79,990 में"], []));
+  assert.ok(
+    wrong.added.some((figure) => figure.includes("79")),
+    `a price he said wrong is caught: ${wrong.added}`,
+  );
+
+  const misheard = await addedToScript(
+    config,
+    script,
+    video,
+    check(["Sony Bravia 65 inch ₹89,999 में", "Sony Bravia 65 inch ₹89,990 में"], []),
+  );
+  assert.deepEqual(misheard.added, [], "a figure misheard once, and heard right the second time, does not block it");
+
+  const offer = await addedToScript(
+    config,
+    script,
+    video,
+    check(["... smart TV पे best deals"], ["smart TV पे best deals"]),
+  );
+  assert.deepEqual(offer.added, ["smart TV पे best deals"], "an offer he made up is caught");
 });

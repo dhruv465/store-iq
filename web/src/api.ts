@@ -92,8 +92,9 @@ export type Preview = {
 };
 
 export type VideoBrief = {
-  status: "scripting" | "rendering" | "ready" | "failed";
+  status: "scripting" | "rendering" | "checking" | "ready" | "failed";
   brief: string;
+  heard?: string;
   script?: string;
   video?: string;
   error?: string;

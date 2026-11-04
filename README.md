@@ -75,7 +75,11 @@ up to 24 spoken words, all filmed at once, each starting and ending on the photo
 for every clip; the store's ElevenLabs voice cannot be given to it. The presenter says prices and
 percentages in English, as the floor says them ("one lakh nineteen thousand nine hundred ninety rupees",
 "ten percent"), and a number before a Hindi word in Hindi ("बारह महीने तक"); the caption keeps
-`Rs 1,19,990`. It is watched in the portal and goes out only on "Approve and send", to the same people as
+`Rs 1,19,990`. Then it is heard back before the manager sees it: ElevenLabs Scribe transcribes it twice, every
+figure is checked in code against the script (refused only when both hearings have it wrong, since a
+long spoken price is sometimes misheard once), and one router call lists any product or offer he added.
+Anything added and the video is not shown, with what he said; the model filming him once offered "smart
+TV pe best deals" that nobody gave it. It is watched in the portal and goes out only on "Approve and send", to the same people as
 a text notice, held for anyone outside the window.
 
 So **Gemini is now only the shelf-tag photo**, plus the turn when there is no `FAL_KEY` at all — on

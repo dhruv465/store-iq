@@ -1,5 +1,5 @@
 import { unsupportedNumbers } from "./brain.js";
-import { addSpend, falText, type FalConfig } from "./fal.js";
+import { addSpend, falText, falTranscribe, readJson, type FalConfig } from "./fal.js";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 
 /** The morning video brief: the manager types today's brief roughly, the model writes a short spoken
@@ -48,7 +48,9 @@ function partOf(index: number, count: number): string {
 }
 
 export type VideoBrief = {
-  status: "scripting" | "rendering" | "ready" | "failed";
+  status: "scripting" | "rendering" | "checking" | "ready" | "failed";
+  /** What the presenter was heard to say, once the video is checked. */
+  heard?: string;
   brief: string;
   script?: string;
   video?: string;
@@ -229,6 +231,43 @@ export async function falQueue(
   throw Error("The video took over 20 minutes; nothing was sent. Try again.");
 }
 
+const ADDED_SYSTEM = [
+  "You compare what a presenter said on video with the script he was given, for a store that must never tell its staff an offer, price or product that nobody gave it.",
+  "List every product, brand, model, offer, deal, discount, date or claim about a product or the store that he said and the script does not contain.",
+  "Leave out prices, numbers and percentages altogether, even ones that differ: they are checked separately.",
+  "Ignore what is only said differently: Hindi or English letters for the same word, a different spelling (पे for पर, महिने for महीने), a number in words or digits. Never list a greeting, a closing, a filler or a linking word that adds no fact, even one he added (Hello, so, now, तो याद रखो).",
+  'Answer with JSON only: {"added": ["the added words, as he said them"]}, and an empty list when he added nothing.',
+].join("\n");
+
+/** What the presenter actually said, checked against his script before the manager can approve it.
+ *  He is filmed by a model that adds words it is told not to (it offered "smart TV pe best deals" on
+ *  4 Nov 2026), so nothing he says goes out unread. Figures are checked in code, as every reply is;
+ *  a product or an offer he made up is found by the model, since the words never match exactly. */
+export async function addedToScript(
+  config: FalConfig,
+  script: string,
+  video: string,
+  request: typeof fetch = fetch,
+): Promise<{ heard: string; added: string[]; cost: number }> {
+  // ElevenLabs Scribe, as for voice notes: Whisper wrote "Rs 89,990" said aloud as "89,000-9990". Scribe
+  // too heard one clip's price as 89,990 and then as 89,999, so it listens twice and a figure is refused
+  // only when both hearings have it wrong: a figure he really said wrong is heard wrong both times.
+  const file = await modelRequest(request, video, {}, "fal");
+  const bytes = await readLimited(file, WHATSAPP_VIDEO_BYTES);
+  const [text, again] = await Promise.all(
+    [0, 1].map(() => falTranscribe(config, { bytes, mimeType: "video/mp4" }, request, 4000).catch(() => "")),
+  );
+  if (!text || !again)
+    throw Error("What the presenter said could not be heard, so the video was not checked. Make it again.");
+  const heardTwice = new Set(unsupportedNumbers(again, new Set(), script));
+  const figures = unsupportedNumbers(text, new Set(), script).filter((figure) => heardTwice.has(figure));
+  const compared = await falText(config, ADDED_SYSTEM, `SCRIPT:\n${script}\n\nWHAT HE SAID:\n${text}`, request);
+  const { added } = readJson<{ added?: unknown }>(compared.text);
+  if (!Array.isArray(added)) throw Error("The check of what the presenter said came back unreadable. Make it again.");
+  const words = added.map((item) => String(item).trim()).filter(Boolean);
+  return { heard: text, added: [...new Set([...figures, ...words])], cost: compared.cost };
+}
+
 let current: VideoBrief | null = null;
 
 /** shortcut: one brief, in memory, so a restart forgets it; move it to the database if the manager
@@ -258,7 +297,7 @@ export function startVideoBrief(
   request: typeof fetch = fetch,
   wait?: (ms: number) => Promise<void>,
 ): { job: VideoBrief; done: Promise<void> } | null {
-  if (current && ["scripting", "rendering"].includes(current.status)) return null;
+  if (current && ["scripting", "rendering", "checking"].includes(current.status)) return null;
   const job: VideoBrief = { status: "scripting", brief, cost: 0 };
   current = job;
   let billed = 0;
@@ -309,6 +348,16 @@ export function startVideoBrief(
       if (typeof video !== "string" || !video.startsWith("https://")) throw Error("The video came back empty.");
       if (Number(made.file_size) > WHATSAPP_VIDEO_BYTES)
         throw Error("The video is over WhatsApp's 16 MB limit. Make the brief shorter and try again.");
+      job.status = "checking";
+      const checked = await addedToScript(config, job.script, video, request);
+      // falText has counted the comparison in the spend already, as it did the script.
+      job.cost = written.cost + billed + checked.cost;
+      job.heard = checked.heard;
+      if (checked.added.length)
+        throw Error(
+          `The presenter said what is not in the script: ${checked.added.map((item) => `"${item}"`).join(", ")}. ` +
+            "It was not sent; make it again.",
+        );
       job.video = video;
       job.status = "ready";
     } catch (error) {

@@ -837,7 +837,8 @@ function TellTheFloor({ floor }: { floor: Floor }) {
 
 const MAKING: Record<string, string> = {
   scripting: "Writing the script…",
-  rendering: "Filming the presenter. This takes about a minute; you can leave this tab open.",
+  rendering: "Filming the presenter, a piece at a time. This takes two or three minutes; you can leave this tab open.",
+  checking: "Checking that the presenter said only what is in the script…",
 };
 
 /** Today's brief as a short video: the manager writes it roughly, the server scripts, voices and
@@ -944,6 +945,15 @@ function VideoBriefCard() {
           <>
             <video src={job.video} controls playsInline className="max-h-[28rem] w-full max-w-sm rounded-md bg-black" />
             <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{view?.caption}</div>
+            {job.heard ? (
+              <details className="text-muted-foreground text-xs">
+                <summary className="cursor-pointer">
+                  <CheckCircle2 className="mr-1 inline size-3.5 text-emerald-600" />
+                  Checked: he says nothing that is not in the script
+                </summary>
+                <p className="mt-2 border-l-2 pl-3 whitespace-pre-wrap">{job.heard}</p>
+              </details>
+            ) : null}
             <p className="text-muted-foreground text-xs">This video cost ${job.cost.toFixed(2)} to make.</p>
             {view?.to ? <Recipients preview={view as Omit<Preview, "message">} /> : null}
             <div className="flex flex-wrap gap-2">

@@ -206,6 +206,7 @@ export async function falTranscribe(
   config: FalConfig,
   audio: { bytes: Uint8Array; mimeType: string },
   request: typeof fetch = fetch,
+  limit = 600,
 ): Promise<string> {
   const response = await modelRequest(
     request,
@@ -228,7 +229,7 @@ export async function falTranscribe(
   };
   if (body.error) throw Error(`fal refused the audio: ${body.error}`);
   if (!body.text?.trim()) throw Error(NOTHING_HEARD);
-  return body.text.trim().slice(0, 600);
+  return body.text.trim().slice(0, limit);
 }
 
 /** JSON out of a model that was only asked for it in words.
