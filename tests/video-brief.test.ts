@@ -118,6 +118,7 @@ test("the video goes only on approval, now to who can be reached and held for wh
     assert.equal(view.job.status, "ready");
     assert.equal(view.job.video, VIDEO);
     assert.equal(falBodies["https://fal.run/fal-ai/elevenlabs/tts/turbo-v2.5"].voice, "7b9mYhmnp0y2qSH1FnBL");
+    assert.equal(falBodies["https://fal.run/fal-ai/elevenlabs/tts/turbo-v2.5"].language_code, "hi", "always Hindi");
     assert.equal(
       falBodies["https://queue.fal.run/fal-ai/sync-lipsync/v2"].video_url,
       "https://x/p.mp4",
@@ -161,10 +162,10 @@ test("a held video reaches the associate when they next write", async () => {
   }
 });
 
-test("the voice hears figures the way a store says them, and the caption keeps Rs", () => {
+test("the voice hears figures the way a store says them in Hindi, and the caption keeps Rs", () => {
   assert.equal(
-    spokenScript("LG OLED pe Rs 1,19,990, SBI card pe 10% off. Sony Rs. 89,990/- aur boat ₹999, bonus Rs 5,000."),
-    "LG OLED pe 1 lakh 19 thousand 990 rupees, SBI card pe 10 percent off. Sony 89 thousand 990 rupees aur boat 999 rupees, bonus 5 thousand rupees.",
+    spokenScript("LG OLED पर Rs 1,19,990, SBI कार्ड पर 10% ऑफ। Sony Rs. 89,990/- और boat ₹999, बोनस Rs 5,000।"),
+    "LG OLED पर 1 लाख 19 हज़ार 990 रुपये, SBI कार्ड पर 10 परसेंट ऑफ। Sony 89 हज़ार 990 रुपये और boat 999 रुपये, बोनस 5 हज़ार रुपये।",
   );
-  assert.equal(spokenScript("Rs 1,00,000 and Rs 2,50,00,000"), "1 lakh rupees and 2 crore 50 lakh rupees");
+  assert.equal(spokenScript("Rs 1,00,000 और Rs 2,50,00,000"), "1 लाख रुपये और 2 करोड़ 50 लाख रुपये");
 });

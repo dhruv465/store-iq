@@ -37,14 +37,14 @@ const SCRIPT_SYSTEM = [
   "You write what a Reliance Digital store manager says to camera at the morning huddle, to the floor team: the store associates, never customers. It is heard, not read.",
   "35 to 45 words, about 15 seconds; never more. Talk the way a good manager actually talks to their team: short sentences, one idea each, a quick greeting, what is on today and what to do about it, and a short push to finish.",
   'Never say the same word twice in a row or in back-to-back sentences (not "sale... sale"); say it once and move on. No headings, lists, emoji, hashtags or stage directions.',
-  'Write in the language the manager wrote the brief in. A brief in Hinglish (Hindi words in Latin letters, like "aaj se sale shuru") gets a script in Hinglish, in Latin letters, never translated to English.',
+  "Always write in Hindi, in Devanagari, whatever language the brief is in: everyday Hindi as it is spoken on a store floor, not formal or literary. Common English words people use there (offer, demo, exchange, EMI, card) are written in Devanagari; brand and model names, and every figure with its unit, stay exactly as the brief writes them (LG, iPhone 16, 55 inch, 10%).",
   'Keep every fact as the brief has it, including when: "kal" is tomorrow, "aaj" is today; never move a day.',
   "Use only what the brief says. Every price, percentage, number, date and duration must appear in the brief exactly as written; never add one, round one or work one out.",
   "Write money as Rs 54,990, never with the rupee sign.",
   "Answer with the script only, no quotes around it.",
 ].join("\n");
 
-/** An amount as it is said aloud in an Indian store: 1,19,990 is "1 lakh 19 thousand 990". The
+/** An amount as it is said aloud in an Indian store: 1,19,990 is "1 लाख 19 हज़ार 990". The
  *  voice reads digits well and "Rs" and Indian commas badly ("R S 100,199,000"), so the figures stay
  *  the checked ones and only the way they are written changes. */
 function sayAmount(written: string): string {
@@ -52,9 +52,9 @@ function sayAmount(written: string): string {
   if (!/^\d+$/.test(plain)) return plain;
   const n = Number(plain);
   const parts = [
-    [Math.floor(n / 1e7), "crore"],
-    [Math.floor((n % 1e7) / 1e5), "lakh"],
-    [Math.floor((n % 1e5) / 1e3), "thousand"],
+    [Math.floor(n / 1e7), "करोड़"],
+    [Math.floor((n % 1e7) / 1e5), "लाख"],
+    [Math.floor((n % 1e5) / 1e3), "हज़ार"],
   ]
     .filter(([count]) => count)
     .map(([count, word]) => `${count} ${word}`);
@@ -67,10 +67,10 @@ export function spokenScript(script: string): string {
   return script
     .replace(
       /(?:\bRs\.?|₹|\bINR)\s*(\d+(?:,\d{2,3})*(?:\.\d+)?)(?:\s*\/-)?/gi,
-      (_, amount: string) => `${sayAmount(amount)} rupees`,
+      (_, amount: string) => `${sayAmount(amount)} रुपये`,
     )
     .replace(/\b\d{1,3}(?:,\d{2,3})+\b/g, sayAmount)
-    .replace(/(\d)\s*%/g, "$1 percent");
+    .replace(/(\d)\s*%/g, "$1 परसेंट");
 }
 
 /** The script, held to Rule 1: every figure in it must be in the manager's own words. Refused once,
@@ -189,7 +189,7 @@ export function startVideoBrief(
           {
             method: "POST",
             headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
-            body: JSON.stringify({ text: spokenScript(job.script), voice: VOICE_ID }),
+            body: JSON.stringify({ text: spokenScript(job.script), voice: VOICE_ID, language_code: "hi" }),
           },
           "fal",
           60_000,
