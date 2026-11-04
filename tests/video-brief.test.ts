@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { openDatabase, type DB } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
-import { writeScript } from "../server/src/video.js";
+import { spokenScript, writeScript } from "../server/src/video.js";
 import { sendWhatsApp } from "../server/src/whatsapp.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 import type { Reply } from "../server/src/types.js";
@@ -66,15 +66,17 @@ test("a video goes to WhatsApp as a video with its caption, and a bad one never 
   }
 });
 
-/** fal, faked end to end: the script, the voice, and Kling through the queue. */
-const fal = (async (url: string) => {
+/** fal, faked end to end: the script, the voice, and lipsync-2 through the queue. */
+const falBodies: Record<string, any> = {};
+const fal = (async (url: string, init?: RequestInit) => {
+  if (typeof init?.body === "string") falBodies[url] = JSON.parse(init.body);
   if (url === "https://fal.run/openrouter/router")
     return Response.json({ output: "Team, LG 55 inch OLED Rs 54,990 aaj. Chalo!", usage: { cost: 0.001 } });
   if (url.startsWith("https://fal.run/fal-ai/elevenlabs/")) return Response.json({ audio: { url: "https://x/a.mp3" } });
-  if (url === "https://queue.fal.run/fal-ai/kling-video/ai-avatar/v2/standard")
+  if (url === "https://queue.fal.run/fal-ai/sync-lipsync/v2")
     return Response.json({
-      status_url: "https://queue.fal.run/fal-ai/kling-video/requests/r1/status",
-      response_url: "https://queue.fal.run/fal-ai/kling-video/requests/r1",
+      status_url: "https://queue.fal.run/fal-ai/sync-lipsync/requests/r1/status",
+      response_url: "https://queue.fal.run/fal-ai/sync-lipsync/requests/r1",
     });
   if (url.endsWith("/r1/status")) return Response.json({ status: "COMPLETED" });
   if (url.endsWith("/r1")) return Response.json({ video: { url: VIDEO, file_size: 3_000_000 }, duration: 30 });
@@ -83,7 +85,7 @@ const fal = (async (url: string) => {
 
 test("the video goes only on approval, now to who can be reached and held for who cannot", async () => {
   const saved = { ...process.env };
-  Object.assign(process.env, { ADMIN_PASSWORD: "pw", FAL_KEY: "k", PRESENTER_IMAGE_URL: "https://x/p.jpg" });
+  Object.assign(process.env, { ADMIN_PASSWORD: "pw", FAL_KEY: "k", PRESENTER_VIDEO_URL: "https://x/p.mp4" });
   const sent: { phone: string; reply: Reply }[] = [];
   const held: { body: string; phones: string[]; video?: string | undefined }[] = [];
   const db = {
@@ -115,6 +117,12 @@ test("the video goes only on approval, now to who can be reached and held for wh
     }
     assert.equal(view.job.status, "ready");
     assert.equal(view.job.video, VIDEO);
+    assert.equal(falBodies["https://fal.run/fal-ai/elevenlabs/tts/turbo-v2.5"].voice, "7b9mYhmnp0y2qSH1FnBL");
+    assert.equal(
+      falBodies["https://queue.fal.run/fal-ai/sync-lipsync/v2"].video_url,
+      "https://x/p.mp4",
+      "lips on the clip",
+    );
     assert.deepEqual(view.to, [{ phone: "919820000001", name: "Ramesh" }], "the manager sees who before sending");
     assert.equal(sent.length, 0, "and nothing has gone yet");
 
@@ -151,4 +159,12 @@ test("a held video reaches the associate when they next write", async () => {
   } finally {
     await db.close();
   }
+});
+
+test("the voice hears figures the way a store says them, and the caption keeps Rs", () => {
+  assert.equal(
+    spokenScript("LG OLED pe Rs 1,19,990, SBI card pe 10% off. Sony Rs. 89,990/- aur boat ₹999, bonus Rs 5,000."),
+    "LG OLED pe 1 lakh 19 thousand 990 rupees, SBI card pe 10 percent off. Sony 89 thousand 990 rupees aur boat 999 rupees, bonus 5 thousand rupees.",
+  );
+  assert.equal(spokenScript("Rs 1,00,000 and Rs 2,50,00,000"), "1 lakh rupees and 2 crore 50 lakh rupees");
 });

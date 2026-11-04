@@ -66,9 +66,13 @@ Proven on real audio in English and Hindi.
 
 The manager's **video brief** (portal, Broadcast tab) is fal too: the router writes a ~20 s script from
 the manager's rough brief, held to the figure guard against the brief's own words; ElevenLabs
-`fal-ai/elevenlabs/tts/turbo-v2.5` ($0.05 per 1,000 characters) voices it; and
-`fal-ai/kling-video/ai-avatar/v2/standard` ($0.0562 a second) makes the presenter in
-`PRESENTER_IMAGE_URL` say it, through fal's queue. A 20 s brief measured $1.15 and 5.5 minutes, and 12.2 MB, which is why it is kept short: WhatsApp takes 16 MB. It is watched in the portal and
+`fal-ai/elevenlabs/tts/turbo-v2.5` ($0.05 per 1,000 characters, the store's chosen voice) voices it;
+and sync's lipsync-2, `fal-ai/sync-lipsync/v2` ($3 a minute), moves the lips of the presenter clip
+in `PRESENTER_VIDEO_URL` to it, through fal's queue. The clip is made once by `scripts/presenter.ts`:
+nano-banana-pro draws the presenter and Kling AI Avatar films 22 s of him talking. A 19 s brief took
+about 2 to 3 minutes and about $1. lipsync-2 sets its bitrate by resolution, so the clip is 540x960:
+7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice hears figures as a store says them
+("1 lakh 19 thousand 990 rupees"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
 goes out only on "Approve and send", to the same people as a text notice, held for anyone outside the
 window.
 

@@ -3,16 +3,24 @@ import { addSpend, falText, type FalConfig } from "./fal.js";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 
 /** The morning video brief: the manager types today's brief roughly, the model writes a short spoken
- *  script around it, ElevenLabs reads it, and Kling makes the one fixed presenter say it. Nothing
- *  goes to the floor from here; the manager watches it in the portal and approves it there.
+ *  script around it, ElevenLabs reads it, and sync's lipsync-2 moves the fixed presenter's mouth to it.
+ *  Nothing goes to the floor from here; the manager watches it in the portal and approves it there.
  *
- *  Prices from fal's pricing API, 4 Nov 2026. The first real brief, 4 Nov: 20 s of video, $1.15, 5.5
- *  minutes, 12.2 MB. Kling writes about 0.6 MB a second, so the script is kept to 20 seconds to stay
- *  under WhatsApp's 16 MB. */
+ *  The presenter is a 22 s clip of him talking, made once (scripts/presenter.ts), so each day only the
+ *  lips are made. Chosen by the store on 4 Nov 2026 from three side by side: LatentSync drifted off
+ *  the words after the first sentences on a clip played back and forth, and lipsync-2 on a clip that
+ *  only plays forward held them, in about 2 minutes. If the voice runs past the clip, it bounces.
+ *  lipsync-2 sets its own bitrate whatever it is given, by resolution: at 720x1280 19.2 s was 14.3 MB
+ *  and a Hinglish brief went over WhatsApp's 16 MB; at 540x960 it is 7.4 MB, so the clip is 540x960.
+ *  Prices from fal, 4 Nov 2026. */
 const VOICE = "fal-ai/elevenlabs/tts/turbo-v2.5"; // $0.05 per 1000 characters; half of multilingual-v2
-const AVATAR = "fal-ai/kling-video/ai-avatar/v2/standard"; // $0.0562 per second of video
+const VOICE_ID = "7b9mYhmnp0y2qSH1FnBL"; // the store's chosen ElevenLabs voice, 4 Nov 2026
+const LIPSYNC = "fal-ai/sync-lipsync/v2"; // $3 a minute of video
 const VOICE_PER_CHAR = 0.05 / 1000;
-const AVATAR_PER_SECOND = 0.0562;
+const LIPSYNC_PER_SECOND = 3 / 60;
+// shortcut: fal does not return the length, so it is estimated from the words (about 15 characters a
+// second for this voice); read it from the file if the spend has to be exact.
+const SPOKEN_CHARS_PER_SECOND = 15;
 /** Meta refuses a video message over 16 MB. */
 const WHATSAPP_VIDEO_BYTES = 16 * 1024 * 1024;
 
@@ -26,13 +34,44 @@ export type VideoBrief = {
 };
 
 const SCRIPT_SYSTEM = [
-  "You write the script for a short video that opens the shift at a Reliance Digital store. A presenter in the store's red staff shirt reads it to camera, to the floor team: the store associates, never customers.",
-  "40 to 60 words, about 20 seconds spoken. Warm and energetic, plain speech: no headings, lists, emoji, hashtags or stage directions.",
-  "Write in the language the manager wrote the brief in. Hinglish stays Hinglish, in Latin letters.",
+  "You write what a Reliance Digital store manager says to camera at the morning huddle, to the floor team: the store associates, never customers. It is heard, not read.",
+  "35 to 45 words, about 15 seconds; never more. Talk the way a good manager actually talks to their team: short sentences, one idea each, a quick greeting, what is on today and what to do about it, and a short push to finish.",
+  'Never say the same word twice in a row or in back-to-back sentences (not "sale... sale"); say it once and move on. No headings, lists, emoji, hashtags or stage directions.',
+  'Write in the language the manager wrote the brief in. A brief in Hinglish (Hindi words in Latin letters, like "aaj se sale shuru") gets a script in Hinglish, in Latin letters, never translated to English.',
+  'Keep every fact as the brief has it, including when: "kal" is tomorrow, "aaj" is today; never move a day.',
   "Use only what the brief says. Every price, percentage, number, date and duration must appear in the brief exactly as written; never add one, round one or work one out.",
   "Write money as Rs 54,990, never with the rupee sign.",
   "Answer with the script only, no quotes around it.",
 ].join("\n");
+
+/** An amount as it is said aloud in an Indian store: 1,19,990 is "1 lakh 19 thousand 990". The
+ *  voice reads digits well and "Rs" and Indian commas badly ("R S 100,199,000"), so the figures stay
+ *  the checked ones and only the way they are written changes. */
+function sayAmount(written: string): string {
+  const plain = written.replace(/,/g, "");
+  if (!/^\d+$/.test(plain)) return plain;
+  const n = Number(plain);
+  const parts = [
+    [Math.floor(n / 1e7), "crore"],
+    [Math.floor((n % 1e7) / 1e5), "lakh"],
+    [Math.floor((n % 1e5) / 1e3), "thousand"],
+  ]
+    .filter(([count]) => count)
+    .map(([count, word]) => `${count} ${word}`);
+  if (n % 1000 || !parts.length) parts.push(String(n % 1000));
+  return parts.join(" ");
+}
+
+/** The script as the voice should read it. The caption keeps "Rs 54,990"; only the audio changes. */
+export function spokenScript(script: string): string {
+  return script
+    .replace(
+      /(?:\bRs\.?|₹|\bINR)\s*(\d+(?:,\d{2,3})*(?:\.\d+)?)(?:\s*\/-)?/gi,
+      (_, amount: string) => `${sayAmount(amount)} rupees`,
+    )
+    .replace(/\b\d{1,3}(?:,\d{2,3})+\b/g, sayAmount)
+    .replace(/(\d)\s*%/g, "$1 percent");
+}
 
 /** The script, held to Rule 1: every figure in it must be in the manager's own words. Refused once,
  *  the model is told which figure; refused twice, nothing is generated and the manager is told. */
@@ -150,7 +189,7 @@ export function startVideoBrief(
           {
             method: "POST",
             headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
-            body: JSON.stringify({ text: job.script, voice: "Brian" }),
+            body: JSON.stringify({ text: spokenScript(job.script), voice: VOICE_ID }),
           },
           "fal",
           60_000,
@@ -161,13 +200,19 @@ export function startVideoBrief(
       const audio = voiced.audio?.url;
       if (typeof audio !== "string") throw Error("The voice came back empty.");
       job.status = "rendering";
-      const made = await falQueue(config, AVATAR, { image_url: presenter, audio_url: audio }, request, wait);
-      billed += (Number(made.duration) || 0) * AVATAR_PER_SECOND;
+      const made = await falQueue(
+        config,
+        LIPSYNC,
+        { video_url: presenter, audio_url: audio, sync_mode: "bounce" },
+        request,
+        wait,
+      );
+      billed += (spokenScript(job.script).length / SPOKEN_CHARS_PER_SECOND) * LIPSYNC_PER_SECOND;
       job.cost = written.cost + billed;
       const video = made.video?.url;
       if (typeof video !== "string" || !video.startsWith("https://")) throw Error("The video came back empty.");
       if (Number(made.video.file_size) > WHATSAPP_VIDEO_BYTES)
-        throw Error("The video is over WhatsApp's 16 MB limit. Shorten the brief and try again.");
+        throw Error("The video is over WhatsApp's 16 MB limit. Make the brief shorter and try again.");
       job.video = video;
       job.status = "ready";
     } catch (error) {
