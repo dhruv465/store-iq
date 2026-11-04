@@ -65,14 +65,15 @@ which is all the rest wants: the card is then read from those words exactly as f
 Proven on real audio in English and Hindi.
 
 The manager's **video brief** (portal, Broadcast tab) is fal too: the router writes a ~20 s script from
-the manager's rough brief, held to the figure guard against the brief's own words; ElevenLabs
+the manager's rough brief, always in Hinglish (mostly English, Hindi words in Devanagari so the voice
+says them right) whatever language the brief is in, held to the figure guard against the brief's own words; ElevenLabs
 `fal-ai/elevenlabs/tts/turbo-v2.5` ($0.05 per 1,000 characters, the store's chosen voice) voices it;
 and sync's lipsync-2, `fal-ai/sync-lipsync/v2` ($3 a minute), moves the lips of the presenter clip
 in `PRESENTER_VIDEO_URL` to it, through fal's queue. The clip is made once by `scripts/presenter.ts`:
 nano-banana-pro draws the presenter and Kling AI Avatar films 22 s of him talking. A 19 s brief took
 about 2 to 3 minutes and about $1. lipsync-2 sets its bitrate by resolution, so the clip is 540x960:
 7.4 MB for 19 s, where 720x1280 went over WhatsApp's 16 MB. The voice hears figures as a store says them
-("1 lakh 19 thousand 990 rupees"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
+("1 लाख 19 हज़ार 990 रुपये"); the caption keeps `Rs 1,19,990`. It is watched in the portal and
 goes out only on "Approve and send", to the same people as a text notice, held for anyone outside the
 window.
 
