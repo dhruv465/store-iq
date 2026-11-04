@@ -64,6 +64,14 @@ a clear note and misheard Hindi on the same ten real notes. It returns the words
 which is all the rest wants: the card is then read from those words exactly as from typed ones.
 Proven on real audio in English and Hindi.
 
+The manager's **video brief** (portal, Broadcast tab) is fal too: the router writes a ~20 s script from
+the manager's rough brief, held to the figure guard against the brief's own words; ElevenLabs
+`fal-ai/elevenlabs/tts/turbo-v2.5` ($0.05 per 1,000 characters) voices it; and
+`fal-ai/kling-video/ai-avatar/v2/standard` ($0.0562 a second) makes the presenter in
+`PRESENTER_IMAGE_URL` say it, through fal's queue. A 20 s brief measured $1.15 and 5.5 minutes, and 12.2 MB, which is why it is kept short: WhatsApp takes 16 MB. It is watched in the portal and
+goes out only on "Approve and send", to the same people as a text notice, held for anyone outside the
+window.
+
 So **Gemini is now only the shelf-tag photo**, plus the turn when there is no `FAL_KEY` at all — on
 a free tier of 20 requests a day, which is what answered an associate "I could not answer that just
 now" twice on a real phone before this.

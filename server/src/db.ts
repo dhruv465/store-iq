@@ -69,6 +69,7 @@ create table if not exists notice_deliveries (
   delivered_at timestamptz,
   primary key (notice_id, phone)
 );
+alter table notices add column if not exists video text;
 create index if not exists notice_waiting on notice_deliveries (phone) where delivered_at is null;
 create table if not exists associates (
   phone text primary key,
@@ -415,8 +416,11 @@ export class DB {
    *  somebody who has not written in 24 hours, so the ones who cannot be reached now are held and
    *  go out the moment they next write. A notice about today stops being worth delivering after
    *  the shift, so it expires rather than arriving tomorrow morning. */
-  async queueNotice(body: string, phones: string[]): Promise<number> {
-    const created = await this.pg.query<{ id: number }>(`insert into notices (body) values ($1) returning id`, [body]);
+  async queueNotice(body: string, phones: string[], video?: string): Promise<number> {
+    const created = await this.pg.query<{ id: number }>(
+      `insert into notices (body, video) values ($1, $2) returning id`,
+      [body, video ?? null],
+    );
     const id = created.rows[0]!.id;
     for (const phone of phones)
       await this.pg.query(`insert into notice_deliveries (notice_id, phone) values ($1, $2) on conflict do nothing`, [
@@ -427,9 +431,12 @@ export class DB {
   }
 
   /** Notices this associate has not been given yet, oldest first, that are still worth giving. */
-  async waitingNotices(phone: string, lifeHours = NOTICE_LIFE_HOURS): Promise<{ id: number; body: string }[]> {
-    const rows = await this.pg.query<{ id: number; body: string }>(
-      `select n.id, n.body from notice_deliveries d join notices n on n.id = d.notice_id
+  async waitingNotices(
+    phone: string,
+    lifeHours = NOTICE_LIFE_HOURS,
+  ): Promise<{ id: number; body: string; video?: string | null }[]> {
+    const rows = await this.pg.query<{ id: number; body: string; video?: string | null }>(
+      `select n.id, n.body, n.video from notice_deliveries d join notices n on n.id = d.notice_id
        where d.phone = $1 and d.delivered_at is null and n.created_at > now() - make_interval(hours => $2)
        order by n.created_at`,
       [phone, lifeHours],

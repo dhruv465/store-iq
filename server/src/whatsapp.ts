@@ -40,12 +40,27 @@ async function json(response: Response, limit = 64 * 1024): Promise<Record<strin
   }
 }
 
-/** Floor rule: at most 3 buttons, so a reply is always a plain text or a 3-button card. */
+/** Floor rule: at most 3 buttons, so a reply is always a plain text, a 3-button card, or the
+ *  manager's video brief with its caption. */
 export async function sendWhatsApp(phone: string, reply: Reply, request: typeof fetch = fetch): Promise<string> {
   if (!/^[1-9]\d{6,14}$/.test(phone)) throw Error("Invalid WhatsApp recipient");
   const buttons = reply.buttons ?? [];
-  if (typeof reply.text !== "string" || !reply.text.trim() || reply.text.length > (buttons.length ? 1024 : 4096))
+  if (
+    typeof reply.text !== "string" ||
+    !reply.text.trim() ||
+    reply.text.length > (buttons.length || reply.video !== undefined ? 1024 : 4096)
+  )
     throw Error("Invalid WhatsApp reply text");
+  // Meta downloads the video itself, so the link has to be public HTTPS; a caption takes no buttons.
+  if (
+    reply.video !== undefined &&
+    (typeof reply.video !== "string" ||
+      reply.video.length > 2048 ||
+      !URL.canParse(reply.video) ||
+      new URL(reply.video).protocol !== "https:" ||
+      buttons.length)
+  )
+    throw Error("Invalid WhatsApp reply video");
   if (
     buttons.length > 3 ||
     buttons.some(
@@ -68,16 +83,18 @@ export async function sendWhatsApp(phone: string, reply: Reply, request: typeof 
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to: phone,
-    ...(buttons.length
-      ? {
-          type: "interactive",
-          interactive: {
-            type: "button",
-            body: { text: reply.text },
-            action: { buttons: buttons.map((b) => ({ type: "reply", reply: { id: b.id, title: b.title } })) },
-          },
-        }
-      : { type: "text", text: { body: reply.text, preview_url: false } }),
+    ...(reply.video
+      ? { type: "video", video: { link: reply.video, caption: reply.text } }
+      : buttons.length
+        ? {
+            type: "interactive",
+            interactive: {
+              type: "button",
+              body: { text: reply.text },
+              action: { buttons: buttons.map((b) => ({ type: "reply", reply: { id: b.id, title: b.title } })) },
+            },
+          }
+        : { type: "text", text: { body: reply.text, preview_url: false } }),
   };
   const result = await json(
     await providerRequest(

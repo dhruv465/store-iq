@@ -44,7 +44,8 @@ export type HomeCard = {
 };
 
 export type Button = { id: string; title: string };
-export type Reply = { text: string; buttons?: Button[] };
+/** With `video`, the text is the video's caption: a public HTTPS mp4 Meta fetches itself. */
+export type Reply = { text: string; buttons?: Button[]; video?: string };
 
 export type Turn = { who: "associate" | "storeiq"; text: string };
 

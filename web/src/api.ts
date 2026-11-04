@@ -91,6 +91,18 @@ export type Preview = {
   rosterEmpty: boolean;
 };
 
+export type VideoBrief = {
+  status: "scripting" | "voicing" | "rendering" | "ready" | "failed";
+  brief: string;
+  script?: string;
+  video?: string;
+  error?: string;
+  cost: number;
+};
+
+/** The current video brief, and once it is ready, who it would reach. */
+export type VideoBriefView = { job: VideoBrief | null; caption: string | null } & Partial<Omit<Preview, "message">>;
+
 /** Thrown when the portal is not signed in, so the app can show the sign-in card rather than an
  *  error the manager cannot act on. */
 export class NeedsSignIn extends Error {}
@@ -118,6 +130,12 @@ export const api = {
     call<Preview>("/broadcast/preview", { method: "POST", body: JSON.stringify({ text }) }),
   broadcast: (text: string) =>
     call<{ queued: number; waiting: number }>("/broadcast", { method: "POST", body: JSON.stringify({ text }) }),
+  videoBrief: () => call<VideoBriefView>("/video-brief"),
+  makeVideoBrief: (brief: string) =>
+    call<{ job: VideoBrief }>("/video-brief", { method: "POST", body: JSON.stringify({ brief }) }),
+  discardVideoBrief: () => call<{ ok: true }>("/video-brief", { method: "DELETE" }),
+  sendVideoBrief: (video: string) =>
+    call<{ queued: number; waiting: number }>("/video-brief/send", { method: "POST", body: JSON.stringify({ video }) }),
   resolveQuestion: (reference: string) =>
     call<{ ok: true; reference: string }>(`/expert/${encodeURIComponent(reference)}/resolve`, { method: "POST" }),
 };

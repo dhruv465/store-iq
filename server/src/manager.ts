@@ -20,15 +20,9 @@ import {
 import { falConfig, falSpend } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
 import { loadPack, type Pack } from "./pack.js";
+import { languageFrom, t } from "./i18n.js";
+import { discardVideoBrief, startVideoBrief, takeVideoBrief, videoBrief } from "./video.js";
 
-/** The department manager's own view: how each associate worked today, and one box to tell the
- *  floor what is on. The portal itself is the React app in web/; everything below is its data.
- *
- *  All of it is read from the conversations the number already wrote, so the portal cannot
- *  disagree with what the associates were actually told. */
-
-/** When the associate last wrote to the number, which is as close as we get to "are they working".
- *  Formatted here rather than in the page, so the one implementation is the tested one. */
 export function ago(iso?: string, now = Date.now()): string {
   if (!iso) return "never";
   const ms = now - new Date(iso).getTime();
@@ -54,9 +48,10 @@ export function notice(text: string, from: string): string {
   return `📢 *${from}*:\n\n${text.trim().slice(0, 900)}`;
 }
 
-/** Who a floor notice is actually for: the manager's own people who can be reached right now.
- *  Before anyone is on the roster it falls back to whoever wrote to the number, which is the only
- *  thing it can do, and the portal says so rather than letting it look deliberate. */
+export function videoCaption(script: string, from: string): string {
+  return notice(`${t(languageFrom(script, "en"), "video.title")}\n\n${script}`, from);
+}
+
 export function recipients(
   roster: Rostered[],
   reachable: string[],
@@ -84,9 +79,6 @@ export function floorRows(rows: AssociateRow[], now = Date.now()): FloorRow[] {
 const COOKIE = "storeiq_manager";
 const DAY = 24 * 60 * 60 * 1000;
 
-/** A signed note saying "this browser signed in, and until when". Nothing is stored server side:
- *  the signature is over the expiry alone, keyed by the password, so changing the password signs
- *  everybody out. */
 export function sessionToken(password: string, expires: number): string {
   return `${expires}.${createHmac("sha256", password).update(String(expires)).digest("base64url")}`;
 }
@@ -105,23 +97,17 @@ function catalogModel(): string {
   return falConfig()?.model ?? process.env.GEMINI_MODEL?.trim() ?? "gemini";
 }
 
-export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
+export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fetch = fetch): void {
   const user = process.env.ADMIN_USER?.trim() || "manager";
   const password = process.env.ADMIN_PASSWORD!;
   const from = process.env.ADMIN_NAME?.trim() || "Store manager";
   const basic = basicAuth({ username: user, password });
-  // The portal signs in with a form and carries a cookie; Basic auth stays for scripting and for
-  // anything that is not a browser. SameSite=Strict means the cookie is not attached to a request
-  // somebody else's page makes, which is the other half of the origin checks below.
+
   const guard = async (c: Parameters<typeof basic>[0], next: Parameters<typeof basic>[1]) => {
     if (validSession(password, getCookie(c, COOKIE))) return next();
     return basic(c, next);
   };
-  // A browser attaches Basic credentials to every request to this origin, a fetch from somebody
-  // else's page included, and the broadcast route messages the whole floor. The Origin header is
-  // what separates the manager's own click from that.
-  // Signing in is the one route that cannot require a session, and it is rate-limited by nothing
-  // but the password itself, so it answers the same way whether the password was close or absurd.
+
   app.post("/api/manager/login", async (c) => {
     const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as Record<string, unknown>);
     const given = Buffer.from(String(body.password ?? ""));
@@ -140,17 +126,14 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
   });
 
   app.use("/api/manager/*", csrf());
-  // csrf() above covers what an HTML form can send. A form cannot set a header of its own, and a
-  // fetch that does needs a preflight this server never grants, so requiring one closes the rest:
-  // a page the manager happens to visit cannot reach these routes at all, credentials or not.
+
   app.use("/api/manager/*", async (c, next) => {
     if (c.req.method !== "GET" && c.req.header("x-store-iq") !== "portal")
       return c.json({ error: "Call this from the manager portal." }, 403);
     await next();
   });
   app.use("/api/manager/*", guard);
-  // The portal's own files are not guarded: they hold no data and the page's whole job when it is
-  // not signed in is to show the sign-in card. Everything it then asks for needs the session.
+ 
 
   app.get("/api/manager/floor", async (c) => {
     const packData = pack ?? (await loadPack().catch(() => undefined));
@@ -213,22 +196,26 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
 
   // Two calls on purpose: a message to the whole floor is not an accident anyone should be able to
   // have, and the store visits are full of things that went out without anyone owning them.
-  app.post("/api/manager/broadcast/preview", async (c) => {
-    const body = await c.req.json<{ text?: unknown }>().catch(() => ({}) as Record<string, unknown>);
-    const text = String(body.text ?? "").trim();
-    if (!text) return c.json({ error: "Nothing to send." }, 400);
+  // Who a message would reach, by name, for the manager to see before anything goes.
+  const audience = async () => {
     const roster = await db.roster();
     const { to, unreachable, rosterEmpty } = recipients(roster, await db.reachable());
     const names = new Map<string, string>([
       ...(await db.today()).map((session): [string, string] => [session.phone, session.associate ?? session.phone]),
       ...roster.map((person): [string, string] => [person.phone, person.name]),
     ]);
-    return c.json({
-      message: notice(text, from),
+    return {
       to: to.map((phone) => ({ phone, name: names.get(phone) ?? phone })),
       unreachable: unreachable.map((person) => ({ phone: person.phone, name: person.name })),
       rosterEmpty,
-    });
+    };
+  };
+
+  app.post("/api/manager/broadcast/preview", async (c) => {
+    const body = await c.req.json<{ text?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+    const text = String(body.text ?? "").trim();
+    if (!text) return c.json({ error: "Nothing to send." }, 400);
+    return c.json({ message: notice(text, from), ...(await audience()) });
   });
 
   app.post("/api/manager/broadcast", async (c) => {
@@ -246,6 +233,53 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack): void {
     if (held.length) await db.queueNotice(line, held);
     // Each message is checked against the window again as it leaves, so one that closed a moment
     // ago means that associate is skipped rather than failed.
+    return c.json({ queued: to.length, waiting: held.length });
+  });
+
+  // The video brief: made on the manager's click, watched in the portal, and sent only on a second,
+  // explicit one (Rule 3). Making it takes minutes, so the portal polls the GET.
+  app.get("/api/manager/video-brief", async (c) => {
+    const job = videoBrief();
+    return c.json({
+      job,
+      caption: job?.script ? videoCaption(job.script, from) : null,
+      ...(job?.status === "ready" ? await audience() : {}),
+    });
+  });
+
+  app.post("/api/manager/video-brief", async (c) => {
+    const body = await c.req.json<{ brief?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+    const brief = String(body.brief ?? "")
+      .trim()
+      .slice(0, 900);
+    if (!brief) return c.json({ error: "Write today's brief first." }, 400);
+    const config = falConfig();
+    const presenter = process.env.PRESENTER_IMAGE_URL?.trim();
+    if (!config || !presenter)
+      return c.json({ error: "Video briefs need FAL_KEY and PRESENTER_IMAGE_URL set on the server." }, 503);
+    const started = startVideoBrief(config, presenter, brief, request);
+    if (!started) return c.json({ error: "A video is already being made. Wait for it, or discard it." }, 409);
+    return c.json({ job: started.job });
+  });
+
+  app.delete("/api/manager/video-brief", (c) => {
+    // A render already at fal still finishes and is billed; it is simply never shown or sent.
+    discardVideoBrief();
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/manager/video-brief/send", async (c) => {
+    const body = await c.req.json<{ video?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+    // Only the video the manager watched, and only once: it is taken off the shelf as it goes.
+    const job = takeVideoBrief(String(body.video ?? ""));
+    if (!job?.video || !job.script)
+      return c.json({ error: "There is no finished video to send. Make one first." }, 409);
+    const { to, unreachable } = recipients(await db.roster(), await db.reachable());
+    const caption = videoCaption(job.script, from);
+    for (const phone of to) await db.send(phone, { text: caption, video: job.video });
+    // Held like a text notice, and released when they next write, which is what opens their window.
+    const held = unreachable.map((person) => person.phone);
+    if (held.length) await db.queueNotice(caption, held, job.video);
     return c.json({ queued: to.length, waiting: held.length });
   });
 

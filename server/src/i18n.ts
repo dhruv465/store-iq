@@ -77,6 +77,7 @@ const EN: Record<string, Phrase> = {
   "lang.switched": "Okay, English from here.",
   "ack.audio": "👂 Listening…",
   "ack.image": "🔎 Reading the label…",
+  "video.title": "🎬 Today's video brief",
   "turn.failed":
     "I could not answer that just now. Send it again.\n↳ A connection problem, your customer card is untouched.",
   "voice.unheard": "I could not make out that voice note. Say it again, or type it.",
@@ -189,6 +190,7 @@ const HI: Record<string, Phrase> = {
   "lang.switched": "ठीक है, अब हिंदी में।",
   "ack.audio": "👂 सुन रहा हूँ…",
   "ack.image": "🔎 लेबल पढ़ रहा हूँ…",
+  "video.title": "🎬 आज की वीडियो ब्रीफ़",
   "turn.failed": "अभी जवाब नहीं दे पाया। एक बार फिर भेजिए।\n↳ कनेक्शन की दिक़्क़त है, ग्राहक कार्ड वैसा ही है।",
   "voice.unheard": "यह वॉइस नोट समझ नहीं आया। फिर से बोलिए, या लिख दीजिए।",
   "greet.back": "हाँ बोलिए — क्या चल रहा है?",
@@ -299,6 +301,7 @@ const MR: Record<string, Phrase> = {
   "lang.switched": "ठीक आहे, आता मराठीत.",
   "ack.audio": "👂 ऐकतोय…",
   "ack.image": "🔎 लेबल वाचतोय…",
+  "video.title": "🎬 आजची व्हिडिओ ब्रीफ",
   "turn.failed": "आत्ता उत्तर देता आलं नाही. पुन्हा पाठवा.\n↳ कनेक्शनची अडचण आहे, ग्राहक कार्ड तसंच आहे.",
   "voice.unheard": "हा व्हॉइस नोट समजला नाही. पुन्हा बोला, किंवा लिहा.",
   "greet.back": "हां बोला — काय चाललंय?",

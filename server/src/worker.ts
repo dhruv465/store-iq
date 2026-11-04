@@ -91,7 +91,7 @@ export async function deliverHeldNotices(
 ): Promise<number> {
   const held = await db.waitingNotices(phone);
   for (const notice of held) {
-    await db.send(phone, { text: notice.body });
+    await db.send(phone, notice.video ? { text: notice.body, video: notice.video } : { text: notice.body });
     await db.markNoticeDelivered(notice.id, phone);
   }
   return held.length;

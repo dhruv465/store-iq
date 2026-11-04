@@ -16,6 +16,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  Video,
 } from "lucide-react";
 import {
   api,
@@ -26,6 +27,7 @@ import {
   type OpenQuestion,
   type Preview,
   type ProductInsight,
+  type VideoBriefView,
 } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar } from "@/components/ui/avatar";
@@ -684,6 +686,66 @@ function AddAssociate({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+/** Who a floor message reaches now, and who it is held for, shown before anything is sent. */
+function Recipients({ preview }: { preview: Omit<Preview, "message"> }) {
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {preview.to.map((person) => (
+          <Badge key={person.phone} variant="secondary">
+            <Avatar seed={person.phone} className="size-5 text-xs" />
+            {person.name}
+          </Badge>
+        ))}
+      </div>
+      {preview.rosterEmpty ? (
+        <Alert variant="warning">
+          <AlertTriangle />
+          <AlertTitle>Nobody is on your roster</AlertTitle>
+          <AlertDescription>
+            This goes to every number that has written to the agent today, whoever they are. Add your associates and it
+            will only ever go to them.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {preview.unreachable.length ? (
+        <Alert>
+          <Clock />
+          <AlertTitle>Held until they next write</AlertTitle>
+          <AlertDescription>
+            {preview.unreachable.map((person) => person.name).join(", ")} — WhatsApp only carries a message to someone
+            who wrote in the last 24 hours, so theirs waits and goes out the moment they message the number. It expires
+            at the end of the shift rather than arriving tomorrow.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+    </>
+  );
+}
+
+function SentCard({ sent, onAgain }: { sent: { queued: number; waiting: number }; onAgain: () => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          Sent to {sent.queued === 1 ? "1 associate" : `${sent.queued} associates`}
+          {sent.waiting ? `, waiting for ${sent.waiting} more` : ""}
+        </CardTitle>
+        <CardDescription>
+          {sent.waiting
+            ? `The ${sent.waiting === 1 ? "one who has" : `${sent.waiting} who have`} not written today will get it the moment they next message the number, which is what lets WhatsApp carry it. Nobody is dropped.`
+            : "Each one is checked against the 24 hour window again as it leaves, so a window that closed a moment ago means that associate is skipped rather than failed."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={onAgain}>
+          Write another
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TellTheFloor({ floor }: { floor: Floor }) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -705,31 +767,14 @@ function TellTheFloor({ floor }: { floor: Floor }) {
 
   if (sent !== null)
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Sent to {sent.queued === 1 ? "1 associate" : `${sent.queued} associates`}
-            {sent.waiting ? `, waiting for ${sent.waiting} more` : ""}
-          </CardTitle>
-          <CardDescription>
-            {sent.waiting
-              ? `The ${sent.waiting === 1 ? "one who has" : `${sent.waiting} who have`} not written today will get it the moment they next message the number, which is what lets WhatsApp carry it. Nobody is dropped.`
-              : "Each one is checked against the 24 hour window again as it leaves, so a window that closed a moment ago means that associate is skipped rather than failed."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSent(null);
-              setPreview(null);
-              setText("");
-            }}
-          >
-            Write another
-          </Button>
-        </CardContent>
-      </Card>
+      <SentCard
+        sent={sent}
+        onAgain={() => {
+          setSent(null);
+          setPreview(null);
+          setText("");
+        }}
+      />
     );
 
   return (
@@ -756,35 +801,7 @@ function TellTheFloor({ floor }: { floor: Floor }) {
         {preview ? (
           <>
             <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{preview.message}</div>
-            <div className="flex flex-wrap gap-2">
-              {preview.to.map((person) => (
-                <Badge key={person.phone} variant="secondary">
-                  <Avatar seed={person.phone} className="size-5 text-xs" />
-                  {person.name}
-                </Badge>
-              ))}
-            </div>
-            {preview.rosterEmpty ? (
-              <Alert variant="warning">
-                <AlertTriangle />
-                <AlertTitle>Nobody is on your roster</AlertTitle>
-                <AlertDescription>
-                  This goes to every number that has written to the agent today, whoever they are. Add your associates
-                  and it will only ever go to them.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {preview.unreachable.length ? (
-              <Alert>
-                <Clock />
-                <AlertTitle>Held until they next write</AlertTitle>
-                <AlertDescription>
-                  {preview.unreachable.map((person) => person.name).join(", ")} — WhatsApp only carries a message to
-                  someone who wrote in the last 24 hours, so theirs waits and goes out the moment they message the
-                  number. It expires at the end of the shift rather than arriving tomorrow.
-                </AlertDescription>
-              </Alert>
-            ) : null}
+            <Recipients preview={preview} />
             <div className="flex gap-2">
               <Button
                 disabled={busy || !(preview.to.length + preview.unreachable.length)}
@@ -811,6 +828,141 @@ function TellTheFloor({ floor }: { floor: Floor }) {
               {busy ? <Loader2 className="animate-spin" /> : null} Preview
             </Button>
           </div>
+        )}
+        {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+const MAKING: Record<string, string> = {
+  scripting: "Writing the script…",
+  voicing: "Recording the voice…",
+  rendering: "Rendering the presenter. This takes a few minutes; you can leave this tab open.",
+};
+
+/** Today's brief as a short video: the manager writes it roughly, the server scripts, voices and
+ *  renders it, and it is watched here before a separate, explicit tap sends it to the floor. */
+function VideoBriefCard() {
+  const [brief, setBrief] = useState("");
+  const [view, setView] = useState<VideoBriefView | null>(null);
+  const [sent, setSent] = useState<{ queued: number; waiting: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const job = view?.job ?? null;
+  const making = !!job && job.status in MAKING;
+
+  const refresh = useCallback(async () => setView(await api.videoBrief()), []);
+  useEffect(() => {
+    refresh().catch(() => {});
+  }, [refresh]);
+  useEffect(() => {
+    if (!making) return;
+    const timer = setInterval(() => refresh().catch(() => {}), 4000);
+    return () => clearInterval(timer);
+  }, [making, refresh]);
+
+  const run = async (step: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await step();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "That did not work.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const make = (text: string) =>
+    run(async () => {
+      await api.makeVideoBrief(text);
+      await refresh();
+    });
+  const discard = () =>
+    run(async () => {
+      await api.discardVideoBrief();
+      await refresh();
+    });
+
+  if (sent !== null)
+    return (
+      <SentCard
+        sent={sent}
+        onAgain={() => {
+          setSent(null);
+          setBrief("");
+          refresh().catch(() => {});
+        }}
+      />
+    );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Video brief</CardTitle>
+        <CardDescription>
+          Write today's brief roughly. The agent writes a 20 second script from it, using only the figures you wrote,
+          and the store's presenter reads it on video. You watch it here first; nothing goes out until you approve it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {!job || job.status === "failed" ? (
+          <>
+            <Textarea
+              maxLength={900}
+              placeholder="e.g. Diwali offers today: LG 55 inch OLED at Rs 54,990, 10% off Samsung soundbars, push the exchange offer on TVs."
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
+            />
+            {job?.status === "failed" ? (
+              <Alert variant="destructive">
+                <AlertTriangle />
+                <AlertTitle>No video this time</AlertTitle>
+                <AlertDescription>{job.error}</AlertDescription>
+              </Alert>
+            ) : null}
+            <div>
+              <Button disabled={busy || !brief.trim()} onClick={() => make(brief)}>
+                {busy ? <Loader2 className="animate-spin" /> : <Video />} Make the video
+              </Button>
+            </div>
+          </>
+        ) : making ? (
+          <>
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="animate-spin" /> {MAKING[job.status]}
+            </p>
+            {job.script ? (
+              <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{job.script}</div>
+            ) : null}
+            <div>
+              <Button variant="outline" onClick={discard} disabled={busy}>
+                Discard
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <video src={job.video} controls playsInline className="max-h-[28rem] w-full max-w-sm rounded-md bg-black" />
+            <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{view?.caption}</div>
+            <p className="text-muted-foreground text-xs">This video cost ${job.cost.toFixed(2)} to make.</p>
+            {view?.to ? <Recipients preview={view as Omit<Preview, "message">} /> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={busy || !((view?.to?.length ?? 0) + (view?.unreachable?.length ?? 0))}
+                onClick={() => run(async () => setSent(await api.sendVideoBrief(job.video!)))}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <Send />} Approve and send to{" "}
+                {(view?.to?.length ?? 0) + (view?.unreachable?.length ?? 0)}
+              </Button>
+              <Button variant="outline" onClick={() => make(job.brief)} disabled={busy}>
+                <RefreshCw /> Make it again
+              </Button>
+              <Button variant="ghost" onClick={discard} disabled={busy}>
+                <Trash2 /> Discard
+              </Button>
+            </div>
+          </>
         )}
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
       </CardContent>
@@ -978,6 +1130,7 @@ export default function App() {
           {activeTab === "broadcast" && (
             <div className="space-y-6">
               <TellTheFloor floor={floor} />
+              <VideoBriefCard />
               <AddAssociate onAdded={reload} />
             </div>
           )}

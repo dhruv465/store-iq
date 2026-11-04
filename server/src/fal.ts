@@ -41,6 +41,11 @@ export function falSpend(): number {
   return spent;
 }
 
+/** For what fal bills without saying so in the answer: a voice and a video are priced per unit. */
+export function addSpend(cost: number): void {
+  spent += cost;
+}
+
 export function falConfig(env = process.env): FalConfig | null {
   const key = env.FAL_KEY?.trim();
   if (!key) return null;
