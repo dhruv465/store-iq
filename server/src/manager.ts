@@ -254,9 +254,9 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
       .slice(0, 900);
     if (!brief) return c.json({ error: "Write today's brief first." }, 400);
     const config = falConfig();
-    const presenter = process.env.PRESENTER_VIDEO_URL?.trim();
+    const presenter = process.env.PRESENTER_IMAGE_URL?.trim();
     if (!config || !presenter)
-      return c.json({ error: "Video briefs need FAL_KEY and PRESENTER_VIDEO_URL set on the server." }, 503);
+      return c.json({ error: "Video briefs need FAL_KEY and PRESENTER_IMAGE_URL set on the server." }, 503);
     const started = startVideoBrief(config, presenter, brief, request);
     if (!started) return c.json({ error: "A video is already being made. Wait for it, or discard it." }, 409);
     return c.json({ job: started.job });

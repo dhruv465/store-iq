@@ -837,8 +837,7 @@ function TellTheFloor({ floor }: { floor: Floor }) {
 
 const MAKING: Record<string, string> = {
   scripting: "Writing the script…",
-  voicing: "Recording the voice…",
-  rendering: "Rendering the presenter. This takes a few minutes; you can leave this tab open.",
+  rendering: "Filming the presenter. This takes about a minute; you can leave this tab open.",
 };
 
 /** Today's brief as a short video: the manager writes it roughly, the server scripts, voices and

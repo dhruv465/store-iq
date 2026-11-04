@@ -92,7 +92,7 @@ export type Preview = {
 };
 
 export type VideoBrief = {
-  status: "scripting" | "voicing" | "rendering" | "ready" | "failed";
+  status: "scripting" | "rendering" | "ready" | "failed";
   brief: string;
   script?: string;
   video?: string;
@@ -126,8 +126,7 @@ export const api = {
   addAssociate: (name: string, phone: string) =>
     call<{ ok: true }>("/roster", { method: "POST", body: JSON.stringify({ name, phone }) }),
   removeAssociate: (phone: string) => call<{ ok: true }>(`/roster/${encodeURIComponent(phone)}`, { method: "DELETE" }),
-  preview: (text: string) =>
-    call<Preview>("/broadcast/preview", { method: "POST", body: JSON.stringify({ text }) }),
+  preview: (text: string) => call<Preview>("/broadcast/preview", { method: "POST", body: JSON.stringify({ text }) }),
   broadcast: (text: string) =>
     call<{ queued: number; waiting: number }>("/broadcast", { method: "POST", body: JSON.stringify({ text }) }),
   videoBrief: () => call<VideoBriefView>("/video-brief"),

@@ -3,29 +3,35 @@ import { addSpend, falText, type FalConfig } from "./fal.js";
 import { modelRequest, providerRequest, readLimited } from "./http.js";
 
 /** The morning video brief: the manager types today's brief roughly, the model writes a short spoken
- *  script around it, ElevenLabs reads it, and sync's lipsync-2 moves the fixed presenter's mouth to it.
- *  Nothing goes to the floor from here; the manager watches it in the portal and approves it there.
+ *  script around it, and Google's Gemini Omni Flash films the fixed presenter saying it, voice and lips
+ *  together, from his photo. Nothing goes to the floor from here; the manager watches it in the portal
+ *  and approves it there.
  *
- *  The presenter is a 22 s clip of him talking, made once (scripts/presenter.ts), so each day only the
- *  lips are made. Chosen by the store on 4 Nov 2026 from three side by side: LatentSync drifted off
- *  the words after the first sentences on a clip played back and forth, and lipsync-2 on a clip that
- *  only plays forward held them, in about 2 minutes. If the voice runs past the clip, it bounces.
- *  lipsync-2 sets its own bitrate whatever it is given, by resolution: at 720x1280 19.2 s was 14.3 MB
- *  and a Hinglish brief went over WhatsApp's 16 MB; at 540x960 it is 7.4 MB, so the clip is 540x960.
- *  Prices from fal, 4 Nov 2026. */
-const VOICE = "fal-ai/elevenlabs/tts/turbo-v2.5"; // $0.05 per 1000 characters; half of multilingual-v2
-const VOICE_ID = "7b9mYhmnp0y2qSH1FnBL"; // the store's chosen ElevenLabs voice, 4 Nov 2026
-const LIPSYNC = "fal-ai/sync-lipsync/v2"; // $3 a minute of video
-const VOICE_PER_CHAR = 0.05 / 1000;
-const LIPSYNC_PER_SECOND = 3 / 60;
-// shortcut: fal does not return the length, so it is estimated from the words (about 15 characters a
-// second for this voice); read it from the file if the spend has to be exact.
-const SPOKEN_CHARS_PER_SECOND = 15;
+ *  Chosen by the store on 4 Nov 2026 over ElevenLabs plus lipsync-2 on a pre-filmed clip (about 2
+ *  minutes): it moved more naturally and took 46 s. It films 10 s at most and takes no audio, so the
+ *  script is cut into pieces that fit 10 s, every piece is filmed at once, each starting and ending on
+ *  the same photo so the cuts meet, and fal's ffmpeg joins them. The voice is Google's, described the
+ *  same way every time; the store's ElevenLabs voice cannot be given to it. Prices from fal, 4 Nov 2026. */
+const FILM = "google/gemini-omni-flash/v1.1/image-to-video"; // $0.10 a second at 720p
+const JOIN = "fal-ai/ffmpeg-api/merge-videos"; // $0 a compute second
+const FILM_PER_SECOND = 0.1;
+const CLIP_SECONDS = 10; // the most it films
+// Measured 4 Nov 2026: 26 spoken words took 9 s, so 24 leaves room for a breath.
+const WORDS_PER_CLIP = 24;
+const WORDS_PER_SECOND = 2.6;
 /** Meta refuses a video message over 16 MB. */
 const WHATSAPP_VIDEO_BYTES = 16 * 1024 * 1024;
 
+/** Said the same way for every clip, so the pieces sound like one man. */
+const SCENE = [
+  "A Reliance Digital store manager in his red shirt speaks straight to the camera at the morning team huddle: warm, confident and natural, small head movements, at most one light hand gesture. Static camera, framing unchanged. His lips match every word.",
+  "Voice: a warm, clear Indian male voice in his thirties, speaking natural Hinglish the way managers in Indian stores talk: English words in an Indian English accent, Hindi words in natural Hindi. Brisk, friendly pace. Always the same voice.",
+  "He starts and ends still, mouth closed, looking at the camera, exactly as in the photo.",
+  "Audio: only his voice and a faint, quiet showroom ambience. No music, no subtitles, no text on screen.",
+].join("\n");
+
 export type VideoBrief = {
-  status: "scripting" | "voicing" | "rendering" | "ready" | "failed";
+  status: "scripting" | "rendering" | "ready" | "failed";
   brief: string;
   script?: string;
   video?: string;
@@ -101,12 +107,12 @@ function sayNumber(written: string, tongue: Tongue = "en"): string {
 // A figure on its own, not part of a model code like S25 or 4K.
 const FIGURE = String.raw`(?<![\w.])\d+(?:,\d{2,3})*(?:\.\d+)?(?!\w|\.\d)`;
 
-/** The script as the voice should read it, every figure spelt out because the voice is set to Hindi
- *  and reads "Rs" and Indian commas as letters ("R S 100,199,000"). Prices and percentages are said
+/** The script as the presenter should say it, every figure spelt out so it is said the store's way
+ *  and not read off as letters and digits ("R S 100,199,000"), or in Hindi where English was meant. Prices and percentages are said
  *  in English, the way the floor says them ("one lakh nineteen thousand nine hundred ninety rupees",
  *  "ten percent"); a number that counts a Hindi word is said in Hindi ("बारह महीने तक"), unless it
  *  follows an English name (iPhone 16 पर); any other number is English. The caption keeps
- *  "Rs 1,19,990"; only the audio changes. */
+ *  "Rs 1,19,990"; only what is said changes. */
 export function spokenScript(script: string): string {
   return script
     .replace(
@@ -116,6 +122,25 @@ export function spokenScript(script: string): string {
     .replace(new RegExp(String.raw`(${FIGURE})\s*%`, "g"), (_, n: string) => `${sayNumber(n)} percent`)
     .replace(new RegExp(String.raw`(?<![A-Za-z][\w-]*\s+)${FIGURE}(?=\s*[ऀ-ॿ])`, "g"), (n) => sayNumber(n, "hi"))
     .replace(new RegExp(FIGURE, "g"), (n) => sayNumber(n));
+}
+
+const wordCount = (text: string) => text.split(/\s+/).filter(Boolean).length;
+const spokenWords = (text: string) => wordCount(spokenScript(text));
+
+/** The script cut into what one clip can say: whole sentences packed in order, and a sentence too
+ *  long for one clip cut at its commas. */
+export function clipLines(script: string): string[] {
+  const pieces = script
+    .trim()
+    .split(/(?<=[.!?।])\s+/)
+    .flatMap((sentence) => (spokenWords(sentence) > WORDS_PER_CLIP ? sentence.split(/(?<=,)\s+/) : [sentence]));
+  const clips: string[] = [];
+  for (const piece of pieces) {
+    const joined = clips.length ? `${clips.at(-1)} ${piece}` : "";
+    if (joined && spokenWords(joined) <= WORDS_PER_CLIP) clips[clips.length - 1] = joined;
+    else clips.push(piece);
+  }
+  return clips;
 }
 
 /** The script, held to Rule 1: every figure in it must be in the manager's own words. Refused once,
@@ -216,7 +241,7 @@ export function startVideoBrief(
   request: typeof fetch = fetch,
   wait?: (ms: number) => Promise<void>,
 ): { job: VideoBrief; done: Promise<void> } | null {
-  if (current && ["scripting", "voicing", "rendering"].includes(current.status)) return null;
+  if (current && ["scripting", "rendering"].includes(current.status)) return null;
   const job: VideoBrief = { status: "scripting", brief, cost: 0 };
   current = job;
   let billed = 0;
@@ -224,39 +249,44 @@ export function startVideoBrief(
     try {
       const written = await writeScript(config, brief, request);
       job.script = written.script;
-      // falText has already counted the script in the spend; the voice and the video are counted below.
+      // falText has already counted the script in the spend; the clips are counted below.
       job.cost = written.cost;
-      job.status = "voicing";
-      const voiced = await json(
-        await providerRequest(
-          request,
-          `https://fal.run/${VOICE}`,
-          {
-            method: "POST",
-            headers: { authorization: `Key ${config.key}`, "content-type": "application/json" },
-            body: JSON.stringify({ text: spokenScript(job.script), voice: VOICE_ID, language_code: "hi" }),
-          },
-          "fal",
-          60_000,
-        ),
-      );
-      billed += job.script.length * VOICE_PER_CHAR;
-      job.cost = written.cost + billed;
-      const audio = voiced.audio?.url;
-      if (typeof audio !== "string") throw Error("The voice came back empty.");
       job.status = "rendering";
-      const made = await falQueue(
-        config,
-        LIPSYNC,
-        { video_url: presenter, audio_url: audio, sync_mode: "bounce" },
-        request,
-        wait,
+      const filmed = await Promise.allSettled(
+        clipLines(job.script).map(async (line) => {
+          const seconds = Math.min(CLIP_SECONDS, Math.max(4, Math.ceil(spokenWords(line) / WORDS_PER_SECOND) + 1));
+          const made = await falQueue(
+            config,
+            FILM,
+            {
+              prompt: `${SCENE}\nHe says exactly this, word for word, adding nothing before or after: "${spokenScript(line)}"`,
+              image_url: presenter,
+              end_image_url: presenter,
+              aspect_ratio: "9:16",
+              resolution: "720p",
+              duration: seconds,
+            },
+            request,
+            wait,
+          );
+          billed += seconds * FILM_PER_SECOND;
+          job.cost = written.cost + billed;
+          const url = made.video?.url;
+          if (typeof url !== "string" || !url.startsWith("https://")) throw Error("A clip came back empty.");
+          return made.video as { url: string; file_size?: number };
+        }),
       );
-      billed += (spokenScript(job.script).length / SPOKEN_CHARS_PER_SECOND) * LIPSYNC_PER_SECOND;
-      job.cost = written.cost + billed;
-      const video = made.video?.url;
+      // Settled, not all, so a clip still filming when another fails is counted before the spend is.
+      const failed = filmed.find((clip) => clip.status === "rejected");
+      if (failed) throw failed.reason;
+      const clips = filmed.map((clip) => (clip as PromiseFulfilledResult<{ url: string; file_size?: number }>).value);
+      const made =
+        clips.length === 1
+          ? clips[0]!
+          : (await falQueue(config, JOIN, { video_urls: clips.map((clip) => clip.url) }, request, wait)).video;
+      const video = made?.url;
       if (typeof video !== "string" || !video.startsWith("https://")) throw Error("The video came back empty.");
-      if (Number(made.video.file_size) > WHATSAPP_VIDEO_BYTES)
+      if (Number(made.file_size) > WHATSAPP_VIDEO_BYTES)
         throw Error("The video is over WhatsApp's 16 MB limit. Make the brief shorter and try again.");
       job.video = video;
       job.status = "ready";

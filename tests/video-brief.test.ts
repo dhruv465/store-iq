@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { openDatabase, type DB } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
-import { HINDI_UNDER_100, spokenScript, writeScript } from "../server/src/video.js";
+import { HINDI_UNDER_100, clipLines, spokenScript, writeScript } from "../server/src/video.js";
 import { sendWhatsApp } from "../server/src/whatsapp.js";
 import { deliverHeldNotices } from "../server/src/worker.js";
 import type { Reply } from "../server/src/types.js";
@@ -66,26 +66,34 @@ test("a video goes to WhatsApp as a video with its caption, and a bad one never 
   }
 });
 
-/** fal, faked end to end: the script, the voice, and lipsync-2 through the queue. */
-const falBodies: Record<string, any> = {};
+/** fal, faked end to end: the script, a clip for each piece of it through the queue, and the join. */
+const SCRIPT =
+  "Good morning team, aaj ka din bada hai aur floor par sabko taiyaar rehna hai. " +
+  "LG 55 inch OLED Rs 54,990 mein aaj se mil raha hai, har customer ko demo dikhao. " +
+  "Chalo, shaandaar din banate hain, sab log full energy ke saath!";
+const falBodies: Record<string, any[]> = {};
+let clipsAsked = 0;
 const fal = (async (url: string, init?: RequestInit) => {
-  if (typeof init?.body === "string") falBodies[url] = JSON.parse(init.body);
-  if (url === "https://fal.run/openrouter/router")
-    return Response.json({ output: "Team, LG 55 inch OLED Rs 54,990 aaj. Chalo!", usage: { cost: 0.001 } });
-  if (url.startsWith("https://fal.run/fal-ai/elevenlabs/")) return Response.json({ audio: { url: "https://x/a.mp3" } });
-  if (url === "https://queue.fal.run/fal-ai/sync-lipsync/v2")
-    return Response.json({
-      status_url: "https://queue.fal.run/fal-ai/sync-lipsync/requests/r1/status",
-      response_url: "https://queue.fal.run/fal-ai/sync-lipsync/requests/r1",
+  if (typeof init?.body === "string") (falBodies[url] ??= []).push(JSON.parse(init.body));
+  if (url === "https://fal.run/openrouter/router") return Response.json({ output: SCRIPT, usage: { cost: 0.001 } });
+  const queued = (id: string) =>
+    Response.json({
+      status_url: `https://queue.fal.run/requests/${id}/status`,
+      response_url: `https://queue.fal.run/requests/${id}`,
     });
-  if (url.endsWith("/r1/status")) return Response.json({ status: "COMPLETED" });
-  if (url.endsWith("/r1")) return Response.json({ video: { url: VIDEO, file_size: 3_000_000 }, duration: 30 });
+  if (url === "https://queue.fal.run/google/gemini-omni-flash/v1.1/image-to-video") return queued(`c${++clipsAsked}`);
+  if (url === "https://queue.fal.run/fal-ai/ffmpeg-api/merge-videos") return queued("join");
+  if (url.endsWith("/status")) return Response.json({ status: "COMPLETED" });
+  const clip = url.match(/requests\/c(\d)$/);
+  if (clip)
+    return Response.json({ video: { url: `https://v3.fal.media/files/clip${clip[1]}.mp4`, file_size: 3_000_000 } });
+  if (url.endsWith("/requests/join")) return Response.json({ video: { url: VIDEO, file_size: 9_000_000 } });
   throw Error(`unexpected ${url}`);
 }) as unknown as typeof fetch;
 
 test("the video goes only on approval, now to who can be reached and held for who cannot", async () => {
   const saved = { ...process.env };
-  Object.assign(process.env, { ADMIN_PASSWORD: "pw", FAL_KEY: "k", PRESENTER_VIDEO_URL: "https://x/p.mp4" });
+  Object.assign(process.env, { ADMIN_PASSWORD: "pw", FAL_KEY: "k", PRESENTER_IMAGE_URL: "https://x/p.png" });
   const sent: { phone: string; reply: Reply }[] = [];
   const held: { body: string; phones: string[]; video?: string | undefined }[] = [];
   const db = {
@@ -117,12 +125,22 @@ test("the video goes only on approval, now to who can be reached and held for wh
     }
     assert.equal(view.job.status, "ready");
     assert.equal(view.job.video, VIDEO);
-    assert.equal(falBodies["https://fal.run/fal-ai/elevenlabs/tts/turbo-v2.5"].voice, "7b9mYhmnp0y2qSH1FnBL");
-    assert.equal(falBodies["https://fal.run/fal-ai/elevenlabs/tts/turbo-v2.5"].language_code, "hi", "always Hindi");
-    assert.equal(
-      falBodies["https://queue.fal.run/fal-ai/sync-lipsync/v2"].video_url,
-      "https://x/p.mp4",
-      "lips on the clip",
+    const clips = falBodies["https://queue.fal.run/google/gemini-omni-flash/v1.1/image-to-video"]!;
+    assert.equal(clips.length, 3, "a script over 10 s is filmed in pieces");
+    for (const clip of clips) {
+      assert.equal(clip.image_url, "https://x/p.png", "every piece starts on the presenter");
+      assert.equal(clip.end_image_url, "https://x/p.png", "and ends on him, so the cuts meet");
+      assert.equal(clip.aspect_ratio, "9:16");
+      assert.ok(clip.duration >= 4 && clip.duration <= 10, `a clip fits what the model films: ${clip.duration}`);
+    }
+    assert.match(
+      clips[1].prompt,
+      /word for word, adding nothing before or after: "LG fifty-five inch OLED fifty-four thousand nine hundred ninety rupees/,
+    );
+    assert.deepEqual(
+      falBodies["https://queue.fal.run/fal-ai/ffmpeg-api/merge-videos"]![0].video_urls,
+      [1, 2, 3].map((n) => `https://v3.fal.media/files/clip${n}.mp4`),
+      "joined in the order they are said",
     );
     assert.deepEqual(view.to, [{ phone: "919820000001", name: "Ramesh" }], "the manager sees who before sending");
     assert.equal(sent.length, 0, "and nothing has gone yet");
@@ -181,4 +199,17 @@ test("the voice says prices and percentages in English, a number before a Hindi 
   );
   assert.equal(HINDI_UNDER_100.length, 100, "one Hindi word for each of 0 to 99");
   assert.equal(HINDI_UNDER_100[99], "निन्यानबे");
+});
+
+test("a script is cut into whole sentences that each fit one 10 s clip, and nothing is lost", () => {
+  const script =
+    "Good morning team! Diwali offers आज से live हैं. Sony Bravia 65 inch Rs 89,990 में, 12 महीने तक no cost EMI है. " +
+    "Boat earbuds पर buy 1 get 1 है. हर TV sale पर extended warranty ज़रूर pitch करो. Let's make it a great day!";
+  const lines = clipLines(script);
+  assert.equal(lines.join(" "), script);
+  for (const line of lines) assert.ok(spokenScript(line).split(/\s+/).length <= 24, line);
+  assert.deepEqual(clipLines("Short one. Two."), ["Short one. Two."], "a short script is one clip");
+  const long =
+    "Ek, do, teen, char, paanch, chhe, saat, aath, nau, das, gyaarah, baarah, terah, chaudah, pandrah, solah, satrah, athaarah, unnees, bees, ikkees, baees, teis, chaubees, pachchees, chhabbees.";
+  assert.ok(clipLines(long).length > 1, "a sentence too long for one clip is cut at its commas");
 });
