@@ -68,6 +68,47 @@ export function withAfterSales(pack: Pack): Pack {
   };
 }
 
+const DELIVERY = /deliver/i;
+
+/** This kind's delivery charges that today's data prices, cheapest first: within 5 km, beyond 5 km. */
+export function deliveryCharges(pack: Pack, product: Product): Charge[] {
+  return (categoryOf(product)?.charges ?? [])
+    .filter((charge) => DELIVERY.test(charge.title) && pack.charges.some((other) => other.id === charge.id))
+    .sort((a, b) => a.amount_rupees - b.amount_rupees);
+}
+
+/** The kilometres the associate said: "4 km", "2.5 kilometre", "6 kms door". */
+export function kmIn(said: string | undefined): number | null {
+  const found = said?.match(/(\d+(?:\.\d+)?)\s*(?:km|kms|kilomet(?:er|re)s?|किमी|किलोमीटर)(?![a-z])/i);
+  const km = found ? Number(found[1]) : NaN;
+  return Number.isFinite(km) && km >= 0 && km < 500 ? km : null;
+}
+
+/** The delivery charge a distance falls under, read off the charges' own names ("within 5 km",
+ *  "beyond 5 km"), so the store's uploaded list decides it. Null when no name says. */
+export function deliveryFor(charges: Charge[], km: number): Charge | null {
+  for (const charge of charges) {
+    const within = charge.title.match(/(?:within|up ?to|under|upto)\s*(\d+(?:\.\d+)?)\s*km/i);
+    if (within && km <= Number(within[1])) return charge;
+    const beyond = charge.title.match(/(?:beyond|above|over|more than|after)\s*(\d+(?:\.\d+)?)\s*km/i);
+    if (beyond && km > Number(beyond[1])) return charge;
+  }
+  return null;
+}
+
+/** Sets the bill's delivery line to this one charge, or to none when the customer takes it. */
+export function setDelivery(
+  pack: Pack,
+  product: Product,
+  selection: { charges: string[]; delivery?: "carry" | "deliver" },
+  charge: Charge | null,
+): void {
+  const ids = new Set(deliveryCharges(pack, product).map((one) => one.id));
+  selection.charges = selection.charges.filter((id) => !ids.has(id));
+  if (charge) selection.charges.unshift(charge.id);
+  selection.delivery = charge ? "deliver" : "carry";
+}
+
 /** The charges every sale of this kind carries, as far as this pack prices them. */
 export function defaultCharges(pack: Pack, product: Product): string[] {
   const category = categoryOf(product);
@@ -82,8 +123,12 @@ const rupees = (amount: number): string => (amount ? `Rs ${amount.toLocaleString
 /** The charges that are not on the bill yet, but are if the home needs them. */
 export function extrasLine(pack: Pack, product: Product, picked: string[], lang: Lang): string {
   const category = categoryOf(product);
+  // Delivery is settled by "take it or deliver", so it is never an extra.
   const extras = (category?.charges ?? []).filter(
-    (charge) => !picked.includes(charge.id) && pack.charges.some((other) => other.id === charge.id),
+    (charge) =>
+      !picked.includes(charge.id) &&
+      !DELIVERY.test(charge.title) &&
+      pack.charges.some((other) => other.id === charge.id),
   );
   if (!extras.length) return "";
   return t(lang, "as.extras", {

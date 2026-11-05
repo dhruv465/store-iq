@@ -192,28 +192,69 @@ test("changing the selection withdraws the sale and the consent", () => {
   assert.equal(session.sold, false);
 });
 
-test("on the live catalogue a heavy product gets the after-sales charges, delivery and install on the bill", () => {
+test("a heavy product asks take or deliver at the pick, and the distance sets the delivery line", () => {
   // The live catalogue has no charges: the after-sales list fills them for the kinds in view.
   const live = withAfterSales({ ...pack, charges: [], install_requirements: {} });
   const session = newSession("919820000001");
-  const breakdown = deterministic(
-    { id: "l1", phone: session.phone, modality: "interactive", action: "select:TCL-55C6KS", name: ASSOCIATE },
-    session,
-    live,
-  )!;
-  assert.deepEqual(session.selection?.charges, ["LTV-DEL", "LTV-DEMO"]);
-  assert.match(
-    breakdown.text,
-    /Home delivery within 5 km — free; Table-top installation and demo — free\. Total Rs 54,990/,
+  const run = (event: Partial<Event>) =>
+    deterministic(
+      { id: `l${Math.random()}`, phone: session.phone, modality: "interactive", name: ASSOCIATE, ...event } as Event,
+      session,
+      live,
+    )!;
+  const breakdown = run({ action: "select:TCL-55C6KS" });
+  assert.deepEqual(session.selection?.charges, ["LTV-DEMO"], "no delivery line until it is asked");
+  assert.match(breakdown.text, /Table-top installation and demo — free\. Total Rs 54,990/);
+  assert.match(breakdown.text, /Will you take it with you, or shall we deliver it home\?/);
+  assert.deepEqual(
+    breakdown.buttons?.map((button) => button.id),
+    ["deliver:yes", "deliver:carry", "charges"],
   );
-  assert.match(breakdown.text, /If the home needs it: Delivery beyond 5 km Rs 299 · Wall mount installation Rs 799/);
-  const charges = deterministic(
-    { id: "l2", phone: session.phone, modality: "interactive", action: "charges" },
-    session,
-    live,
-  )!;
+
+  const rates = run({ action: "deliver:yes" });
+  const said = rates.text.replace(/\*/g, "");
+  assert.match(
+    said,
+    /^Delivery: Home delivery within 5 km free · Delivery beyond 5 km Rs 299\. Installation and extras: Table-top installation and demo free · Wall mount installation Rs 799\./,
+  );
+  assert.match(said, /How far is your home from the store\?/);
+  assert.match(said, /Sample rates/);
+  assert.deepEqual(
+    rates.buttons?.map((button) => [button.id, button.title]),
+    [
+      ["deliver:LTV-DEL", "Within 5 km"],
+      ["deliver:LTV-DEL-FAR", "Beyond 5 km"],
+    ],
+  );
+
+  const far = run({ modality: "text", text: "they live about 7 km away" });
+  assert.match(
+    far.text.replace(/\*/g, ""),
+    /^7 km: Delivery beyond 5 km\.\n+Breakdown: .*Delivery beyond 5 km — Rs 299; Table-top installation and demo — free\. Total Rs 55,289/,
+  );
+  assert.equal(far.buttons?.[0]?.id, "sold");
+  const near = run({ action: "deliver:LTV-DEL" });
+  assert.match(near.text, /Home delivery within 5 km — free; Table-top installation and demo — free\. Total Rs 54,990/);
+  assert.deepEqual(session.selection?.charges, ["LTV-DEL", "LTV-DEMO"], "one delivery line, never two");
+
+  const charges = run({ action: "charges" });
   assert.match(charges.text, /Charges for a television: Home delivery within 5 km free · Delivery beyond 5 km Rs 299/);
-  assert.match(charges.text, /Sample rates/);
+});
+
+test("a customer who takes it with them has no delivery on the bill", () => {
+  const live = withAfterSales({ ...pack, charges: [], install_requirements: {} });
+  const session = newSession("919820000001");
+  const run = (event: Partial<Event>) =>
+    deterministic(
+      { id: `c${Math.random()}`, phone: session.phone, modality: "interactive", name: ASSOCIATE, ...event } as Event,
+      session,
+      live,
+    )!;
+  run({ action: "select:TCL-55C6KS" });
+  const carried = run({ modality: "text", text: "they will take it themselves" });
+  assert.equal(session.selection?.delivery, "carry");
+  assert.doesNotMatch(carried.text.split("\n").slice(0, 2).join("\n"), /delivery/i, "not on the bill, not as an extra");
+  assert.equal(carried.buttons?.[0]?.id, "sold");
 });
 
 test("a pack that brings its own charges lists those, not the sample sheet", () => {
@@ -240,10 +281,11 @@ test("an AC's sale carries the store visit's list: installation, bracket, nitrog
       session,
       live,
     )!;
-  const breakdown = tapLive("select:AC-1");
+  tapLive("select:AC-1");
+  const breakdown = tapLive("deliver:AC-DEL");
   assert.match(
     breakdown.text,
-    /Split AC installation — Rs 1,500; Outdoor unit bracket — Rs 1,200; Nitrogen leak test — Rs 500\. Total Rs 41,690/,
+    /Home delivery within 5 km — free; Split AC installation — Rs 1,500; Outdoor unit bracket — Rs 1,200; Nitrogen leak test — Rs 500\. Total Rs 41,690/,
   );
   assert.match(breakdown.text, /Extra copper pipe, per metre beyond 3 metres Rs 850/);
   const sold = tapLive("sold");

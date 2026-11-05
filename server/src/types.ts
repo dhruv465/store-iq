@@ -79,6 +79,8 @@ export type Session = {
     charges: string[];
     /** How many of a charge sold by the unit, such as metres of copper pipe past what is included. */
     qty?: Record<string, number>;
+    /** A heavy product: the customer takes it with them, or the store delivers. Unset until asked. */
+    delivery?: "carry" | "deliver";
     /** Real catalogue lines offered with the pick, such as the brand's wall mount, at their real price. */
     offered?: Pack["accessories"];
   };

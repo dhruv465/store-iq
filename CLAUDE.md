@@ -54,7 +54,12 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    about a television, and it made the product a form with a chat window around it. The code tells
    the model only what it cannot see, in a note (`JUST NOW:`): a search that missed, a store that did
    not answer. What is worth asking this customer is the model's judgement, and a customer who has
-   decided is served, not interviewed. **Do not add a question to the code.** What still answers
+   decided is served, not interviewed. A customer who only names a kind of product ("customer wants a
+   TV", "washing machine dikhao") has not decided: the model asks the two or three things that decide
+   the pick, one at a time, then shows three that fit (decided by the user 6 Nov 2026, after "washing
+   machine dikhao" went straight to prices). **Do not add a question to the code.** The asks after a
+   pick are the bill's, not the customer's needs, and stay in code: take it or deliver, how far, and the
+   site at Sold. What still answers
    without a model request is a tap or a whole-message command: the reset, consent, the card
    read-back, the brief, the score.
 5. **The 24-hour window.** Replies go only to numbers that wrote to us inside Meta's window. Never
@@ -99,7 +104,10 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   table and loaded at start, so it outlasts a deploy only with a lasting database. `withAfterSales()` adds them only to a pack with no charges of its own. resQ care
   plans are real, from the catalogue (`carePlanFor()`). Follow-ups live in the `followups` table and
   reach the associate on hello, the brief, and "follow ups"; there is no push outside the 24-hour window.
-  The manager sees and closes them under **After-sales** in the portal. An AC's pipe run ("outdoor unit
+  The manager sees and closes them under **After-sales** in the portal. A heavy product's pick asks
+  **take it or deliver** before the total (decided by the user 6 Nov 2026); "deliver" shows the delivery
+  rates and installation charges for the associate to tell the customer, and the distance tapped or typed
+  ("7 km") picks the delivery line from the charges' own names (`deliveryFor()`). An AC's pipe run ("outdoor unit
   5 m away") is multiplied out in code (`priceRun()`), because the guard refuses a sum the model makes.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything

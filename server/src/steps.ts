@@ -3,7 +3,7 @@ import { isAssessed, stated } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
 import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
-import { extrasLine, followUpPlan } from "./aftersales.js";
+import { categoryOf, deliveryCharges, extrasLine, followUpPlan, isSample } from "./aftersales.js";
 
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
  *  no request spent, no figure invented, and an answer in milliseconds rather than seconds. */
@@ -51,7 +51,8 @@ export function cardParts(session: Session): string[] {
     parts.push(t(lang, "cares", { v: card.priorities.map((entry) => v(lang, entry)).join(", ") }));
   if (card.site_constraints?.length) parts.push(card.site_constraints.join(", "));
   if (has("internet")) parts.push(String(card.internet));
-  if (typeof card.budget_rupees === "number") parts.push(t(lang, "budget.of", { v: card.budget_rupees.toLocaleString("en-IN") }));
+  if (typeof card.budget_rupees === "number")
+    parts.push(t(lang, "budget.of", { v: card.budget_rupees.toLocaleString("en-IN") }));
   // What this product needed that a television did not, in the words the model filed it under.
   // Not translated: these are the associate's own words coming back, like a free-text room is.
   for (const [name, said] of Object.entries(card.facts ?? {})) parts.push(`${name.replace(/[_-]+/g, " ")}: ${said}`);
@@ -280,6 +281,39 @@ export function itemisedTotal(
   return { lines, total };
 }
 
+const priced = (amount: number, lang: Lang): string =>
+  amount ? `Rs ${amount.toLocaleString("en-IN")}` : t(lang, "dl.free");
+
+/** "We deliver": what delivery costs by distance and what installation costs, for the associate to tell
+ *  the customer, and the distance to ask. Each rate is a tap that puts it on the bill. */
+export function deliveryRates(session: Session, pack: Pack): Reply | null {
+  const lang = session.language;
+  const product = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
+  const rates = product ? deliveryCharges(pack, product) : [];
+  if (!product || !rates.length) return null;
+  const category = categoryOf(product)!;
+  const rest = category.charges.filter(
+    (charge) => !rates.includes(charge) && pack.charges.some((other) => other.id === charge.id),
+  );
+  return {
+    text: [
+      t(lang, "dl.rates", {
+        body: rates.map((charge) => `${charge.title} ${priced(charge.amount_rupees, lang)}`).join(" · "),
+        rest: rest
+          .slice(0, 4)
+          .map((charge) => `${charge.title} ${priced(charge.amount_rupees, lang)}`)
+          .join(" · "),
+      }),
+      t(lang, "dl.far"),
+      `↳ ${isSample(category) ? t(lang, "as.sample") : t(lang, "why.far")}`,
+    ].join("\n"),
+    buttons: rates.slice(0, 3).map((charge) => {
+      const said = charge.title.replace(/^(home\s+)?delivery\s*,?\s*/i, "").trim() || charge.title;
+      return { id: `deliver:${charge.id}`, title: (said[0]!.toUpperCase() + said.slice(1)).slice(0, 20) };
+    }),
+  };
+}
+
 /** A product's name as said on the floor: the part before its spec list. */
 export function shortName(product: Product): string {
   return product.name.split(/[,(]/)[0]!.trim().slice(0, 60);
@@ -313,6 +347,22 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
   const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
   const total = itemised.total.toLocaleString("en-IN");
   const needs = siteNeeds(pack, selection);
+
+  // A heavy product goes home in a van or in their arms: asked before the total, since it changes it.
+  const delivery = deliveryCharges(pack, product);
+  if (!session.sold && delivery.length && !selection.delivery)
+    return {
+      text: [
+        t(lang, "bd.total", { body: itemised.lines.join("; "), total }),
+        t(lang, "dl.ask"),
+        `↳ ${t(lang, "why.deliver")}`,
+      ].join("\n"),
+      buttons: [
+        { id: "deliver:yes", title: t(lang, "btn.deliver") },
+        { id: "deliver:carry", title: t(lang, "btn.carry") },
+        { id: "charges", title: t(lang, "btn.charges") },
+      ],
+    };
 
   if (!session.sold) {
     // The offer gate holds here too: no MRP saving, offer figure or net total until the home is

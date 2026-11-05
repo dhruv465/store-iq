@@ -19,7 +19,11 @@ import {
   categoryOf,
   chargesList,
   defaultCharges,
+  deliveryCharges,
+  deliveryFor,
   followUpPlan,
+  kmIn,
+  setDelivery,
   pipeMetres,
   priceRun,
   storeDay,
@@ -48,6 +52,7 @@ import {
   itemisedTotal,
   cardSummary,
   customerSummary,
+  deliveryRates,
   followThrough,
   reviewReply,
   shiftBrief,
@@ -70,7 +75,8 @@ FACTS is what the live Reliance Digital catalogue returned just now for what the
 How to be:
 - Talk to the associate the way a good manager talks: short, plain, direct, no greeting rituals and no selling at them. If they say hello, ask what is going on with them, the way you would in the aisle.
 - Answer the question they actually asked, about the exact thing they asked about. The search is loose, so FACTS can hold neighbours of what they named: an iPhone 18 Pro is not an iPhone 18 Pro Max, and a case is not a phone. If what they named is in FACTS, talk about that. If it is not, say plainly that this one is not coming up, set "unknown" true, and only then name the nearest thing, as a different product.
-- A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked what there is, which are good, to show something, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
+- A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked about a brand or a model they named, what we have of it, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. Asked "which Samsung phones do we have?", "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
+- A customer who only wants a kind of product ("customer wants a TV", "AC chahiye", "washing machine dikhao", "show fridges") has not decided, and nothing is known yet about what they need: do not list products or prices yet. Ask the one question about this customer that most changes which one fits, with buttons that are its likely answers, and on each turn after, ask the next one, until you know the two or three things that decide it: for a TV the room or how far they sit and what they watch most, for an AC the room size and whether it gets the afternoon sun, for a washing machine how many people it washes for and top or front loading, for a fridge how many people and single or double door, and for any of them the budget. As soon as you know two of them, show three from FACTS that fit, each with its price and the reason it fits what they said, and ask the budget alongside if it is still unknown. Never stop at a "show me options" button: show them. If the associate asks to see the options anyway, or says the customer is in a hurry, show them at once.
 - A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets the price, whether it is available or on pre-order, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
 - Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, and stop as soon as you have enough to be useful.
 - With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
@@ -88,7 +94,7 @@ Hard rules, never bent:
 - The reason for an answer is two fields. "because" is the name of the one thing in WHAT THE CUSTOMER HAS SAID that this answer serves — a name under facts, or budget_rupees — exactly as it is written there or as you file it this turn. "reason" is what that means for what to say or show, in a few words, with no figures: because "main use" and reason "a fast-moving ball is the thing to show". The associate sees the customer's own words and then yours. If nothing the customer said explains this answer, both are null.
 - You never send anything to a customer, and never say you are sending or have sent something. When the associate says the customer has bought it, tell them to tap "Sold": that records the sale on the customer's card and sets the follow-ups.
 - After a sale, help with what comes next from what you can see: delivery, installation, the site, the charges in FACTS, and checking it works. A charge FACTS has is quoted from FACTS; one it does not have is with the service desk.
-- A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. Never offer a button for something you cannot answer from FACTS or the customer's card, such as warranty details or service history. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
+- A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". Give two or three answers, short words with no brackets: "Small bedroom", "Living room", "Big hall". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. Never offer a button for something you cannot answer from FACTS or the customer's card, such as warranty details or service history. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
 - Name a product by its name, never by its sku: the sku is only for a "select:" button id.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
@@ -635,13 +641,15 @@ export function render(decision: Decision): Reply {
       const acts = DOES_SOMETHING.test(id);
       // "Under Rs 40,000" with the price taken out is "Under": an answer whose meaning was its figure goes.
       if (!acts && clean !== raw) return { id: "", title: "" };
+      // "Small (up to 43 inch)" is too long for a button: its bracket goes, not the whole answer.
+      const short = !acts && clean.length > 20 ? clean.replace(/\s*\([^)]*\)\s*$/, "").trim() : clean;
       const title =
-        acts && clean.length > 20
+        acts && short.length > 20
           ? clean
               .slice(0, 21)
               .replace(/\s+\S*$/, "")
               .slice(0, 20)
-          : clean;
+          : short;
       return { id: acts ? id : `say:${title}`, title };
     })
     .filter((button) => button.title && button.title.length <= 20);
@@ -903,7 +911,9 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     if (!product) return { text: t(session.language, "ft.gone") };
     // Delivery and installation are on the bill from the start; a charge from the last pick stays
     // only if this pack still prices it.
-    const defaults = defaultCharges(pack, product);
+    // Delivery waits for "take it or deliver", asked with the breakdown; installation does not.
+    const vans = new Set(deliveryCharges(pack, product).map((charge) => charge.id));
+    const defaults = defaultCharges(pack, product).filter((id) => !vans.has(id));
     session.selection = {
       sku,
       accessories: [],
@@ -935,6 +945,33 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     session.step = "follow_through";
     recordPurchase(session, pack);
     return followThrough(session, pack, event.name ?? session.phone, cheer);
+  }
+  // Take it or deliver, and how far: the delivery line on the bill follows the answer.
+  const chosen = session.selection && pack.products.find((p) => p.sku === session.selection?.sku);
+  const vans = chosen ? deliveryCharges(pack, chosen) : [];
+  if (chosen && vans.length && session.selection) {
+    const lang = session.language;
+    const typed = event.action ? "" : (event.text ?? "");
+    const km = kmIn(typed);
+    const tapped = event.action?.match(/^deliver:(.+)$/)?.[1];
+    const waiting = !session.selection.delivery;
+    const carry = tapped === "carry" || (waiting && CARRY_WORDS.test(typed));
+    const deliver = tapped === "yes" || (waiting && km === null && DELIVER_WORDS.test(typed));
+    const rate = tapped ? vans.find((charge) => charge.id === tapped) : km !== null ? deliveryFor(vans, km) : null;
+    if (carry || deliver || rate) {
+      if (carry) setDelivery(pack, chosen, session.selection, null);
+      else if (rate) setDelivery(pack, chosen, session.selection, rate);
+      else {
+        session.selection.delivery = "deliver";
+        return deliveryRates(session, pack)!;
+      }
+      session.consent = false;
+      recordPurchase(session, pack);
+      const bill = followThrough(session, pack, event.name ?? session.phone);
+      return km !== null && rate
+        ? { ...bill, text: `${t(lang, "dl.km", { km, title: rate.title })}\n${bill.text}` }
+        : bill;
+    }
   }
   if (event.action === "summary:customer") return customerSummary(session, pack, event.name ?? session.phone);
   if (event.action === "consent:yes") {
@@ -1060,6 +1097,11 @@ export type Store = {
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
+
+/** "They'll take it themselves" / "deliver it": an answer to take-or-deliver, while it is being asked. */
+const CARRY_WORDS =
+  /\b(take it (with them|home|themselves)|they('| wi)ll take it|carry|self[- ]?pick|pick(ing)? (it )?up|khud le|le ?jayenge|saath le)\b/i;
+const DELIVER_WORDS = /\b(deliver|delivery|home delivery|ghar (pe|par) (bhej|chahiye)|bhej do)\b/i;
 
 /** Asking about a saved customer's card, what they bought or their history. */
 const CARD_ASK =
