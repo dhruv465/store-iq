@@ -26,6 +26,7 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
   const session: Session = Object.assign(newSession("919820000001"), { associate: "Ramesh" });
   const db = {
     today: async (): Promise<Session[]> => [session],
+    allConversations: async (): Promise<Session[]> => [session],
     openQuestions: async () => [
       {
         reference: "SIQ-4321",

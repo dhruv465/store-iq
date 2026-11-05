@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { floorFeed, objectionInsights, perAssociate, productInsights } from "../server/src/extras.js";
 import { ago, floorRows, notice, phoneOf, recipients } from "../server/src/manager.js";
 import { loadPack } from "../server/src/pack.js";
+import { score } from "../server/src/steps.js";
 import { newSession, type Session } from "../server/src/types.js";
 
 function conversation(phone: string, name: string, done: Session["steps_done"], assessed: boolean): Session {
@@ -180,4 +181,41 @@ test("floor feed returns active customer conversations in order", () => {
   assert.equal(feed[0]!.room, "living room");
   assert.equal(feed[0]!.distance, "2.5 m");
   assert.equal(feed[0]!.budget, 55000);
+});
+
+test("the coaching scorecard averages every conversation on record, not just today's, and skips empty ones", () => {
+  const today = conversation("919820000003", "Priya", ["assess", "translate"], true);
+  const lastWeek = conversation("919820000003", "Priya", ["assess"], true);
+  lastWeek.selection = { sku: "x", accessories: [], charges: [] };
+  lastWeek.sold = true;
+  lastWeek.steps_done.push("close", "follow_through");
+  // Asking for the brief, or a "hi" after a reset, is no customer and must not count as zeros.
+  const briefOnly = conversation("919820000003", "Priya", ["brief"], false);
+  const rows = perAssociate([today], [], [lastWeek, today, briefOnly]);
+  const priya = rows[0]!;
+  assert.equal(priya.conversations, 1, "today's column is still today");
+  assert.equal(priya.coached, 2, "both customers, not the brief");
+  assert.equal(priya.stepMarks!.assess, 2);
+  assert.equal(priya.stepMarks!.translate, 1, "2 in one of two conversations");
+  assert.equal(priya.stepMarks!.close, 1);
+  assert.equal(priya.average, (score(today).points + score(lastWeek).points) / 2);
+  assert.equal(priya.weakest, "validate", "never done in either");
+  assert.match(priya.advice!, /half right/);
+});
+
+test("an associate with a past but nothing today keeps their scorecard", () => {
+  const old = conversation("919820000006", "Kiran", ["assess"], true);
+  const rows = perAssociate([], [{ phone: "919820000006", name: "Kiran" }], [old]);
+  assert.equal(rows[0]!.conversations, 0);
+  assert.equal(floorRows(rows)[0]!.quiet, true, "quiet today, still coached");
+  assert.equal(rows[0]!.coached, 1);
+});
+
+test("a pitch shown against a known home scores Translate, a pick with no home does not", () => {
+  const pitched = conversation("919820000007", "Meera", ["assess", "recommend"], true);
+  pitched.demonstrated = true;
+  assert.equal(score(pitched).marks.translate, 2);
+  const blind = conversation("919820000007", "Meera", ["recommend"], false);
+  blind.demonstrated = true;
+  assert.equal(score(blind).marks.translate, 0);
 });

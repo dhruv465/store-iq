@@ -16,7 +16,7 @@ import {
   type ProductInsight,
   type Rostered,
 } from "./extras.js";
-import { falConfig } from "./fal.js";
+import { falBilled, falConfig } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
 import { afterSalesData, chargesCsv, isSample, readChargesCsv, setAfterSalesData, storeDay } from "./aftersales.js";
 import { loadPack, type Pack } from "./pack.js";
@@ -194,7 +194,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
         due: row.due_on <= storeDay(),
       })),
       visits: await db.recentVisits(),
-      rows: floorRows(perAssociate(sessions, roster)),
+      rows: floorRows(perAssociate(sessions, roster, await db.allConversations())),
       reachable: recipients(roster, reachable).to.length,
       waiting: await db.noticesWaiting(),
       rosterEmpty: !roster.length,
@@ -203,6 +203,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
       from,
 
       spend: await db.spendTotals(storeDay()),
+      billed: await falBilled(),
       model: catalogModel(),
       objections: objectionInsights(sessions, packData),
       products: productInsights(sessions, packData),

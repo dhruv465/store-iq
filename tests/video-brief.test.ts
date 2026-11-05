@@ -118,6 +118,7 @@ test("the video goes only on approval, now to who can be reached and held for wh
     ],
     reachable: async () => ["919820000001"],
     today: async () => [],
+    allConversations: async () => [],
     send: async (phone: string, reply: Reply) => void sent.push({ phone, reply }),
     queueNotice: async (body: string, phones: string[], video?: string) => held.push({ body, phones, video }),
     logBroadcast: async (row: unknown) => void logged.push(row),

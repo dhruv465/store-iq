@@ -16,7 +16,12 @@ export type FloorRow = {
   lastSeen?: string;
   lastSeenLabel: string;
   quiet: boolean;
+  /** The 7 steps averaged over every conversation this associate has had, not only today's. */
   stepMarks?: Record<string, number>;
+  coached: number;
+  average: number;
+  weakest?: string;
+  advice?: string;
 };
 
 export type OpenQuestion = {
@@ -97,6 +102,8 @@ export type Floor = {
   /** What fal has billed, in US dollars: today (store day), in all since `since`, and by kind
    *  (model, voice, photo, video). Kept in the database, so a deploy does not reset it. */
   spend?: { today: number; total: number; since: string | null; kinds: Record<string, number> };
+  /** fal's own total for Store IQ since the first commit, every key and machine; null without a billing key. */
+  billed?: { total: number; since: string; endpoints: Record<string, number> } | null;
   model?: string;
 };
 

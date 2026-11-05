@@ -518,6 +518,14 @@ export class DB {
     return rows.rows.map((row) => row.state);
   }
 
+  /** Every conversation on record, for each associate's coaching scorecard: one shift is too few
+   *  customers to coach from. shortcut: reads every row; page it by associate if this grows past a
+   *  few thousand conversations. */
+  async allConversations(): Promise<Session[]> {
+    const rows = await this.pg.query<{ state: Session }>(`select state from conversations order by updated_at`);
+    return rows.rows.map((row) => row.state);
+  }
+
   /** The manager's roster, with when each person last wrote to the number. An associate who has
    *  done nothing today has to be visible, or "who has been quiet" cannot be answered. */
   async roster(): Promise<{ phone: string; name: string; lastSeen?: string }[]> {

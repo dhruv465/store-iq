@@ -135,16 +135,30 @@ function TodayOverview({ floor }: { floor: Floor }) {
           value={String(quiet)}
           hint={quiet ? "no customers yet" : "everyone has served"}
         />
-        <Stat
-          label="Model cost today"
-          value={floor.spend ? usd(floor.spend.today) : "—"}
-          hint={
-            floor.spend
-              ? `${usd(floor.spend.total)} in all${floor.spend.since ? ` since ${shortDay(floor.spend.since)}` : ""}` +
-                (total > 0 ? ` · ${usd(floor.spend.today / total)} a customer` : "")
-              : "fal is not set up"
-          }
-        />
+        {floor.billed ? (
+          // fal's own bill: every key and machine, local tests and timed-out requests included.
+          <Stat
+            label="Model cost, fal billed"
+            value={usd(floor.billed.total)}
+            hint={
+              `since ${shortDay(floor.billed.since)}` +
+              (floor.spend ? ` · ${usd(floor.spend.today)} on the floor today` : "") +
+              (floor.spend && total > 0 ? ` · ${usd(floor.spend.today / total)} a customer` : "")
+            }
+          />
+        ) : (
+          <Stat
+            label="Model cost today"
+            value={floor.spend ? usd(floor.spend.today) : "—"}
+            hint={
+              floor.spend
+                ? `${usd(floor.spend.total)} on the live number${floor.spend.since ? ` since ${shortDay(floor.spend.since)}` : ""}` +
+                  (total > 0 ? ` · ${usd(floor.spend.today / total)} a customer` : "") +
+                  " · local tests not counted"
+                : "fal is not set up"
+            }
+          />
+        )}
       </div>
     </section>
   );
@@ -158,6 +172,17 @@ function usd(amount: number): string {
 function shortDay(day: string): string {
   return new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
+
+/** The judges' 7 steps in their order, with what earns the 2 (server/src/steps.ts mark()). */
+const STEP_CARDS = [
+  ["assess", "Assess", "Four of the customer's needs learned"],
+  ["validate", "Validate", "Half-right claim confirmed, then corrected"],
+  ["translate", "Translate", "A spec turned into home life"],
+  ["demonstrate", "Demonstrate", "A difference shown on the floor"],
+  ["complete", "Complete", "A pick with its itemised total"],
+  ["close", "Close", "Sold tapped"],
+  ["follow_through", "Follow Through", "Follow-ups set after the sale"],
+] as const;
 
 function ScoreBadge({ score }: { score: number }) {
   if (score >= 1.8)
@@ -256,7 +281,7 @@ function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => voi
                       </TableCell>
                       <TableCell className="text-right">{row.lastSeenLabel}</TableCell>
                       <TableCell className="text-right">
-                        {row.conversations > 0 && row.stepMarks ? (
+                        {row.coached > 0 && row.stepMarks ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -301,45 +326,34 @@ function AssociateTable({ floor, onChange }: { floor: Floor; onChange: () => voi
                         <TableCell colSpan={9} className="py-3">
                           <div className="flex flex-col gap-2 px-2">
                             <span className="text-xs font-semibold text-muted-foreground">
-                              7-Step Store Visit Scorecard Breakdown for {row.name} (avg out of 2.0 per step):
+                              {row.name}: average {row.average} of {floor.maxScore} across {row.coached}{" "}
+                              {row.coached === 1 ? "conversation" : "conversations"} (every customer, not only today).
+                              Each step out of 2.
                             </span>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-7 text-xs">
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">1. Assess</span>
-                                <ScoreBadge score={row.stepMarks.assess ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Card & readback</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">2. Validate</span>
-                                <ScoreBadge score={row.stepMarks.validate ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Confirm then correct</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">3. Translate</span>
-                                <ScoreBadge score={row.stepMarks.translate ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Spec to home life</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">4. Demonstrate</span>
-                                <ScoreBadge score={row.stepMarks.demonstrate ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Demo difference cue</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">5. Complete</span>
-                                <ScoreBadge score={row.stepMarks.complete ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Itemised & full finance</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">6. Close</span>
-                                <ScoreBadge score={row.stepMarks.close ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Consent & site check</span>
-                              </div>
-                              <div className="flex flex-col gap-1 rounded bg-background p-2 border">
-                                <span className="text-muted-foreground">7. Follow Through</span>
-                                <ScoreBadge score={row.stepMarks.follow_through ?? 0} />
-                                <span className="text-[10px] text-muted-foreground">Owner & task handover</span>
-                              </div>
+                              {STEP_CARDS.map(([step, label, hint], index) => (
+                                <div
+                                  key={step}
+                                  className={`flex flex-col gap-1 rounded bg-background p-2 border${
+                                    row.weakest === step ? " border-destructive/50" : ""
+                                  }`}
+                                >
+                                  <span className="text-muted-foreground">
+                                    {index + 1}. {label}
+                                  </span>
+                                  <ScoreBadge score={row.stepMarks?.[step] ?? 0} />
+                                  <span className="text-[10px] text-muted-foreground">{hint}</span>
+                                </div>
+                              ))}
                             </div>
+                            {row.weakest ? (
+                              <span className="text-xs">
+                                Coach next: <strong>{STEP_CARDS.find(([step]) => step === row.weakest)?.[1]}</strong> —{" "}
+                                {row.advice}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-success">Every step at 2 of 2.</span>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1513,9 +1527,8 @@ function ThemeSwitch() {
 function Brand() {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="bg-brand flex size-8 items-center justify-center rounded-md text-[13px] font-bold text-white">
-        IQ
-      </span>
+      {/* The same picture as the WhatsApp number's profile, so the portal and the chat look like one thing. */}
+      <img src={`${import.meta.env.BASE_URL}store-iq.jpg`} alt="" className="size-8 rounded-md" />
       <span className="leading-tight">
         <span className="block text-sm font-semibold">Store IQ</span>
         <span className="text-muted-foreground block text-xs">Reliance Digital</span>

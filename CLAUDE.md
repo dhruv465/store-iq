@@ -93,7 +93,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   **What fal bills is kept** in the `spend` table by store day and kind (model, voice, photo, video)
   through `onSpend()` in `fal.ts`, so the portal's model cost survives a deploy. A text or photo call
   returns its cost in `usage.cost`; a voice note does not, so its `x-fal-billable-units` header (minutes)
-  is multiplied by fal's pricing API. fal's usage API needs an admin key we do not have.
+  is multiplied by fal's pricing API. Every answer fal returns is billed, the hedged duplicate and an empty one
+  included. That table only sees the live number: with `FAL_BILLING_KEY` (a key on fal's BILLING preset; `FAL_KEY` gets
+  a 403) the portal shows **fal's own bill** for Store IQ's endpoints since 28 Oct, every key and machine (`falBilled()`).
 - The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and
   `CATALOG_APPLICATION_TOKEN` are set: `searchFrom()` in `brain.ts` asks the model for one search
   and `searchPack()` in `pack.ts` runs it, in FDK `getProducts` parameters, with

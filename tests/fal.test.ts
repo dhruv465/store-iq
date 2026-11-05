@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  falBilled,
   falConfig,
   falText,
   falTranscribe,
@@ -241,4 +242,45 @@ test("the ledger keeps today's cost and the running total across days", async ()
   } finally {
     await db.close();
   }
+});
+
+test("the hedged duplicate and an empty answer are billed too, because fal charges for both", async () => {
+  const billed: number[] = [];
+  onSpend(async (_kind, usd) => void billed.push(usd));
+  try {
+    let calls = 0;
+    const fake = (async () => {
+      calls++;
+      const mine = calls;
+      await new Promise((resolve) => setTimeout(resolve, mine === 1 ? 60 : 5));
+      return Response.json({ output: mine === 1 ? "slow" : "fast", usage: { cost: 0.001 } });
+    }) as unknown as typeof fetch;
+    assert.equal((await falText({ key: "k", model: "m" }, "s", "u", fake, 20)).text, "fast");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.deepEqual(billed, [0.001, 0.001], "the slow first request was billed as well");
+    const empty = (async () => Response.json({ output: " ", usage: { cost: 0.002 } })) as unknown as typeof fetch;
+    await assert.rejects(falText({ key: "k", model: "m" }, "s", "u", empty, 1000), /Empty/);
+    assert.equal(billed.at(-1), 0.002);
+  } finally {
+    onSpend(null);
+  }
+});
+
+test("fal's own bill is summed across Store IQ's endpoints, and is absent without a billing key", async () => {
+  assert.equal(await falBilled({}), null);
+  const asked: string[] = [];
+  const usage = (async (url: string | URL, init?: RequestInit) => {
+    asked.push(String(url));
+    assert.equal((init?.headers as Record<string, string>).authorization, "Key bk");
+    return Response.json({
+      summary: [
+        { endpoint_id: "openrouter/router", cost_total: 1.25 },
+        { endpoint_id: "fal-ai/elevenlabs/speech-to-text", cost_total: 0.5 },
+      ],
+    });
+  }) as unknown as typeof fetch;
+  const billed = await falBilled({ FAL_BILLING_KEY: "bk" }, usage, Date.now() + 3_600_000);
+  assert.equal(billed!.total, 1.75);
+  assert.equal(billed!.endpoints["openrouter/router"], 1.25);
+  assert.match(asked[0]!, /start=2026-10-28.*endpoint_id=openrouter%2Frouter%2C/);
 });

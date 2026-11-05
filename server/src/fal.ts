@@ -59,6 +59,62 @@ export function addSpend(cost: number, kind: SpendKind = "video"): void {
   bill(kind, cost);
 }
 
+/** Every fal endpoint Store IQ calls (server/src/video.ts, scripts/presenter.ts), so fal's total
+ *  is this project's and not the whole account's. Add one here when a new endpoint is called. */
+const OUR_ENDPOINTS = [
+  "openrouter/router",
+  "openrouter/router/vision",
+  "fal-ai/elevenlabs/speech-to-text",
+  "google/gemini-omni-flash/v1.1/image-to-video",
+  "fal-ai/ffmpeg-api/merge-videos",
+  "fal-ai/ffmpeg-api/extract-frame",
+  "fal-ai/nano-banana-pro",
+];
+/** The first commit: nothing before it was Store IQ. */
+export const BILLED_SINCE = "2026-10-28";
+export type Billed = { total: number; since: string; endpoints: Record<string, number> };
+let billedCache: { at: number; value: Billed | null } | undefined;
+
+/** What fal itself has charged for Store IQ, from every key and machine: local tests included, which
+ *  the spend table never sees, and requests that timed out here but were still billed. It needs
+ *  FAL_BILLING_KEY, a key on fal's BILLING preset; the turn's FAL_KEY is refused with a 403. Read at
+ *  most every 10 minutes, and a failure is kept for as long, so the portal is never held up by it. */
+export async function falBilled(
+  env = process.env,
+  request: typeof fetch = fetch,
+  now = Date.now(),
+): Promise<Billed | null> {
+  const key = env.FAL_BILLING_KEY?.trim();
+  if (!key) return null;
+  if (billedCache && now - billedCache.at < 10 * 60 * 1000) return billedCache.value;
+  let value: Billed | null = null;
+  try {
+    const url = new URL("https://api.fal.ai/v1/models/usage");
+    url.searchParams.set("start", BILLED_SINCE);
+    url.searchParams.set("expand", "summary");
+    url.searchParams.set("endpoint_id", OUR_ENDPOINTS.join(","));
+    const response = await request(url, {
+      headers: { authorization: `Key ${key}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw Error(`status ${response.status}`);
+    const body = (await response.json()) as {
+      summary?: { endpoint_id?: string; cost_total?: number; cost?: number }[];
+    };
+    value = { total: 0, since: BILLED_SINCE, endpoints: {} };
+    for (const line of body.summary ?? []) {
+      const usd = Number(line.cost_total ?? line.cost ?? 0);
+      value.total += usd;
+      const id = line.endpoint_id ?? "other";
+      value.endpoints[id] = (value.endpoints[id] ?? 0) + usd;
+    }
+  } catch (error) {
+    console.error("fal usage not read:", error instanceof Error ? error.message : error);
+  }
+  billedCache = { at: now, value };
+  return value;
+}
+
 export function falConfig(env = process.env): FalConfig | null {
   const key = env.FAL_KEY?.trim();
   if (!key) return null;
@@ -79,8 +135,11 @@ export async function falText(
   request: typeof fetch = fetch,
   hedgeMs = HEDGE_MS,
 ): Promise<{ text: string; cost: number }> {
-  const post = (): Promise<Response> =>
-    modelRequest(
+  type Answer = { output?: string; error?: string; usage?: { cost?: number } };
+  // Each request is billed as soon as its answer is read: fal charges the hedged duplicate and an
+  // empty or refused answer too, and leaving those out made the portal's cost read low.
+  const post = async (): Promise<Answer> => {
+    const response = await modelRequest(
       request,
       "https://fal.run/openrouter/router",
       {
@@ -97,12 +156,16 @@ export async function falText(
       },
       "fal",
     );
+    const answer = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024))) as Answer;
+    bill("model", answer.usage?.cost ?? 0);
+    return answer;
+  };
   // The second request starts only while the first is still out. A first that answers, or that
   // fails before then, stands it down; one that fails after it started leaves it running.
   let started = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let standDown: (reason: Error) => void = () => {};
-  const second = new Promise<Response>((resolve, reject) => {
+  const second = new Promise<Answer>((resolve, reject) => {
     standDown = reject;
     timer = setTimeout(() => {
       started = true;
@@ -117,17 +180,11 @@ export async function falText(
   first.then(stop, () => {
     if (!started) stop();
   });
-  const response = await Promise.any([first, second]).catch((all: AggregateError) => {
+  const body = await Promise.any([first, second]).catch((all: AggregateError) => {
     throw all.errors[0];
   });
-  const body = JSON.parse(new TextDecoder().decode(await readLimited(response, 512 * 1024))) as {
-    output?: string;
-    error?: string;
-    usage?: { cost?: number };
-  };
   if (body.error) throw Error(`fal refused: ${body.error}`);
   if (!body.output?.trim()) throw Error("Empty fal response");
-  bill("model", body.usage?.cost ?? 0);
   return { text: body.output, cost: body.usage?.cost ?? 0 };
 }
 
@@ -199,8 +256,8 @@ export async function falVision(
     error?: string;
     usage?: { cost?: number };
   };
-  if (body.error) throw Error(`fal refused the photo: ${body.error}`);
   bill("photo", body.usage?.cost ?? 0);
+  if (body.error) throw Error(`fal refused the photo: ${body.error}`);
   return (body.output ?? "").trim();
 }
 

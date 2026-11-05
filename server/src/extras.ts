@@ -76,41 +76,76 @@ export type AssociateRow = {
   /** On the manager's roster, rather than a number that simply turned up. */
   onRoster: boolean;
   lastSeen?: string;
-  /** Step marks breakdown (0 to 2) averaged across their conversations. */
+  /** The coaching scorecard: each of the 7 steps (0 to 2) averaged over every customer this
+   *  associate has served, not only today's. Absent until they have served one. */
   stepMarks?: Record<Scored, number>;
+  /** How many conversations the scorecard is averaged over, and their average out of 14. */
+  coached: number;
+  average: number;
+  /** The step to coach next: the lowest average, Assess first on a tie, as the visits named it. */
+  weakest?: Scored;
+  /** What to tell them about it: the same line the associate gets after a conversation. */
+  advice?: string;
 };
 
-/** One row per associate, which is what a manager is looking at: how many customers they took, how
- *  many of those they actually learned the home for, and the number out of 14 that follows from it. */
-export function perAssociate(sessions: Session[], roster: Rostered[] = []): AssociateRow[] {
+/** A conversation with a customer in it. The brief carries over from one customer to the next, and
+ *  "hi" or a reset opens an empty one; scoring those as zeros would mark an associate down for
+ *  asking the brief. */
+export function served(session: Session): boolean {
+  return (
+    session.steps_done.some((step) => step !== "brief") ||
+    session.shortlist.length > 0 ||
+    !!session.selection ||
+    !!session.sold ||
+    Object.values(session.card).some((value) =>
+      Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "",
+    )
+  );
+}
+
+function coaching(all: Session[]): Pick<AssociateRow, "stepMarks" | "coached" | "average" | "weakest" | "advice"> {
+  const cards = all.filter(served).map((session) => score(session));
+  if (!cards.length) return { coached: 0, average: 0 };
+  const mean = (values: number[]) => Number((values.reduce((sum, value) => sum + value, 0) / cards.length).toFixed(1));
+  const stepMarks = Object.fromEntries(
+    SCORED.map((step) => [step, mean(cards.map((card) => card.marks[step]))]),
+  ) as Record<Scored, number>;
+  const weakest = SCORED.reduce((low, step) => (stepMarks[step] < stepMarks[low] ? step : low));
+  return {
+    stepMarks,
+    coached: cards.length,
+    average: mean(cards.map((card) => card.points)),
+    ...(stepMarks[weakest] < 2 ? { weakest, advice: t("en", `adv.${weakest}`) } : {}),
+  };
+}
+
+/** One row per associate, which is what a manager is looking at: how many customers they took today,
+ *  how many of those they actually learned the home for, and the number out of 14 that follows from
+ *  it. The coaching scorecard reads `history`, every conversation on record, when it is given. */
+export function perAssociate(
+  sessions: Session[],
+  roster: Rostered[] = [],
+  history: Session[] = sessions,
+): AssociateRow[] {
   const byPhone = new Map<string, Session[]>();
   // Every rostered associate starts with no conversations, so the one who did nothing today is in
   // the table rather than missing from it. That absence is the thing a manager is looking for.
   for (const person of roster) byPhone.set(person.phone, []);
   for (const session of sessions) byPhone.set(session.phone, [...(byPhone.get(session.phone) ?? []), session]);
+  const past = new Map<string, Session[]>();
+  for (const session of history) past.set(session.phone, [...(past.get(session.phone) ?? []), session]);
+  // Someone with a past but nothing today still gets a row and their scorecard.
+  for (const phone of past.keys()) if (!byPhone.has(phone)) byPhone.set(phone, []);
   const listed = new Map(roster.map((person) => [person.phone, person]));
   const rows = [...byPhone.entries()].map(([phone, all]) => {
     const points = all.map((session) => score(session).points).sort((a, b) => a - b);
-    const stepMarks: Record<Scored, number> = {
-      assess: 0,
-      validate: 0,
-      translate: 0,
-      demonstrate: 0,
-      complete: 0,
-      close: 0,
-      follow_through: 0,
-    };
-    if (all.length) {
-      const scoredList = all.map((session) => score(session));
-      for (const st of SCORED) {
-        const sum = scoredList.reduce((acc, card) => acc + card.marks[st], 0);
-        stepMarks[st] = Number((sum / all.length).toFixed(1));
-      }
-    }
     return {
       phone,
       // The roster is the manager's own spelling, so it wins over a WhatsApp profile name.
-      name: listed.get(phone)?.name ?? all.find((session) => session.associate)?.associate ?? phone,
+      name:
+        listed.get(phone)?.name ??
+        [...all, ...(past.get(phone) ?? [])].find((session) => session.associate)?.associate ??
+        phone,
       onRoster: listed.has(phone),
       ...(listed.get(phone)?.lastSeen ? { lastSeen: listed.get(phone)!.lastSeen } : {}),
       conversations: all.length,
@@ -120,7 +155,7 @@ export function perAssociate(sessions: Session[], roster: Rostered[] = []): Asso
       best: points[points.length - 1] ?? 0,
       guide: points.filter((value) => value >= GUIDE).length,
       homeBeforePrice: all.filter((session) => !session.priced_before_home).length,
-      stepMarks,
+      ...coaching(past.get(phone) ?? []),
     };
   });
   // The floor's own order: the strongest associate first, so the manager reads the gap downwards.

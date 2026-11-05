@@ -175,8 +175,10 @@ function mark(session: Session, step: Scored): 0 | 1 | 2 {
       return isAssessed(session.card) ? 2 : anything ? 1 : 0;
     case "validate":
       return done("validate") ? 2 : 0;
+    // Since 6 Nov every pitch turns the catalogue's features into what they do for this customer, so a
+    // pick shown against a known home is the step even when the model called the turn "recommend".
     case "translate":
-      return done("translate") ? 2 : 0;
+      return done("translate") || (session.demonstrated && isAssessed(session.card)) ? 2 : 0;
     case "demonstrate":
       return session.demonstrated ? 2 : 0;
     // The findings' "Complete" is the full cost, charge by charge, not just a product picked.
