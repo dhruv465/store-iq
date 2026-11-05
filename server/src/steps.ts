@@ -8,24 +8,6 @@ import { applicableCharges, categoryOf, deliveryCharges, extrasLine, followUpPla
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
  *  no request spent, no figure invented, and an answer in milliseconds rather than seconds. */
 
-const NEW_CUSTOMER_WORDS = /^\s*(?:a\s+)?(new customer|next customer|naya customer|new client|reset|done with)\b/i;
-
-/** The card belongs to one customer on the floor; the associate says when the next one walks up. */
-export function wantsNewCustomer(text: string | undefined, action: string | undefined): boolean {
-  return action === "new_customer" || (!!text && NEW_CUSTOMER_WORDS.test(text));
-}
-
-/** What the associate said AFTER announcing the new customer. "New customer asking for iPhone 17
- *  model 256 gb any offers going on?" is one sentence: the card has to be cleared AND the question
- *  answered. It was answered with "new customer, clean card" twice, and the question thrown away
- *  both times, because the command matched the first two words and took the whole turn. */
-export function newCustomerRest(text: string | undefined): string {
-  if (!text) return "";
-  const rest = text.replace(NEW_CUSTOMER_WORDS, "").trim();
-  // "new customer" and "new customer." are the command and nothing else.
-  return rest.replace(/^[,.:;\-\s]+/, "").trim();
-}
-
 /** What the card holds, one phrase each, in the associate's language. */
 export function cardParts(session: Session): string[] {
   const card = session.card;

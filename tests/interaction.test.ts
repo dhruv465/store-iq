@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadPack } from "../server/src/pack.js";
-import { SCORED, cardSummary, score, wantsNewCustomer } from "../server/src/steps.js";
-import { deterministic, startInteraction } from "../server/src/brain.js";
+import { SCORED, cardSummary, score } from "../server/src/steps.js";
+import { deterministic, readSearchTurn, startInteraction } from "../server/src/brain.js";
 import { newSession, STEPS, type Event, type Session } from "../server/src/types.js";
 
 const pack = await loadPack("data/pack.json");
@@ -36,11 +36,12 @@ test("the shift brief survives a new customer, the home card does not", () => {
   assert.deepEqual(session.steps_done, ["brief"]);
 });
 
-test("the associate can start a new customer by word or by tap", () => {
-  assert.equal(wantsNewCustomer("new customer", undefined), true);
-  assert.equal(wantsNewCustomer("naya customer aaya hai", undefined), true);
-  assert.equal(wantsNewCustomer(undefined, "new_customer"), true);
-  assert.equal(wantsNewCustomer("customer wants a new TV", undefined), false, "a new TV is not a new customer");
+test("catalogue intent can reset a new customer without requiring a phrase", () => {
+  assert.deepEqual(readSearchTurn({ q: null, new_customer: true }), { search: null, newCustomer: true });
+  assert.deepEqual(readSearchTurn({ q: "air conditioner", new_customer: false }), {
+    search: { q: "air conditioner" },
+    newCustomer: false,
+  });
 });
 
 test("the card is read back in the brief's I heard shape, with a correction button", () => {

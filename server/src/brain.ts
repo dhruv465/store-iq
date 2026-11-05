@@ -60,8 +60,6 @@ import {
   siteNeeds,
   wantsBrief,
   wantsFollowThrough,
-  newCustomerRest,
-  wantsNewCustomer,
   wantsReview,
 } from "./steps.js";
 import type { Event, HomeCard, Purchase, Reply, Session, Step, Turn } from "./types.js";
@@ -103,7 +101,9 @@ Hard rules, never bent:
 
 /** One search of the store out of what was said. Understanding the message is the model's job: a
  *  list of filler words was what searched "current data" for a question about an iPhone. */
-const SEARCH_SYSTEM = `You turn a message from a Reliance Digital store associate into one search of the store's product catalogue. You write no reply to anyone.
+const SEARCH_SYSTEM = `You turn a message from a Reliance Digital store associate into one search of the store's product catalogue and identify whether a different customer has just arrived. You write no reply to anyone.
+
+new_customer is true when the associate's current message means a different customer has just arrived or taken over, whatever words they use. Use the meaning of the whole message, not a required phrase. If true, ignore LAST SEARCH and RECENT TURNS when choosing q; only a product named in the current message belongs in q. It is false when they are still discussing the same customer or product.
 
 q is the words of the product only: brand, model, size, capacity, variant, as the store would name it, in English. "iphone 18 pro 256 gb", "sony 85 inch tv", "samsung double door fridge", "front load washing machine". The store searches product names, not sentences, so words like want, buy, price, offer, stock, current, latest, today, customer and data never go in q. Keep every word that narrows the product: leaving out "256 gb" finds the wrong one.
 kind is what the thing is, as one plain singular noun a shop would use: phone, television, refrigerator, washing machine, air conditioner, laptop, tablet, watch, soundbar. It is null if the message does not say.
@@ -229,15 +229,21 @@ const schema = {
 
 const searchSchema = {
   type: "OBJECT",
-  required: ["q"],
+  required: ["q", "new_customer"],
   properties: {
     q: { type: "STRING", nullable: true },
+    new_customer: { type: "BOOLEAN", description: "whether this message starts a different customer's visit" },
     kind: { type: "STRING", nullable: true },
     sort_on: { type: "STRING", nullable: true },
     max_price: { type: "NUMBER", nullable: true },
     page_no: { type: "NUMBER", nullable: true },
   },
 } as const;
+
+export function readSearchTurn(raw: unknown): { search: Search | null; newCustomer: boolean } {
+  const result = (raw ?? {}) as Record<string, unknown>;
+  return { search: readSearch(result), newCustomer: result.new_customer === true };
+}
 
 /** Fails loudly for a wrong model name, but never blocks start-up just because Google is unreachable. */
 export async function assertModelAvailable(request: typeof fetch = fetch): Promise<string> {
@@ -789,7 +795,11 @@ async function askModel(
 }
 
 /** What to ask the catalogue for this turn, or null when the message is not about a product. */
-async function searchFrom(said: string, session: Session, request: typeof fetch): Promise<Search | null> {
+async function searchFrom(
+  said: string,
+  session: Session,
+  request: typeof fetch,
+): Promise<{ search: Search | null; newCustomer: boolean }> {
   const asked = [
     `LAST SEARCH: ${JSON.stringify(session.search ?? null)}`,
     `RECENT TURNS:\n${
@@ -802,10 +812,10 @@ async function searchFrom(said: string, session: Session, request: typeof fetch)
   ].join("\n\n");
   const text = await askModel(SEARCH_SYSTEM, asked, searchSchema, request);
   try {
-    return readSearch(readJson(text));
+    return readSearchTurn(readJson(text));
   } catch {
     // An unreadable search is the same as none: the conversation stays on what it was on.
-    return session.search ?? null;
+    return { search: session.search ?? null, newCustomer: false };
   }
 }
 
@@ -902,7 +912,7 @@ export function startInteraction(session: Session): void {
  *  question: the reset, the consent steps, the card read-back, the brief and the score. A command is
  *  the whole message; a sentence that merely starts with "today" or "review" is a question. */
 export function deterministic(event: Event, session: Session, pack: Pack, notes: string[] = []): Reply | null {
-  if (wantsNewCustomer(event.text, event.action)) {
+  if (event.action === "new_customer") {
     startInteraction(session);
     return { text: `${t(session.language, "newcustomer")}\n↳ ${t(session.language, "why.newcustomer")}` };
   }
@@ -1308,17 +1318,9 @@ async function answer(
     event = { ...event, text: tappedWords[1]! };
     delete event.action;
   }
-  // "New customer asking for iPhone 17 model 256 gb any offers going on?" is one sentence: the card
-  // has to be cleared AND the question answered.
-  const started = wantsNewCustomer(event.text, event.action) ? newCustomerRest(event.text) : "";
   const notes: string[] = [];
-  const resetNow = started.length > 3;
+  let resetNow = false;
   let searchedNow = false;
-  if (resetNow) {
-    startInteraction(session);
-    event = { ...event, text: started };
-    notes.push("They have just started a new customer, so nothing is known about them yet.");
-  }
   const remember = (reply: Reply): Reply => {
     session.history.push({ who: "associate", text: (event.text ?? event.action ?? "photo").slice(0, 300) });
     session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
@@ -1396,6 +1398,32 @@ async function answer(
   let pack = withAfterSales(
     withOffered(withShown(session.search ? await fetchFor(session.search) : base, session), session),
   );
+  const applySearch = async (search: Search | null): Promise<void> => {
+    if (!search) {
+      if (resetNow) {
+        pack = withAfterSales(base);
+        failed = false;
+        searchedNow = false;
+      }
+      return;
+    }
+    searchedNow = true;
+    failed = false;
+    if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
+    const found = await fetchFor(search);
+    pack = failed ? found : withAfterSales(withOffered(withShown(found, session), session));
+    session.search = search;
+    if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {
+      delete session.selection;
+      session.consent = false;
+    }
+    if (!failed && !found.products.length)
+      notes.push(
+        pack.products.length
+          ? `The live catalogue search for ${JSON.stringify(search.q)} found nothing new, so FACTS holds only what is already on their screen. If they asked about something else, say it is not coming up and set "unknown" true.`
+          : `The live catalogue search for ${JSON.stringify(search.q)} found no product. Say this one is not coming up in the catalogue, and to check the shelf tag or the ASM; do not name a different product, and set "unknown" true.`,
+      );
+  };
   const withoutUnavailableCharges = (reply: Reply): Reply => {
     const product = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
     if (!product || applicableCharges(pack, product).length) return reply;
@@ -1654,28 +1682,14 @@ async function answer(
   // The turn: what they said becomes a search, the store's answer becomes FACTS, and the model
   // writes the reply from those. Nothing about a product is answered from a written line any more.
   if (event.text && catalogConfig()) {
-    const search = await searchFrom(event.text, session, request);
-    if (search) {
-      searchedNow = true;
-      failed = false;
-      // A different kind of thing is a different subject: the televisions on screen are not "these phones".
-      if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
-      const found = await fetchFor(search);
-      // A store that did not answer gets nothing substituted, not even what it said a turn ago.
-      pack = failed ? found : withAfterSales(withOffered(withShown(found, session), session));
-      session.search = search;
-      // Changing the product withdraws the consent, and the picked one is not on this search.
-      if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {
-        delete session.selection;
-        session.consent = false;
-      }
-      if (!failed && !found.products.length)
-        notes.push(
-          pack.products.length
-            ? `The live catalogue search for ${JSON.stringify(search.q)} found nothing new, so FACTS holds only what is already on their screen. If they asked about something else, say it is not coming up and set "unknown" true.`
-            : `The live catalogue search for ${JSON.stringify(search.q)} found no product. Say this one is not coming up in the catalogue, and to check the shelf tag or the ASM; do not name a different product, and set "unknown" true.`,
-        );
+    const turn = await searchFrom(event.text, session, request);
+    if (turn.newCustomer) {
+      startInteraction(session);
+      resetNow = true;
+      pack = withAfterSales(base);
+      notes.push("The associate has started a different customer's visit. Use only the current message, not earlier customer or product context.");
     }
+    await applySearch(turn.search);
     if (failed)
       notes.push(
         'The catalogue did not answer just now, so FACTS has nothing. Say you cannot check it this second and to try again in a moment or use the shelf tag; do not name any product, and set "unknown" true. This is a hiccup, not a missing system.',
@@ -1725,7 +1739,23 @@ async function answer(
         await askModel(SYSTEM, prompt(event, session, pack, [...notes, ...extra], named), schema, request),
       ),
     );
+  let stale: Session["card"] = {};
   let decision = await written();
+  if (!resetNow && !loaded && decision.customer?.arrived === "new") {
+    stale = session.card;
+    startInteraction(session);
+    resetNow = true;
+    notes.push("The model recognized a different customer. Ignore earlier customer and product context.");
+    if (event.text && catalogConfig()) {
+      const turn = await searchFrom(event.text, session, request);
+      await applySearch(turn.search);
+    } else {
+      pack = withAfterSales(base);
+      failed = false;
+      searchedNow = false;
+    }
+    decision = await written();
+  }
   // Told once what it got wrong, it usually just needed to read the figure again. The guard is
   // unchanged: what it refuses a second time still does not go out.
   const wrong = figuresIn(decision);
@@ -1742,7 +1772,6 @@ async function answer(
   // under a number the associate really said is the code's.
   const who = decision.customer;
   // The model writes this turn's card having seen the last customer's, and copies it back.
-  let stale: Session["card"] = {};
   if (
     (who?.arrived === "new" || who?.arrived === "returning") &&
     !resetNow &&
