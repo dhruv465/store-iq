@@ -11,8 +11,10 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: "10000"
-      - key: LOCAL_DB_PATH
-        value: "memory://"
+      # The floor's memory (sessions, customer cards, follow-ups, the charges list) lives in Postgres
+      # outside the service, so a deploy keeps it. The server will not start on Render without it.
+      - key: DATABASE_URL
+        sync: false
       - key: PACK_PATH
         value: data/pack.json
       - key: GEMINI_MODEL

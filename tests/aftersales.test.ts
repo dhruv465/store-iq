@@ -314,3 +314,12 @@ test("a saved setting comes back after it is written again", async () => {
     await db.close();
   }
 });
+
+test("on Render the floor's memory must be Postgres, so a deploy cannot forget it", async () => {
+  const { storeKind } = await import("../server/src/db.js");
+  assert.throws(() => storeKind({ RENDER: "true", LOCAL_DB_PATH: "memory://" }), /DATABASE_URL is not set on Render/);
+  assert.throws(() => storeKind({ RENDER: "true", DATABASE_URL: "  " }), /DATABASE_URL/);
+  assert.equal(storeKind({ RENDER: "true", DATABASE_URL: "postgres://x" }), "postgres");
+  assert.equal(storeKind({ LOCAL_DB_PATH: "memory://" }), "memory", "a local run may stay in memory");
+  assert.equal(storeKind({}), "disk");
+});

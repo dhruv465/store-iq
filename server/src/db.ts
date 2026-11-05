@@ -713,3 +713,13 @@ export async function openPostgres(url: string): Promise<DB> {
   }
   return new DB(db, () => pool.end());
 }
+
+/** Which database this process keeps the floor in. On Render the disk and memory go with every deploy,
+ *  so without a Postgres outside the service every customer card, follow-up and charges list would be
+ *  forgotten; the server refuses to start there, and Render keeps the previous deploy serving. */
+export function storeKind(env: NodeJS.ProcessEnv = process.env): "postgres" | "memory" | "disk" {
+  if (env.DATABASE_URL?.trim()) return "postgres";
+  if (env.RENDER)
+    throw Error("DATABASE_URL is not set on Render: every deploy would forget the floor. Set it, then deploy.");
+  return (env.LOCAL_DB_PATH || "data/runtime/pg") === "memory://" ? "memory" : "disk";
+}

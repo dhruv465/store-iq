@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
-import { openDatabase, openPostgres, pricedEarly } from "./db.js";
+import { openDatabase, openPostgres, pricedEarly, storeKind } from "./db.js";
 import { startingPack } from "./pack.js";
 import { falConfig } from "./fal.js";
 import { startWorker } from "./worker.js";
@@ -15,7 +15,8 @@ const host = process.env.HOST || "127.0.0.1";
 const local = ["127.0.0.1", "localhost", "::1"].includes(host);
 
 const { pack, source: packSource } = await startingPack();
-const db = process.env.DATABASE_URL ? await openPostgres(process.env.DATABASE_URL) : await openDatabase();
+const store = storeKind();
+const db = store === "postgres" ? await openPostgres(process.env.DATABASE_URL!.trim()) : await openDatabase();
 try {
   // The store's own charges, uploaded from the portal, replace the sample file's.
   const charges = await db.setting<AfterSales>("aftersales");
@@ -52,7 +53,7 @@ try {
   );
   app.get("/health/queues", async (c) => {
     try {
-      return c.json({ ...(await db.health()), pack: pack.version });
+      return c.json({ ...(await db.health()), pack: pack.version, db: store });
     } catch {
       return c.json({ status: "unavailable" }, 503);
     }
@@ -110,7 +111,7 @@ try {
     });
   const server = serve({ fetch: app.fetch, port, hostname: host }, () =>
     console.log(
-      `Store IQ http://${host}:${port} · pack ${pack.version} (${packSource}) · ${model} · whatsapp ${whatsapp ? "on" : "off"}`,
+      `Store IQ http://${host}:${port} · pack ${pack.version} (${packSource}) · ${model} · whatsapp ${whatsapp ? "on" : "off"} · db ${store}`,
     ),
   );
   // Render's free instance sleeps after 15 minutes without inbound traffic, and the next WhatsApp

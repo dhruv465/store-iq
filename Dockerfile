@@ -23,8 +23,8 @@ COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY data/pack.json ./data/pack.json
 COPY --from=portal /app/web/dist ./web/dist
-# In-memory Postgres: the home card is interaction-scoped per the brief, so nothing needs a disk,
-# and there is no lock file to go stale when the free tier restarts the container.
+# The container keeps nothing: DATABASE_URL points at Postgres, which outlives each deploy. memory://
+# is only the fallback for a local run of the image, and on Render the server refuses it.
 ENV HOST=0.0.0.0 PORT=10000 LOCAL_DB_PATH=memory:// PACK_PATH=data/pack.json
 EXPOSE 10000
 USER node

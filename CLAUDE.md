@@ -102,5 +102,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   from `.env`. Check presence only — `grep -c '^NAME=.\+' .env` — and edit the file with a script
   that echoes nothing. Ask the user to paste a new value rather than reading the old one. A key that
   reaches a transcript is a key that has to be rotated.
+- **The floor's memory is Postgres in production.** Sessions, customer cards, follow-ups and the charges
+  list live in the database named by `DATABASE_URL`. `storeKind()` in `db.ts` refuses to start on Render
+  without it, because the container keeps nothing across a deploy. The startup line and `/health/queues`
+  say which store is in use (`db postgres`). `memory://` is for local runs only.
 - Never commit `.env`, `web/dist`, `web/node_modules`, `data/runtime/`.
 - The branch `fal-assets` is parked by instruction. Leave it.
