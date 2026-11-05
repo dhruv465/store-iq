@@ -104,7 +104,7 @@ test("a returning customer gets their old card and history back", async () => {
   assert.equal(session.customer?.id, "c-1");
   assert.equal(session.card.budget_rupees, 30000);
   assert.equal(session.history[0]?.text, "she wants a double door fridge");
-  assert.match(reply.text, /^Welcome back, Asha\. Last time: budget \*?Rs 30000\*?; main use: family of five\./);
+  assert.match(reply.text, /^Welcome back, Asha\. Last time: budget \*?Rs 30,000\*?; main use: family of five\./);
 });
 
 test("a returning number with no card is said, and no card is made up", async () => {
@@ -203,7 +203,7 @@ test("a number asked about is the code's card, with buttons that each do somethi
   const model = manager({ customer: null, lines: ["She was looking at TVs for cricket."] });
   const reply = await decide(said("9876543210 ka data batao"), session, pack, model.fetch, cards(saved) as never);
   assert.equal(model.prompts.length, 0, "no model request for a card on file");
-  assert.match(reply.text, /^Meena ··3210 · Nothing bought on file yet/);
+  assert.match(reply.text.replace(/\*/g, ""), /^Meena · 98765 43210 · ID C-C1\n+Nothing bought on file yet/);
   assert.match(reply.text, /Home:\*? main use: cricket/);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),

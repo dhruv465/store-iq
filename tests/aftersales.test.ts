@@ -3,7 +3,17 @@ import assert from "node:assert/strict";
 import { loadPack, bandHolds } from "../server/src/pack.js";
 import { decide, deterministic } from "../server/src/brain.js";
 import { openDatabase } from "../server/src/db.js";
-import { pipeMetres, storeDay, wantsSold, withAfterSales } from "../server/src/aftersales.js";
+import {
+  afterSalesData,
+  chargesCsv,
+  chargesList,
+  pipeMetres,
+  readChargesCsv,
+  setAfterSalesData,
+  storeDay,
+  wantsSold,
+  withAfterSales,
+} from "../server/src/aftersales.js";
 import { newSession, type Event } from "../server/src/types.js";
 import { manager } from "./model.js";
 
@@ -100,59 +110,59 @@ test("hello carries the count of today's follow-ups and the tap that lists them"
   }
 });
 
-test("asked for a customer's card by name, the code shows it, with what they bought and what is next", async () => {
+test("asked by number, the home card is who they are, the last purchase and a count, with history a tap away", async () => {
   const db = await openDatabase("memory://");
   try {
     const session = await db.session(ASSOCIATE);
-    session.customer = { id: "c-1", phone: "9876543210", name: "Vidya Sathe" };
+    session.customer = { id: "3f9a2c1e-0000-4000-8000-000000000001", phone: "9876543210", name: "Vidya Sathe" };
     await decide(tap("select:TCL-55C6KS"), session, pack, manager({}).fetch, db);
     await decide(tap("sold"), session, pack, manager({}).fetch, db);
+    session.customer.bought = [
+      { sku: "old", name: "LG 7 Kg Washing Machine, Silver", total: 31990, on: "2026-06-01" },
+      ...(session.customer.bought ?? []),
+    ];
     await db.commit(session, []);
     await decide(tap("new_customer"), session, pack, manager({}).fetch, db);
 
     const model = manager({ lines: ["I can't access previous purchase history."] });
-    const card = await decide(said("What's vidya sathe's homecard"), session, pack, model.fetch, db);
+    const card = await decide(said("What's 9876543210's home card"), session, pack, model.fetch, db);
+    const text = card.text.replace(/\*/g, "");
     assert.equal(model.prompts.length, 0, "the card is the code's, not the model's");
-    assert.match(
-      card.text,
-      /^Vidya Sathe ··3210 · \*?Bought:\*? TCL 55 inch C6K QD-Mini LED, \*?Rs 54,990\*? \(\d{4}-\d{2}-\d{2}\)/,
-    );
-    assert.match(card.text.replace(/\*/g, ""), /Next: Call Vidya Sathe: did the TCL/);
+    assert.match(text, /^Vidya Sathe · 98765 43210 · ID C-3F9A2C1E\n+/);
+    assert.match(text, /Last bought: TCL 55 inch C6K QD-Mini LED, Rs 54,990 \(\d+ \w+ \d{4}\) · 1 more on file/);
+    assert.doesNotMatch(text, /LG 7 Kg/, "the card shows the last purchase, not the whole history");
     assert.deepEqual(
       card.buttons?.map((button) => button.id),
-      ["cust:serve", "cust:problem", "followups:customer"],
+      ["cust:history", "cust:problem", "followups:customer"],
     );
-    assert.equal(session.customer?.id, "c-1", "her card is open");
 
-    // The button the model used to invent and then fail on.
+    const history = await decide(tap("cust:history"), session, pack, model.fetch, db);
+    assert.match(
+      history.text.replace(/\*/g, ""),
+      /^1\. TCL 55 inch C6K QD-Mini LED, Rs 54,990 · .*\n+2\. LG 7 Kg Washing Machine, Rs 31,990 · 1 Jun 2026/,
+    );
+    // The words the model used to fail on, with her card open.
     const again = await decide(said("Previous purchases"), session, pack, model.fetch, db);
-    assert.match(again.text, /Bought:\*? TCL 55 inch/);
+    assert.match(again.text, /LG 7 Kg Washing Machine/);
     assert.equal(model.prompts.length, 0);
   } finally {
     await db.close();
   }
 });
 
-test("two customers with one name are told apart by their numbers", async () => {
+test("asked by name, a customer's card is not opened: the number is asked for, since names repeat", async () => {
   const db = await openDatabase("memory://");
   try {
     const session = await db.session(ASSOCIATE);
-    for (const [id, phone] of [
-      ["c-1", "9876543210"],
-      ["c-2", "9123456789"],
-    ] as const) {
-      session.customer = { id, phone, name: "Rahul Shah" };
-      await db.commit(session, []);
-    }
+    session.customer = { id: "c-1", phone: "9876543210", name: "Rahul Shah" };
+    await db.commit(session, []);
     delete session.customer;
-    const which = await decide(said("show Rahul Shah's card"), session, pack, manager({}).fetch, db);
-    assert.match(which.text, /More than one Rahul Shah on file/);
-    assert.deepEqual(which.buttons?.map((button) => button.title).sort(), ["Rahul ··3210", "Rahul ··6789"]);
-    const picked = await decide(tap("cust:9123456789"), session, pack, manager({}).fetch, db);
-    assert.match(picked.text, /^Rahul Shah ··6789/);
-    // Read through a function: the delete above narrowed the field to nothing.
+    const model = manager({});
+    const reply = await decide(said("show Rahul Shah's home card"), session, pack, model.fetch, db);
+    assert.match(reply.text, /^Send me the mobile number Rahul Shah gave\. Names repeat, numbers do not\./);
+    assert.equal(model.prompts.length, 0);
     const opened = () => session.customer;
-    assert.equal(opened()?.id, "c-2");
+    assert.equal(opened(), undefined, "a name alone opens nothing");
   } finally {
     await db.close();
   }
@@ -224,6 +234,82 @@ test("a retried sale does not raise its follow-ups twice", async () => {
     await db.addFollowUps([row]);
     await db.addFollowUps([row]);
     assert.equal((await db.followUps({ phone: ASSOCIATE })).length, 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test("the store's charges CSV replaces a category's sample rates, and a bad row saves nothing", () => {
+  const fridge = {
+    ...pack.products[0]!,
+    sku: "F-1",
+    name: "LG 343 L Refrigerator",
+    categories: ["Refrigerators"],
+    price_rupees: 40000,
+  };
+  const csv = [
+    "category,charge,amount,on every bill,per metre beyond",
+    'refrigerator,"Delivery, within 10 km",0,yes,',
+    "Refrigerator,Installation and demo,Rs 250,yes,",
+    'fridge,Stabiliser,"1,999",no,',
+  ].join("\r\n");
+  const read = readChargesCsv(csv);
+  assert.ok("data" in read, JSON.stringify(read));
+  const fridges = read.data.categories.find((category) => category.kind === "refrigerator")!;
+  assert.equal(fridges.sample, false);
+  assert.deepEqual(
+    fridges.charges.map((charge) => [charge.title, charge.amount_rupees, !!charge.default]),
+    [
+      ["Delivery, within 10 km", 0, true],
+      ["Installation and demo", 250, true],
+      ["Stabiliser", 1999, false],
+    ],
+  );
+  assert.ok(
+    read.data.categories.find((category) => category.kind === "air conditioner")!.charges.length > 1,
+    "the AC keeps its list",
+  );
+  try {
+    setAfterSalesData(read.data);
+    const live = withAfterSales({ ...pack, products: [fridge], charges: [], install_requirements: {}, offers: [] });
+    const list = chargesList(live, fridge, "en");
+    assert.match(list, /Installation and demo Rs 250/);
+    assert.doesNotMatch(list, /Sample rates/, "the store's own list is not called a sample");
+    assert.match(
+      chargesCsv(),
+      /^category,charge,amount,on every bill,per metre beyond\nrefrigerator,"Delivery, within 10 km",0,yes,\n/,
+    );
+  } finally {
+    setAfterSalesData(null);
+  }
+  assert.equal(afterSalesData().sample, true, "back to the file");
+
+  const bad = readChargesCsv("microwave,Delivery,0,yes,\nrefrigerator,Delivery,free,yes,\nrefrigerator,,10,no,");
+  assert.ok("errors" in bad);
+  assert.deepEqual(
+    bad.errors.map((error) => error.split(":")[0]),
+    ["Row 1", "Row 2", "Row 3"],
+  );
+  assert.ok(
+    "errors" in readChargesCsv("category,charge,amount,on every bill,per metre beyond\n"),
+    "an empty list is refused",
+  );
+});
+
+test("the downloaded CSV reads back to the same charges", () => {
+  const read = readChargesCsv(chargesCsv());
+  assert.ok("data" in read);
+  for (const [index, category] of afterSalesData().categories.entries())
+    assert.deepEqual(read.data.categories[index]!.charges, category.charges, category.kind);
+});
+
+test("a saved setting comes back after it is written again", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    assert.equal(await db.setting("aftersales"), null);
+    await db.saveSetting("aftersales", { categories: [] });
+    await db.saveSetting("aftersales", { categories: [{ kind: "x" }] });
+    assert.deepEqual(await db.setting("aftersales"), { categories: [{ kind: "x" }] });
   } finally {
     await db.close();
   }

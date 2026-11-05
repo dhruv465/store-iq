@@ -116,6 +116,11 @@ create table if not exists followups (
   created_at timestamptz not null default now()
 );
 create index if not exists followups_open on followups (phone, due_on) where done_at is null;
+create table if not exists settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -292,18 +297,6 @@ export class DB {
         const first = name.split(" ")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         return new RegExp(`(^|[^\\p{L}\\p{M}])${first}($|[^\\p{L}\\p{M}])`, "iu").test(said);
       });
-  }
-
-  /** Saved customers whose name is in these words, with their number: one match opens their card,
-   *  more than one is asked about, by the last digits of each number. */
-  async customersNamed(said: string): Promise<(SavedCustomer & { phone: string })[]> {
-    const names = await this.namesIn(said);
-    if (!names.length) return [];
-    const result = await this.pg.query<SavedCustomer & { phone: string }>(
-      `select id, phone, name, card, history, purchases from customers where name = any($1) order by updated_at desc limit 5`,
-      [names],
-    );
-    return result.rows;
   }
 
   /** The check-backs after a sale, each against the associate who sold it. A turn that is retried
@@ -604,6 +597,20 @@ export class DB {
       `select distinct phone from inbox where received_at > now() - interval '24 hours'`,
     );
     return rows.rows.map((row) => row.phone);
+  }
+
+  /** A setting the manager saved from the portal, such as the store's charges list. */
+  async setting<T>(key: string): Promise<T | null> {
+    const rows = await this.pg.query<{ value: T }>(`select value from settings where key = $1`, [key]);
+    return rows.rows[0]?.value ?? null;
+  }
+
+  async saveSetting(key: string, value: unknown): Promise<void> {
+    await this.pg.query(
+      `insert into settings (key, value) values ($1, $2::jsonb)
+       on conflict (key) do update set value = excluded.value, updated_at = now()`,
+      [key, JSON.stringify(value)],
+    );
   }
 
   async health(): Promise<Record<string, number>> {

@@ -97,6 +97,16 @@ export type Floor = {
   model?: string;
 };
 
+/** The delivery and installation charges the floor quotes, by category, and the CSV to edit them in. */
+export type Charges = {
+  categories: {
+    kind: string;
+    sample: boolean;
+    charges: { title: string; amount_rupees: number; every: boolean; per_metre_beyond: number | null }[];
+  }[];
+  csv: string;
+};
+
 export type Preview = {
   message: string;
   to: { phone: string; name: string }[];
@@ -163,6 +173,8 @@ export const api = {
   discardVideoBrief: () => call<{ ok: true }>("/video-brief", { method: "DELETE" }),
   sendVideoBrief: (video: string) =>
     call<{ queued: number; waiting: number }>("/video-brief/send", { method: "POST", body: JSON.stringify({ video }) }),
+  charges: () => call<Charges>("/charges"),
+  uploadCharges: (csv: string) => call<Charges>("/charges", { method: "POST", body: JSON.stringify({ csv }) }),
   doneFollowUp: (id: number) => call<{ ok: true; id: number }>(`/followup/${id}/done`, { method: "POST" }),
   resolveQuestion: (reference: string) =>
     call<{ ok: true; reference: string }>(`/expert/${encodeURIComponent(reference)}/resolve`, { method: "POST" }),

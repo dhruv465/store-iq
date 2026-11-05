@@ -23,11 +23,19 @@ export type Category = {
   plan?: string;
   charges: Charge[];
   site: Record<string, string[]>;
+  /** Set on a category the manager uploaded: the store's own list, not the sample. */
+  sample?: boolean;
 };
-type File = { sample?: boolean; categories: Category[] };
+export type File = { note?: string; sample?: boolean; categories: Category[] };
 
 let loaded: File | null = null;
+let uploaded: File | null = null;
+/** The store's own list from the portal, kept in the database and set again at start; null goes back to the file. */
+export function setAfterSalesData(data: File | null): void {
+  uploaded = data;
+}
 export function afterSalesData(): File {
+  if (uploaded) return uploaded;
   if (!loaded) {
     try {
       loaded = JSON.parse(readFileSync(resolve(process.env.AFTERSALES_PATH || "data/aftersales.json"), "utf8"));
@@ -104,8 +112,111 @@ export function chargesList(pack: Pack, product: Product, lang: Lang): string {
       kind: category?.kind ?? product.name.split(/[,(]/)[0]!.trim(),
       body: listed.map((charge) => `${charge.title} ${priced(charge)}`.trim()).join(" · "),
     }),
-    ...(ours.length && afterSalesData().sample ? [`↳ ${t(lang, "as.sample")}`] : []),
+    ...(ours.length && category && isSample(category) ? [`↳ ${t(lang, "as.sample")}`] : []),
   ].join("\n");
+}
+
+export const isSample = (category: Category): boolean => category.sample ?? afterSalesData().sample ?? false;
+
+const CSV_HEAD = ["category", "charge", "amount", "on every bill", "per metre beyond"];
+
+/** Cells of a CSV as Excel and Sheets write it: quoted fields, doubled quotes, CRLF. */
+export function csvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') ((cell += '"'), i++);
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") (row.push(cell.trim()), (cell = ""));
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      (row.push(cell.trim()), rows.push(row), (row = []), (cell = ""));
+    } else cell += ch;
+  }
+  (row.push(cell.trim()), rows.push(row));
+  return rows;
+}
+
+/** The charges as the CSV the manager downloads, edits and uploads again. */
+export function chargesCsv(data = afterSalesData()): string {
+  const cell = (value: string) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+  const rows = data.categories.flatMap((category) =>
+    category.charges.map((charge) => [
+      category.kind,
+      charge.title,
+      String(charge.amount_rupees),
+      charge.default ? "yes" : "no",
+      typeof charge.per_metre_beyond === "number" ? String(charge.per_metre_beyond) : "",
+    ]),
+  );
+  return [CSV_HEAD, ...rows].map((row) => row.map(cell).join(",")).join("\n") + "\n";
+}
+
+/** The store's list, read from the manager's CSV onto the current data. A category in the file is
+ *  replaced whole and is no longer sample; one not in the file keeps what it had. Nothing is saved
+ *  while any row is wrong, because half a price list on the floor is worse than the old one. */
+export function readChargesCsv(csv: string, base = afterSalesData()): { data: File } | { errors: string[] } {
+  const rows = csvRows(csv.replace(/^\uFEFF/, ""));
+  const errors: string[] = [];
+  const read = new Map<Category, Charge[]>();
+  const kinds = base.categories.map((category) => category.kind).join(", ");
+  rows.forEach((row, index) => {
+    const at = `Row ${index + 1}`;
+    if (!row.some(Boolean) || (index === 0 && row[0]?.toLowerCase() === "category")) return;
+    const [kind = "", title = "", amount = "", every = "", perMetre = ""] = row;
+    const category = base.categories.find(
+      (known) => known.kind.toLowerCase() === kind.toLowerCase() || (!!kind && new RegExp(known.match, "i").test(kind)),
+    );
+    if (!category) return void errors.push(`${at}: "${kind}" is not a category Store IQ knows (${kinds}).`);
+    if (!title || title.length > 80) return void errors.push(`${at}: the charge needs a name of up to 80 letters.`);
+    const rupees = amount.replace(/rs\.?|₹|,|\s/gi, "");
+    if (!/^\d{1,7}$/.test(rupees)) return void errors.push(`${at}: "${amount}" is not an amount in whole rupees.`);
+    const yes = /^(yes|y|true|1)$/i.test(every);
+    if (!yes && !/^(no|n|false|0|)$/i.test(every)) return void errors.push(`${at}: "on every bill" is yes or no.`);
+    if (perMetre && !(/^\d+(\.\d+)?$/.test(perMetre) && Number(perMetre) > 0 && Number(perMetre) < 100))
+      return void errors.push(`${at}: "per metre beyond" is the metres included, such as 3, or empty.`);
+    const list = read.get(category) ?? [];
+    if (list.some((charge) => charge.title.toLowerCase() === title.toLowerCase()))
+      return void errors.push(`${at}: "${title}" is in ${category.kind} twice.`);
+    // A charge keeps its id when its name is unchanged, so a customer's open bill still finds it.
+    const prefix = category.charges[0]?.id.split("-")[0] ?? category.kind.slice(0, 3).toUpperCase();
+    let id =
+      category.charges.find((charge) => charge.title.toLowerCase() === title.toLowerCase())?.id ??
+      `${prefix}-${title
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 24)}`;
+    while (list.some((charge) => charge.id === id)) id += "-2";
+    list.push({
+      id,
+      title,
+      amount_rupees: Number(rupees),
+      ...(yes ? { default: true } : {}),
+      ...(perMetre ? { per_metre_beyond: Number(perMetre) } : {}),
+    });
+    read.set(category, list);
+  });
+  if (!errors.length && !read.size) errors.push("No charges in the file.");
+  if (errors.length) return { errors };
+  return {
+    data: {
+      ...base,
+      categories: base.categories.map((category) => {
+        const charges = read.get(category);
+        if (!charges) return category;
+        const ids = new Set(charges.map((charge) => charge.id));
+        const site = Object.fromEntries(Object.entries(category.site).filter(([id]) => ids.has(id)));
+        return { ...category, charges, site, sample: false };
+      }),
+    },
+  };
 }
 
 export type FollowUp = { days: number; what: string; short: string };

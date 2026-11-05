@@ -1053,7 +1053,6 @@ export type Store = {
   today(): Promise<Session[]>;
   findCustomer?(phone: string): Promise<SavedCustomer | null>;
   namesIn?(said: string): Promise<string[]>;
-  customersNamed?(said: string): Promise<(SavedCustomer & { phone: string })[]>;
   addFollowUps?(rows: NewFollowUp[]): Promise<void>;
   followUps?(filter: { phone?: string; dueBy?: string; customer_id?: string }): Promise<OpenFollowUp[]>;
   doneFollowUp?(id: number, phone: string): Promise<OpenFollowUp | null>;
@@ -1065,6 +1064,8 @@ export type Store = {
 /** Asking about a saved customer's card, what they bought or their history. */
 const CARD_ASK =
   /\b(home\s?card|card|bought|purchase[sd]?|purchases|history|record|details|data|profile|kya liya|kya kharida|kharida)\b|कार्ड|खरीद|घेतलं/i;
+/** Asking what they bought, rather than for the whole card. */
+const PURCHASE_WORDS = /\b(bought|purchases?|purchase history|kya liya|kya kharida|kharida)\b|खरीद|घेतलं/i;
 /** About the customer whose card is already open: these words, without a name or a number. */
 const OWN_HISTORY =
   /\b(home\s?card|bought|purchases?|purchase history|previous|history|kya liya|kya kharida|kharida)\b|खरीद|घेतलं/i;
@@ -1081,44 +1082,85 @@ export function openCard(session: Session, found: SavedCustomer, phone: string):
   session.history = [...found.history, ...session.history].slice(-12);
 }
 
-/** A returning customer at a glance: who, what they bought, what they wanted, what is next for them.
- *  Every button does something with data that exists. */
+/** The customer's own id, short enough to read out: the first eight of the card's unique id. */
+export function customerId(id: string): string {
+  return `C-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+/** "2026-11-05" as the floor says it: "5 Nov 2026". */
+function onDay(on: string): string {
+  const day = new Date(`${on}T00:00:00Z`);
+  return Number.isNaN(day.getTime())
+    ? on
+    : day.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+const productName = (name: string): string => name.split(/[,(]/)[0]!.trim();
+
+/** A saved customer's home card: who they are (name, number, id), the last thing they bought with a
+ *  count of the rest, and what they need. Not the whole history: that is a tap away. */
 export function customerCard(session: Session, phone: string, open: OpenFollowUp[]): Reply {
   const lang = session.language;
-  const bought = session.customer?.bought ?? [];
+  const customer = session.customer;
+  const bought = customer?.bought ?? [];
+  const last = bought.at(-1);
   const parts = cardParts(session);
-  const next = open[0];
   return {
     text: [
-      `${t(lang, "cc.head", { name: session.customer?.name ?? phone, last4: phone.slice(-4) })} · ${
-        bought.length
-          ? t(lang, "cc.bought", {
-              body: bought
-                .slice(-2)
-                .map(
-                  (row) => `${row.name.split(/[,(]/)[0]!.trim()}, Rs ${row.total.toLocaleString("en-IN")} (${row.on})`,
-                )
-                .join("; "),
-            })
-          : t(lang, "cc.nobought")
-      }`,
-      [
-        parts.length ? t(lang, "cc.home", { body: parts.slice(0, 4).join("; ") }) : "",
-        next ? t(lang, "cc.open", { what: next.what, due: next.due_on }) : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      `↳ ${t(lang, "cc.why")}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
+      t(lang, "cc.head", {
+        name: customer?.name ?? t(lang, "as.thecustomer"),
+        phone: `${phone.slice(0, 5)} ${phone.slice(5)}`,
+        id: customerId(customer?.id ?? ""),
+      }),
+      last
+        ? t(lang, "cc.last", {
+            name: productName(last.name),
+            total: last.total.toLocaleString("en-IN"),
+            on: onDay(last.on),
+            more: bought.length > 1 ? t(lang, "cc.more", { n: bought.length - 1 }) : "",
+          })
+        : t(lang, "cc.nobought"),
+      parts.length ? t(lang, "cc.home", { body: parts.slice(0, 4).join("; ") }) : `↳ ${t(lang, "cc.why")}`,
+    ].join("\n"),
     buttons: [
+      ...(bought.length
+        ? [
+            { id: "cust:history", title: t(lang, "btn.history") },
+            { id: "cust:problem", title: t(lang, "btn.problem") },
+          ]
+        : [{ id: "cust:serve", title: t(lang, "btn.serve") }]),
+      open.length
+        ? { id: "followups:customer", title: t(lang, "btn.followups") }
+        : bought.length
+          ? { id: "cust:serve", title: t(lang, "btn.serve") }
+          : { id: "new_customer", title: t(lang, "btn.new") },
+    ],
+  };
+}
+
+/** What this customer has bought, newest first, one line each. Three fit the floor; more than that
+ *  shows the two newest and says how many earlier ones are on file. */
+export function purchaseHistory(session: Session): Reply {
+  const lang = session.language;
+  const bought = [...(session.customer?.bought ?? [])].reverse();
+  if (!bought.length) return { text: t(lang, "cc.nobought") };
+  const shown = bought.length > 3 ? bought.slice(0, 2) : bought;
+  return {
+    text: [
+      ...shown.map((row, index) =>
+        t(lang, "cc.row", {
+          n: index + 1,
+          name: productName(row.name),
+          total: row.total.toLocaleString("en-IN"),
+          on: onDay(row.on),
+        }),
+      ),
+      ...(bought.length > 3 ? [`↳ ${t(lang, "cc.earlier", { n: bought.length - 2 })}`] : []),
+    ].join("\n"),
+    buttons: [
+      { id: "cust:problem", title: t(lang, "btn.problem") },
+      { id: "followups:customer", title: t(lang, "btn.followups") },
       { id: "cust:serve", title: t(lang, "btn.serve") },
-      ...(bought.length ? [{ id: "cust:problem", title: t(lang, "btn.problem") }] : []),
-      {
-        id: open.length ? "followups:customer" : "new_customer",
-        title: t(lang, open.length ? "btn.followups" : "btn.new"),
-      },
     ],
   };
 }
@@ -1340,39 +1382,33 @@ async function answer(
     });
   }
 
-  // A saved customer's card, asked for by name or number, is the code's to show: the model offered
+  // A saved customer's card is asked for by mobile number, and the code shows it: the model offered
   // "Warranty details" and "Service history" it had no data for, then could not find the purchase.
-  const chosen = event.action?.match(/^cust:(\d{10})$/)?.[1];
+  // A name only gets the number asked for, since two customers can share one.
   const said = event.text ?? "";
   const asksCard =
     !event.action && CARD_ASK.test(said) && !/^\s*(card|home card|show the card)\s*[.!?]*\s*$/i.test(said);
-  if (store?.findCustomer && (chosen || asksCard)) {
-    const asked = chosen ?? mobileIn(said);
-    let target: (SavedCustomer & { phone: string }) | null = null;
-    if (asked) {
-      const found = await store.findCustomer(asked);
-      if (found) target = { ...found, phone: asked };
-    } else if (store.customersNamed) {
-      const rows = await store.customersNamed(said);
-      const current = rows.find((row) => row.phone === session.customer?.phone);
-      if (rows.length > 1 && !current)
-        return remember({
-          text: t(session.language, "cc.which", { name: rows[0]!.name ?? "" }),
-          buttons: rows.slice(0, 3).map((row) => ({
-            id: `cust:${row.phone}`,
-            title: `${(row.name ?? "").split(" ")[0]!.slice(0, 12)} ··${row.phone.slice(-4)}`,
-          })),
-        });
-      target = current ?? (rows.length === 1 ? rows[0]! : null);
-    }
-    // "Previous purchases", with this customer's card already open.
-    const aboutCurrent = !!session.customer && !target && OWN_HISTORY.test(said);
-    if (target || aboutCurrent) {
-      if (target && target.phone !== session.customer?.phone) {
+  if (store?.findCustomer && (asksCard || event.action === "cust:history")) {
+    const asked = asksCard ? mobileIn(said) : null;
+    const found = asked ? await store.findCustomer(asked) : null;
+    const named = !asked && asksCard && store.namesIn ? await store.namesIn(said) : [];
+    const openName = session.customer?.name?.toLowerCase();
+    // The card already open this visit, named or asked about: its number was given already.
+    const aboutCurrent =
+      !!session.customer &&
+      !asked &&
+      (event.action === "cust:history" ||
+        OWN_HISTORY.test(said) ||
+        named.some((name) => name.toLowerCase() === openName));
+    if (!found && !aboutCurrent && (named.length || event.action === "cust:history"))
+      return remember({ text: t(session.language, "cc.asknumber", { name: named[0] ?? "" }) });
+    if (found || aboutCurrent) {
+      if (found && asked && asked !== session.customer?.phone) {
         startInteraction(session);
-        openCard(session, target, target.phone);
+        openCard(session, found, asked);
       }
       const customer = session.customer!;
+      if (event.action === "cust:history" || PURCHASE_WORDS.test(said)) return remember(purchaseHistory(session));
       const open = store.followUps ? await store.followUps({ customer_id: customer.id }) : [];
       return remember(customerCard(session, customer.phone, open));
     }

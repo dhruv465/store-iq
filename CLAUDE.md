@@ -90,7 +90,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
 - Money is written `Rs 54,990`, never `₹`.
 - Delivery and installation charges for heavy products (fridge, AC, washing machine, TV) come from
   `data/aftersales.json`: **sample figures** until the store's own list replaces them (the charges
-  reply says so). `withAfterSales()` adds them only to a pack with no charges of its own. resQ care
+  reply says so). The manager replaces them per category by uploading a CSV under **Charges** in the
+  portal (`readChargesCsv()`; nothing is saved while any row is wrong). It is kept in the `settings`
+  table and loaded at start, so it outlasts a deploy only with a lasting database. `withAfterSales()` adds them only to a pack with no charges of its own. resQ care
   plans are real, from the catalogue (`carePlanFor()`). Follow-ups live in the `followups` table and
   reach the associate on hello, the brief, and "follow ups"; there is no push outside the 24-hour window.
   The manager sees and closes them under **After-sales** in the portal. An AC's pipe run ("outdoor unit

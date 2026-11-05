@@ -7,6 +7,9 @@ import {
   ClipboardList,
   ChevronUp,
   Clock,
+  Download,
+  ReceiptIndianRupee,
+  Upload,
   HelpCircle,
   LayoutDashboard,
   LogOut,
@@ -29,6 +32,7 @@ import {
   api,
   NeedsSignIn,
   type FeedItem,
+  type Charges,
   type FollowUp,
   type Floor,
   type ObjectionInsight,
@@ -714,6 +718,148 @@ function AfterSales({
   );
 }
 
+/** The delivery and installation charges the floor quotes. The store visits found the best associate
+ *  keeping this list on paper; here the manager keeps it, and every phone quotes the same one. */
+function ChargesCard() {
+  const [charges, setCharges] = useState<Charges | null>(null);
+  const [csv, setCsv] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.charges().then(setCharges, (failed: Error) => setError(failed.message));
+  }, []);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setCsv(await file.text());
+    setSaved(false);
+    setError(null);
+  };
+  const upload = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setCharges(await api.uploadCharges(csv));
+      setCsv("");
+      setSaved(true);
+    } catch (failed) {
+      setError((failed as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const download = () => {
+    if (!charges) return;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([charges.csv], { type: "text/csv" }));
+    link.download = "store-iq-charges.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+  const rupees = (amount: number) => (amount ? `Rs ${amount.toLocaleString("en-IN")}` : "Free");
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle>Charges the floor quotes</CardTitle>
+          <CardDescription>
+            Delivery and installation for heavy products. "On every bill" charges go on the breakdown at the pick; the
+            rest are offered if the home needs them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {!charges ? (
+            <p className="text-muted-foreground text-sm">Loading…</p>
+          ) : (
+            charges.categories.map((category) => (
+              <div key={category.kind} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold capitalize">{category.kind}</h3>
+                  <Badge variant={category.sample ? "outline" : "secondary"}>
+                    {category.sample ? "Sample rates" : "Store's list"}
+                  </Badge>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Charge</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">On every bill</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {category.charges.map((charge) => (
+                      <TableRow key={charge.title}>
+                        <TableCell className="whitespace-normal">
+                          {charge.title}
+                          {charge.per_metre_beyond !== null && (
+                            <span className="text-muted-foreground"> · per metre past {charge.per_metre_beyond} m</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{rupees(charge.amount_rupees)}</TableCell>
+                        <TableCell className="text-right">{charge.every ? "Yes" : "If needed"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle>Upload the store's list</CardTitle>
+          <CardDescription>
+            Download the current list, change the amounts in Excel or Sheets, save as CSV and upload it. A category in
+            the file replaces its sample rates; one left out keeps what it has.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button variant="outline" size="sm" onClick={download} disabled={!charges}>
+            <Download className="size-3.5" />
+            Download CSV
+          </Button>
+          <Input type="file" accept=".csv,text/csv" onChange={(event) => choose(event.target.files?.[0])} />
+          <Textarea
+            rows={8}
+            className="font-mono text-xs"
+            placeholder={
+              "category,charge,amount,on every bill,per metre beyond\nrefrigerator,Delivery within 5 km,0,yes,"
+            }
+            value={csv}
+            onChange={(event) => {
+              setCsv(event.target.value);
+              setSaved(false);
+            }}
+          />
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle />
+              <AlertTitle>Not saved</AlertTitle>
+              <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
+            </Alert>
+          )}
+          {saved && (
+            <Alert>
+              <CheckCircle2 />
+              <AlertTitle>Saved</AlertTitle>
+              <AlertDescription>Every associate quotes these from their next message.</AlertDescription>
+            </Alert>
+          )}
+          <Button onClick={upload} disabled={busy || !csv.trim()}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+            Upload charges
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 /** Adding an associate, opened from the header wherever the manager is. */
 function AddAssociateDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -1212,7 +1358,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
   );
 }
 
-type Section = "overview" | "floor" | "feed" | "aftersales" | "objections" | "notify" | "brief";
+type Section = "overview" | "floor" | "feed" | "aftersales" | "charges" | "objections" | "notify" | "brief";
 
 const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string; group?: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, about: "" },
@@ -1223,6 +1369,12 @@ const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string;
     label: "After-sales",
     icon: ClipboardList,
     about: "Every check-back after a sale: delivery, the installer's call, that it works.",
+  },
+  {
+    id: "charges",
+    label: "Charges",
+    icon: ReceiptIndianRupee,
+    about: "The delivery and installation charges every associate quotes.",
   },
   {
     id: "objections",
@@ -1481,6 +1633,8 @@ export default function App() {
             <LiveFloorFeed feed={floor.feed} />
           ) : active === "aftersales" ? (
             <AfterSales followUps={floor.followUps} onDone={reload} />
+          ) : active === "charges" ? (
+            <ChargesCard />
           ) : active === "objections" ? (
             <ObjectionHeatmap objections={floor.objections} />
           ) : active === "notify" ? (

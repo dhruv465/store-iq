@@ -18,7 +18,7 @@ import {
 } from "./extras.js";
 import { falConfig, falSpend } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
-import { storeDay } from "./aftersales.js";
+import { afterSalesData, chargesCsv, isSample, readChargesCsv, setAfterSalesData, storeDay } from "./aftersales.js";
 import { loadPack, type Pack } from "./pack.js";
 import { languageFrom, t } from "./i18n.js";
 import { discardVideoBrief, startVideoBrief, takeVideoBrief, videoBrief } from "./video.js";
@@ -221,6 +221,33 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     const done = await db.doneFollowUp(id, null);
     if (!done) return c.json({ error: "Follow-up not found or already done." }, 404);
     return c.json({ ok: true, id });
+  });
+
+  // The delivery and installation charges the floor quotes: the store's list replaces the sample.
+  const chargesView = () => ({
+    categories: afterSalesData().categories.map((category) => ({
+      kind: category.kind,
+      sample: isSample(category),
+      charges: category.charges.map(({ title, amount_rupees, default: every, per_metre_beyond }) => ({
+        title,
+        amount_rupees,
+        every: !!every,
+        per_metre_beyond: per_metre_beyond ?? null,
+      })),
+    })),
+    csv: chargesCsv(),
+  });
+  app.get("/api/manager/charges", (c) => c.json(chargesView()));
+  app.post("/api/manager/charges", async (c) => {
+    const body = await c.req.json<{ csv?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+    const csv = typeof body.csv === "string" ? body.csv : "";
+    if (!csv.trim()) return c.json({ error: "Choose or paste the charges file." }, 400);
+    if (csv.length > 200_000) return c.json({ error: "That file is too large for a charges list." }, 400);
+    const read = readChargesCsv(csv);
+    if ("errors" in read) return c.json({ error: ["Nothing was saved.", ...read.errors.slice(0, 15)].join("\n") }, 400);
+    await db.saveSetting("aftersales", read.data);
+    setAfterSalesData(read.data);
+    return c.json(chargesView());
   });
 
   app.post("/api/manager/roster", async (c) => {

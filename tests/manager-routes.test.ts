@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import type { DB, SentBroadcast } from "../server/src/db.js";
 import { managerRoutes } from "../server/src/manager.js";
+import { setAfterSalesData } from "../server/src/aftersales.js";
 import { newSession, type Reply, type Session } from "../server/src/types.js";
 
 const PASSWORD = "test-password";
 // The session cookie of the last harness to sign in; the tests in a file run one after another.
 let AUTH = "";
 const ORIGIN = "http://localhost";
+const settings = new Map<string, unknown>();
 
 async function harness(options: { reachable?: string[] } = {}): Promise<{
   app: Hono;
@@ -17,6 +19,7 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
   held: { body: string; phones: string[] }[];
 }> {
   const sent: { phone: string; reply: Reply }[] = [];
+  settings.clear();
   const removed: string[] = [];
   const held: { body: string; phones: string[] }[] = [];
   const history: SentBroadcast[] = [];
@@ -71,6 +74,7 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
     doneFollowUp: async (id: number, phone: string | null) => (id === 7 && phone === null ? { id: 7 } : null),
     logBroadcast: async (row: SentBroadcast): Promise<void> => void history.push(row),
     broadcasts: async (kind: string) => history.filter((row) => row.kind === kind),
+    saveSetting: async (key: string, value: unknown): Promise<void> => void settings.set(key, value),
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;
   const app = new Hono();
@@ -379,4 +383,34 @@ test("the manager can close any follow-up from the portal", async () => {
   assert.equal(res.status, 200);
   assert.equal((await app.request(...post("/api/manager/followup/9/done", {}))).status, 404);
   assert.equal((await app.request(...post("/api/manager/followup/abc/done", {}))).status, 400);
+});
+
+test("the manager uploads the store's charges: a bad file saves nothing, a good one is saved and quoted", async () => {
+  const { app } = await harness();
+  try {
+    const before = await (await app.request("/api/manager/charges", { headers: { cookie: AUTH } })).json();
+    assert.ok(before.categories.every((category: { sample: boolean }) => category.sample));
+    assert.match(before.csv, /^category,charge,amount,on every bill,per metre beyond\n/);
+
+    const bad = await app.request(...post("/api/manager/charges", { csv: "refrigerator,Delivery,free,yes," }));
+    assert.equal(bad.status, 400);
+    assert.match((await bad.json()).error, /^Nothing was saved\.\nRow 1: "free" is not an amount/);
+    assert.equal(settings.size, 0);
+    assert.equal((await app.request(...post("/api/manager/charges", {}))).status, 400);
+
+    const good = await app.request(...post("/api/manager/charges", { csv: "refrigerator,Delivery,150,yes," }));
+    assert.equal(good.status, 200);
+    const fridge = (await good.json()).categories.find(
+      (category: { kind: string }) => category.kind === "refrigerator",
+    );
+    assert.deepEqual(fridge, {
+      kind: "refrigerator",
+      sample: false,
+      charges: [{ title: "Delivery", amount_rupees: 150, every: true, per_metre_beyond: null }],
+    });
+    assert.ok(settings.has("aftersales"), "kept in the database for the next start");
+    assert.equal((await app.request("/api/manager/charges")).status, 401, "not without signing in");
+  } finally {
+    setAfterSalesData(null);
+  }
 });
