@@ -365,6 +365,11 @@ test("Sold before take-or-deliver asks it, asks for the home card, and the follo
 
       const next = await decide(tap(answer), session, live, manager({}).fetch, db);
       assert.match(next.text, /Before I book the installer/, "then the site, as before");
+      // Asked and told at the counter, so the associate does not come back for it.
+      const plain = next.text.replace(/\*/g, "");
+      assert.equal(/Which address, and which floor/.test(plain), answer !== "deliver:carry");
+      assert.equal(/who will be home to receive it/.test(plain), answer !== "deliver:carry");
+      assert.match(plain, /• Breakdown: .*Total Rs/);
       const set = await db.followUps({ phone: ASSOCIATE });
       assert.equal(set.length, expected, answer);
       assert.equal(
@@ -388,6 +393,20 @@ test("a sale with a home card already open does not ask for one", async () => {
     await decide(tap("select:TCL-55C6KS"), session, pack, manager({}).fetch, db);
     const sold = await decide(tap("sold"), session, pack, manager({}).fetch, db);
     assert.doesNotMatch(sold.text, /home card/);
+  } finally {
+    await db.close();
+  }
+});
+
+test("a customer named before their number is asked only for the number at Sold", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    const session = await db.session(ASSOCIATE);
+    session.named = "Nisha";
+    await decide(tap("select:TCL-55C6KS"), session, pack, manager({}).fetch, db);
+    const sold = await decide(tap("sold"), session, pack, manager({}).fetch, db);
+    assert.match(sold.text, /mobile number Nisha gave/);
+    assert.doesNotMatch(sold.text, /their name/);
   } finally {
     await db.close();
   }

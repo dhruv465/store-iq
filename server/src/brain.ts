@@ -79,11 +79,11 @@ How to be:
 - A customer who only wants a kind of product ("customer wants a TV", "AC chahiye", "washing machine dikhao", "show fridges") has not decided, and nothing is known yet about what they need: do not name products or prices yet. Ask at least three questions about this customer first, one per turn, each with buttons that are its likely answers, the way a good floor salesman does, because every answer is something the pitch will use. For a TV: which room it goes in and how far they sit, on the wall or on a table, and what they watch most (cricket and sports, movies and OTT, serials and news, gaming). For a fridge: how many people at home, single or double door, and whether they stock up for the week. For a washing machine: how many people it washes for, top or front loading, and whether a tap and drain are near where it goes. For an AC: the room size, whether it gets the afternoon sun, and whether it is a top floor. For a phone: what they use it most for, camera, games or battery, and how much they store. The budget comes last, if at all. Only after three answers, pitch the one in FACTS that fits best, and as soon as WHAT THE CUSTOMER HAS SAID holds three things about this kind of product, your next reply is that pitch, not a fourth question: a colour, a finish or a freezer position is chosen in the pitch, not asked before it. Never stop at a "show me options" button: pitch. If the associate asks to see the options anyway, or says the customer is in a hurry, pitch at once.
 - When you put a product in front of a customer, after the questions or in place of one that is not here, write the pitch the associate reads out, one short line each, in this order: why this one fits, in what the customer said; then two or three of its features from FACTS, each as what it does for this customer ("inverter compressor, so the bill stays low running all day", never a bare spec); then one "Ask:" that gets the customer picturing it at home or weighing the step up; and the price LAST, on its own line. When it costs more than what they came for, say what the extra buys them, so the step up feels worth it. The associate should not have to ask you for its features, its warranty or why it is better: if FACTS has it, it is in the pitch. Give its "select:" button, and a "select:" button for one or two others in FACTS that also fit. Only when the associate asked the price outright does the price come first.
 - A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets the price, whether it is available or on pre-order, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
-- Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time: three before the pitch for a customer who has not decided, and none for one who has.
+- Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time: three before the pitch for a customer who has not decided, and none for one who has. "Not needed", "not a priority", "any is fine" and "doesn't matter" are answers: file them and ask the next thing. Never ask a question you have already asked this customer, and a question's buttons are its answers, never products.
 - With a customer who has not decided, the order that works is: find out what they need from this kind of product with three questions, correct a wrong belief kindly, pitch the one that fits with its features as what they do for this customer and its price last, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for him? Send me his name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer as him, her or by name in the third person.
+- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
@@ -593,7 +593,7 @@ export function floor(reply: Reply): Reply {
   const reason = lines.findLast((line) => line.startsWith("↳"));
   const said = lines.filter((line) => !line.startsWith("↳"));
   // A pitch (a product put up for sale) reads out its features before its price, which takes six.
-  const cap = (reply.buttons ?? []).some((button) => button.id.startsWith("select:")) ? 6 : 3;
+  const cap = reply.long || (reply.buttons ?? []).some((button) => button.id.startsWith("select:")) ? 6 : 3;
   const kept = reason ? [...said.slice(0, cap - 1), reason] : said.slice(0, cap);
   // WhatsApp refuses two buttons with one title, and three Apple phones are three "Apple"s.
   const buttons = (reply.buttons ?? [])
@@ -656,8 +656,16 @@ export function render(decision: Decision): Reply {
       return { id: acts ? id : `say:${title}`, title };
     })
     .filter((button) => button.title && button.title.length <= 20);
+  // A question's buttons are its answers. "Water dispenser on the door?" went out over three fridges,
+  // and the spoken answer was lost under them; a pitch ends on its price, not a question.
+  const last = lines.at(-1) ?? "";
+  const asking =
+    /\?["”']?\s*$/.test(last) &&
+    !/\b(which|kaun|konsa|kaunsa)\b|कौन|कोणत/i.test(last) &&
+    !lines.some((line) => /\bRs\b/.test(line));
   const unique = buttons.filter(
     (button, index) =>
+      !(asking && button.id.startsWith("select:")) &&
       buttons.findIndex((other) => other.id === button.id) === index &&
       buttons.findIndex((other) => other.title === button.title) === index,
   );
@@ -709,7 +717,7 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
     Object.keys(pack.shift_brief ?? {}).length ? `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}` : "",
     Object.keys(session.card).length ? `WHAT THE CUSTOMER HAS SAID:\n${JSON.stringify(session.card)}` : "",
     picked ? `THEY HAVE PICKED: ${picked.name}.` : "",
-    `CUSTOMER NUMBER: ${named.length ? `not given, and a card is saved under the name ${named.join(", ")}` : session.customer ? `given${session.customer.name ? `; the customer is ${session.customer.name}, and you are talking to the associate, not to ${session.customer.name}` : ""}${session.customer.bought?.length ? `; they bought before: ${session.customer.bought.map((row) => `${row.name}, Rs ${row.total.toLocaleString("en-IN")} on ${row.on}`).join("; ")}` : ""}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
+    `CUSTOMER NUMBER: ${named.length ? `not given, and a card is saved under the name ${named.join(", ")}` : session.customer ? `given${session.customer.name ? `; the customer is ${session.customer.name}, and you are talking to the associate, not to ${session.customer.name}` : ""}${session.customer.bought?.length ? `; they bought before: ${session.customer.bought.map((row) => `${row.name}, Rs ${row.total.toLocaleString("en-IN")} on ${row.on}`).join("; ")}` : ""}` : session.named ? `not given yet; the customer is ${session.named}${session.customer_asked ? ", and the number was already asked for" : ", so ask only for the number"}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     gate,
     // What the code knows and the model does not: a gate just hit, a tap, a search that came back
@@ -868,6 +876,7 @@ export function startInteraction(session: Session): void {
   session.card = {};
   delete session.customer;
   delete session.customer_asked;
+  delete session.named;
   delete session.search;
   delete session.shown;
   // The last customer's pick, and their yes, are not this customer's.
@@ -1212,12 +1221,53 @@ export function purchaseHistory(session: Session): Reply {
   };
 }
 
+/** Digits as a voice note writes them out, in English, Hindi and Marathi. */
+const DIGIT_WORDS: Record<string, string> = Object.fromEntries(
+  [
+    ["zero", "shunya", "शून्य", "जीरो", "झिरो"],
+    ["one", "ek", "एक"],
+    ["two", "do", "दो", "दोन"],
+    ["three", "teen", "तीन"],
+    ["four", "char", "chaar", "चार"],
+    ["five", "paanch", "panch", "पांच", "पाँच", "पाच"],
+    ["six", "chhe", "chhah", "छह", "छः", "सहा"],
+    ["seven", "saat", "सात"],
+    ["eight", "aath", "आठ"],
+    ["nine", "nau", "नौ", "नऊ"],
+  ].flatMap((words, digit) => words.map((word) => [word, String(digit)])),
+);
+
 /** The customer's mobile number in the associate's own words, or null. Read by the code, not the
  *  model: asked "9876543210 ka data batao", the model passed no number on and nothing was looked up.
- *  shortcut: a number spoken as words, not digits, is not found; upgrade if voice notes miss it. */
+ *  A voice note's transcript writes it however it heard it: "982 012 3456", "९८२०१२३४५६", "nine
+ *  eight double two...", so the groups of digits next to each other are tried together too. */
 export function mobileIn(said: string | undefined): string | null {
   const found = (said ?? "").match(/(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{4}[\s-]?\d{5})(?!\d)/);
-  return found ? found[1]!.replace(/\D/g, "") : null;
+  if (found) return found[1]!.replace(/\D/g, "");
+  const tokens = (said ?? "")
+    .replace(/[०-९]/g, (digit) => String(digit.charCodeAt(0) - 0x966))
+    .toLowerCase()
+    .split(/[\s,.\-+()]+/)
+    .map((token) => DIGIT_WORDS[token] ?? token);
+  // "double five" is 55 and "triple nine" is 999.
+  const digits: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const times = { double: 2, triple: 3, डबल: 2, ट्रिपल: 3 }[tokens[i]!];
+    if (times && /^\d$/.test(tokens[i + 1] ?? "")) digits.push(tokens[++i]!.repeat(times));
+    else digits.push(tokens[i]!);
+  }
+  // The longest from each start, so "91 98 20 12 34 56" is not read as 9198201234.
+  for (let start = 0; start < digits.length; start++) {
+    let run = "";
+    let best: string | null = null;
+    for (let end = start; end < digits.length && /^\d+$/.test(digits[end]!) && run.length < 13; end++) {
+      run += digits[end];
+      const mobile = run.replace(/^(?:91(?=\d{10}$)|0(?=\d{10}$))/, "");
+      if (/^[6-9]\d{9}$/.test(mobile)) best = mobile;
+    }
+    if (best) return best;
+  }
+  return null;
 }
 
 export async function decide(
@@ -1696,14 +1746,16 @@ async function answer(
   const name = typeof who?.name === "string" && who.name.trim() ? who.name.trim().slice(0, 60) : undefined;
   if (number && !loaded && number !== session.customer?.phone && store?.findCustomer) {
     // Not on file. Asked to look it up, it says so; given as this customer's number, it is saved.
-    if (who?.arrived === "returning" || !(askedBefore || name || who?.arrived === "new"))
+    if (who?.arrived === "returning" || !(askedBefore || name || session.named || who?.arrived === "new"))
       customerLine = t(session.language, "customer.notfound", { v: number });
     else {
-      session.customer = { id: randomUUID(), phone: number, ...(name ? { name } : {}) };
+      const known = name ?? session.named;
+      session.customer = { id: randomUUID(), phone: number, ...(known ? { name: known } : {}) };
       recordPurchase(session, pack);
-      customerLine = t(session.language, "customer.saved", { v: name ?? "" });
+      customerLine = t(session.language, "customer.saved", { v: known ?? "" });
     }
   } else if (name && session.customer && !session.customer.name) session.customer.name = name;
+  else if (name && !session.customer) session.named = name;
 
   const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
   if (Array.isArray(extra))

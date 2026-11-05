@@ -411,7 +411,17 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
       })
     : t(lang, "sold.recap", { name: shortName(product), total });
   // No card yet: the sale is the moment to ask again, or what they bought is lost with the chat.
-  const first = cheer && !session.customer ? `${said} ${t(lang, "sold.askcard")}` : said;
+  // What the associate asks and tells at the counter once it is sold, so they do not have to come back
+  // for it: where and when it goes, and every charge on the bill and off it.
+  const extras = extrasLine(pack, product, selection.charges, lang);
+  const handover = [
+    ...(selection.delivery === "deliver" ? [t(lang, "sold.dl1"), t(lang, "sold.dl2")] : []),
+    t(lang, "sold.bill", {
+      body: [t(lang, "bd.total", { body: itemised.lines.join("; "), total }), extras].filter(Boolean).join(" "),
+    }),
+  ];
+  const askCard = session.named ? t(lang, "cc.asknumber", { name: session.named }) : t(lang, "sold.askcard");
+  const first = cheer && !session.customer ? `${said} ${askCard}` : said;
   // Sold before take-or-deliver was answered: asked now, and the follow-ups wait for it.
   if (delivery.length && !selection.delivery)
     return {
@@ -426,7 +436,8 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
   // is asked now, out loud, while the customer is still at the counter.
   if (needs.length && !session.site_checked)
     return {
-      text: [first, t(lang, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }), planLine].join("\n"),
+      text: [first, t(lang, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }), ...handover, planLine].join("\n"),
+      long: true,
       buttons: [
         { id: "site:ok", title: t(lang, "btn.sitefine") },
         { id: "site:problem", title: t(lang, "btn.siteproblem") },
@@ -439,8 +450,10 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
       needs.length
         ? t(lang, "sold.site", { body: needs.slice(0, 3).join(", "), owner: associate })
         : t(lang, "ft.task", { owner: associate }),
+      ...handover,
       planLine,
     ].join("\n"),
+    long: true,
     buttons: [
       { id: "charges", title: t(lang, "btn.charges") },
       { id: "summary:customer", title: t(lang, "btn.summary") },

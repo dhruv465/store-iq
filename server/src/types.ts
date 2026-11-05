@@ -45,7 +45,9 @@ export type HomeCard = {
 
 export type Button = { id: string; title: string };
 /** With `video`, the text is the video's caption: a public HTTPS mp4 Meta fetches itself. */
-export type Reply = { text: string; buttons?: Button[]; video?: string };
+/** `long`: the floor's three lines would cut what this reply exists to say, such as the delivery
+ *  questions and charges at Sold; it may take six. */
+export type Reply = { text: string; buttons?: Button[]; video?: string; long?: boolean };
 
 export type Turn = { who: "associate" | "storeiq"; text: string };
 
@@ -68,6 +70,8 @@ export type Session = {
   customer?: { id: string; phone: string; name?: string; bought?: Purchase[] };
   /** The reply has asked for the customer's name and number, so it is not asked again this interaction. */
   customer_asked?: boolean;
+  /** The customer's name, said before their number: kept so the card and Sold ask only for the number. */
+  named?: string;
   /** The offer opens only after both are true. */
   assessed: boolean;
   demonstrated: boolean;

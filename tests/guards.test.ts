@@ -449,7 +449,13 @@ test("a new customer does not inherit the last one's pick or their yes", () => {
 });
 
 test("a typed answer whose meaning was its price is dropped, not left as 'Under'", () => {
-  const base = { step: "assess" as const, card: {}, shortlist: [], demonstrated: false, lines: ["Ask: budget?"] };
+  const base = {
+    step: "assess" as const,
+    card: {},
+    shortlist: [],
+    demonstrated: false,
+    lines: ["Ask: which one, or what budget?"],
+  };
   const reply = render({
     ...base,
     buttons: [
@@ -496,4 +502,20 @@ test("a figure the associate said a turn ago can still be quoted back", async ()
 test("a bank card saving is an offer, and a running cost is not", () => {
   assert.equal(offerLeaked("It's Rs 44,990, and you save Rs 4,499 with an IDFC card.", false, false), true);
   assert.equal(offerLeaked("Inverter compressor, so it saves on the bill. Rs 44,990.", false, false), false);
+});
+
+test("a question's buttons are its answers, not three fridges", () => {
+  const base = { step: "assess" as const, card: {}, shortlist: [], demonstrated: false };
+  const fridges = [
+    { id: "select:494606322", title: "LG 605L Black" },
+    { id: "select:494813746", title: "LG 574L Prime" },
+  ];
+  const asked = render({
+    ...base,
+    lines: ["Does she want a water dispenser on the door, or is that not a priority?"],
+    buttons: fridges,
+  });
+  assert.equal(asked.buttons, undefined);
+  const chosen = render({ ...base, lines: ["Which one do they like?"], buttons: fridges });
+  assert.equal(chosen.buttons?.length, 2);
 });

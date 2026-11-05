@@ -60,6 +60,13 @@ test("the customer's number is read from the associate's own words", () => {
   assert.equal(mobileIn("9876543210 ka data batao"), "9876543210");
   assert.equal(mobileIn("her name is Asha"), null);
   assert.equal(mobileIn("budget 60000"), null);
+  // A voice note's transcript writes the number however it heard it.
+  assert.equal(mobileIn("customer is Nisha, number 982 012 3456"), "9820123456");
+  assert.equal(mobileIn("नंबर ९८२०१२३४५६ है"), "9820123456");
+  assert.equal(mobileIn("nine eight two zero one double two three four five"), "9820122345");
+  assert.equal(mobileIn("नौ आठ दो शून्य एक दो तीन चार पांच छह"), "9820123456");
+  assert.equal(mobileIn("plus 91 98 20 12 34 56"), "9820123456");
+  assert.equal(mobileIn("Rs 1,26,190 and Rs 44,990 for 4 people"), null);
   assert.equal(mobileIn("1876543210"), null, "not a mobile");
   assert.equal(mobileIn("item 498765432101"), null, "part of a longer number");
 });
