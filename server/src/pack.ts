@@ -441,6 +441,10 @@ const UNIT_OF: Record<string, string> = {
   percent: "percent",
   "%": "percent",
   kg: "kg",
+  // The catalogue names a fridge "215 L"; said back as "215 litre" it was refused.
+  l: "litre",
+  ltr: "litre",
+  ltrs: "litre",
   litre: "litre",
   litres: "litre",
   liter: "litre",

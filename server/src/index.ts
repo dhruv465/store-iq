@@ -109,6 +109,7 @@ try {
         card: session.card,
         assessed: session.assessed,
         demonstrated: session.demonstrated,
+        search: session.search,
       });
     });
   const server = serve({ fetch: app.fetch, port, hostname: host }, () =>

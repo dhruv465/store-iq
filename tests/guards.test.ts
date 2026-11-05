@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allowedNumbers, loadPack } from "../server/src/pack.js";
+import { allowedNumbers, loadPack, pairsIn } from "../server/src/pack.js";
 import {
   isAssessed,
   moneySafe,
@@ -12,6 +12,7 @@ import {
   unknownReply,
   awaitingSale,
   reasonFrom,
+  floor,
   render,
   rememberShown,
   unsupportedNumbers,
@@ -21,6 +22,7 @@ import {
 } from "../server/src/brain.js";
 import { newSession } from "../server/src/types.js";
 import { followThrough } from "../server/src/steps.js";
+import { manager } from "./model.js";
 
 const pack = await loadPack("data/pack.json");
 const allowed = allowedNumbers(pack);
@@ -48,21 +50,39 @@ test("a figure the associate said themselves is allowed back", () => {
 });
 
 test("the reply is capped at three lines and three buttons", () => {
-  const reply = render({
-    step: "complete",
-    card: {},
-    shortlist: [],
-    demonstrated: false,
-    lines: ["one", "two", "three", "four"],
-    buttons: [
-      { id: "a", title: "A" },
-      { id: "b", title: "B" },
-      { id: "c", title: "C" },
-      { id: "d", title: "D" },
-    ],
-  });
-  assert.equal(reply.text, "one\ntwo\nthree");
+  const reply = floor(
+    render({
+      step: "complete",
+      card: {},
+      shortlist: [],
+      demonstrated: false,
+      lines: ["one", "two", "three", "four"],
+      buttons: [
+        { id: "a", title: "A" },
+        { id: "b", title: "B" },
+        { id: "c", title: "C" },
+        { id: "d", title: "D" },
+      ],
+    }),
+  );
+  assert.equal(reply.text, "one\n\ntwo\n\nthree");
   assert.equal(reply.buttons?.length, 3);
+});
+
+test("a pitch, which puts a product up for sale, reads out up to six lines before its price", () => {
+  const lines = ["fits", "feature one", "feature two", "feature three", 'Ask: "picture it"', "Rs 54,990", "seventh"];
+  const reply = floor(
+    render({
+      step: "recommend",
+      card: {},
+      shortlist: [],
+      demonstrated: false,
+      lines,
+      buttons: [{ id: "select:TCL-55C6KS", title: "TCL 55" }],
+    }),
+  );
+  assert.equal(reply.text.split("\n").filter((line) => line.trim()).length, 6);
+  assert.ok(reply.text.includes("54,990") && !reply.text.includes("seventh"));
 });
 
 test("the model's reason goes last, marked, and never costs a line to say", () => {
@@ -451,4 +471,29 @@ test("the store's item codes never reach the words to say", () => {
     lines: ["Show the BPL 55-inch 4K (494749535) and the TCL 494811849 side by side, Rs 41,999."],
   });
   assert.equal(reply.text, "Show the BPL 55-inch 4K and the TCL side by side, Rs 41,999.");
+});
+
+test("a fridge named 215 L can be said back as 215 litre, and 350 litre still cannot", () => {
+  const named = pairsIn("Samsung 215 L 5 Star Single Door Refrigerator");
+  assert.ok(named.has("215 litre"));
+  assert.ok(!named.has("350 litre"));
+});
+
+test("a figure the associate said a turn ago can still be quoted back", async () => {
+  const session = newSession("919820000011");
+  session.history.push({ who: "associate", text: "customer wants a single door fridge 350 litre" });
+  session.history.push({ who: "storeiq", text: "How many people at home?" });
+  const model = manager({ lines: ["For 4 people, 350 litre in a single door is not here today."] });
+  const reply = await decide(
+    { id: "e1", phone: session.phone, modality: "text", text: "4 people" },
+    session,
+    pack,
+    model.fetch,
+  );
+  assert.match(reply.text, /350 litre/);
+});
+
+test("a bank card saving is an offer, and a running cost is not", () => {
+  assert.equal(offerLeaked("It's Rs 44,990, and you save Rs 4,499 with an IDFC card.", false, false), true);
+  assert.equal(offerLeaked("Inverter compressor, so it saves on the bill. Rs 44,990.", false, false), false);
 });
