@@ -5,6 +5,7 @@ import { decide, deterministic } from "../server/src/brain.js";
 import { openDatabase } from "../server/src/db.js";
 import {
   afterSalesData,
+  categoryOf,
   chargesCsv,
   chargesList,
   pipeMetres,
@@ -32,6 +33,15 @@ const tap = (action: string): Event => ({
   modality: "interactive",
   action,
   name: "Gaurav",
+});
+
+test("a large catalogue screen without a type label still gets television after-sales", () => {
+  const television = { ...pack.products[0]!, name: "Sony 139 cm", size_inch: 55, categories: ["Electronics"] };
+  assert.equal(categoryOf(television)?.kind, "television");
+  assert.equal(
+    categoryOf({ ...television, name: "Sony 32 inch monitor", size_inch: 32 })?.kind,
+    undefined,
+  );
 });
 
 test("resQ's price band is read off the plan's own name", () => {

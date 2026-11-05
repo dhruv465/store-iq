@@ -47,11 +47,14 @@ export function afterSalesData(): File {
 }
 
 /** The heavy-product category this is, by its catalogue shelf first and its name after. */
-export function categoryOf(product: Pick<Product, "name" | "categories">): Category | null {
+export function categoryOf(product: Pick<Product, "name" | "categories" | "size_inch">): Category | null {
   const shelf = (product.categories ?? []).join(" ");
   for (const where of [shelf, product.name])
     for (const category of afterSalesData().categories)
       if (where && new RegExp(category.match, "i").test(where)) return category;
+  // shortcut: a large unnamed screen is a TV; prefer a catalogue appliance type if the feed adds one.
+  if (product.size_inch >= 32 && !/monitor|projector/i.test(`${shelf} ${product.name}`))
+    return afterSalesData().categories.find((category) => category.kind === "television") ?? null;
   return null;
 }
 

@@ -241,6 +241,23 @@ test("a heavy product asks take or deliver at the pick, and the distance sets th
   assert.match(charges.text, /Charges for a television: Home delivery within 5 km free · Delivery beyond 5 km Rs 299/);
 });
 
+test("a large live screen without TV in its name still gets delivery and a site check", () => {
+  const television = { ...pack.products[0]!, name: "Sony 139 cm", size_inch: 55, categories: ["Electronics"] };
+  const live = withAfterSales({ ...pack, products: [television], charges: [], install_requirements: {} });
+  const session = newSession("919820000001");
+  const run = (action: string) =>
+    deterministic(
+      { id: `t${Math.random()}`, phone: session.phone, modality: "interactive", action, name: ASSOCIATE },
+      session,
+      live,
+    )!;
+
+  assert.match(run("select:SON-K55S30").text, /take it with you, or shall we deliver/i);
+  run("deliver:yes");
+  run("deliver:LTV-DEL");
+  assert.match(run("sold").text, /Before I book the installer/);
+});
+
 test("a customer who takes it with them has no delivery on the bill", () => {
   const live = withAfterSales({ ...pack, charges: [], install_requirements: {} });
   const session = newSession("919820000001");
