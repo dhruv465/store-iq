@@ -182,7 +182,10 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     return c.json({
       summary: managerView(sessions, open).text,
       // Who is waiting on an answer, and which associate is holding the customer meanwhile.
-      openQuestions: open,
+      openQuestions: open.map((question) => ({
+        ...question,
+        associate: roster.find((member) => member.phone === question.phone)?.name ?? null,
+      })),
       // After the sale: every open check-back on the floor, the overdue ones first by date.
       followUps: (await db.followUps({ limit: 50 })).map((row) => ({
         ...row,
@@ -213,6 +216,28 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     const resolved = await db.resolveQuestion(reference);
     if (!resolved) return c.json({ error: "Question not found or already answered." }, 404);
     return c.json({ ok: true, reference });
+  });
+
+  // The expert's answer goes to the associate who asked, from the manager's name: now if they wrote
+  // inside Meta's 24 hours, otherwise the next time they write, like a floor notice.
+  app.post("/api/manager/expert/:reference/answer", async (c) => {
+    const reference = c.req.param("reference");
+    const body = await c.req.json<{ answer?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+    const answer = String(body.answer ?? "").trim();
+    if (!answer) return c.json({ error: "Write the answer first." }, 400);
+    if (answer.length > 900) return c.json({ error: "Keep the answer under 900 letters; it is read on a phone." }, 400);
+    const asked = await db.answerQuestion(reference, answer);
+    if (!asked) return c.json({ error: "Question not found or already answered." }, 404);
+    const text = t(languageFrom(`${asked.question} ${answer}`, "en"), "exp.answer", {
+      from,
+      ref: reference,
+      question: asked.question.slice(0, 200),
+      answer,
+    });
+    const now = (await db.reachable()).includes(asked.phone);
+    if (now) await db.send(asked.phone, { text });
+    else await db.queueNotice(text, [asked.phone]);
+    return c.json({ ok: true, reference, delivered: now ? "sent" : "waiting" });
   });
 
   app.post("/api/manager/followup/:id/done", async (c) => {

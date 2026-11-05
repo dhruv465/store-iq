@@ -323,3 +323,21 @@ test("on Render the floor's memory must be Postgres, so a deploy cannot forget i
   assert.equal(storeKind({ LOCAL_DB_PATH: "memory://" }), "memory", "a local run may stay in memory");
   assert.equal(storeKind({}), "disk");
 });
+
+test("an expert question is answered once, and the answer is kept with it", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    await db.logQuestion({
+      reference: "SIQ-1111",
+      phone: ASSOCIATE,
+      area: "ac",
+      owner: "AC specialist",
+      question: "stabiliser?",
+    });
+    assert.deepEqual(await db.answerQuestion("SIQ-1111", "Yes"), { phone: ASSOCIATE, question: "stabiliser?" });
+    assert.equal(await db.answerQuestion("SIQ-1111", "again"), null, "not twice");
+    assert.equal((await db.openQuestions()).length, 0);
+  } finally {
+    await db.close();
+  }
+});

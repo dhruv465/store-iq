@@ -49,6 +49,7 @@ create table if not exists expert_questions (
   asked_at timestamptz not null default now(),
   answered_at timestamptz
 );
+alter table expert_questions add column if not exists answer text;
 create table if not exists visits (
   reference text primary key,
   phone text not null,
@@ -489,6 +490,17 @@ export class DB {
   }
 
   /** Mark an expert question answered/resolved once the manager or specialist handles it. */
+  /** The expert's answer, kept with the question; returns who asked and what, or null when the
+   *  question is unknown or already answered, so one question is never answered twice. */
+  async answerQuestion(reference: string, answer: string): Promise<{ phone: string; question: string } | null> {
+    const result = await this.pg.query<{ phone: string; question: string }>(
+      `update expert_questions set answered_at = now(), answer = $2
+       where reference = $1 and answered_at is null returning phone, question`,
+      [reference, answer],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async resolveQuestion(reference: string): Promise<boolean> {
     const result = await this.pg.query(
       `update expert_questions set answered_at = now() where reference = $1 and answered_at is null`,

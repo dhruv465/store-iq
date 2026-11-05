@@ -579,69 +579,122 @@ function ProductDemandTable({ products }: { products?: ProductInsight[] }) {
   );
 }
 
+/** An Indian mobile as people read it, "+91 98200 00001"; anything else as it came. */
+function phoneLabel(phone: string): string {
+  return /^91\d{10}$/.test(phone) ? `+91 ${phone.slice(2, 7)} ${phone.slice(7)}` : `+${phone}`;
+}
+
 function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]; onResolved: () => void }) {
-  const [resolving, setResolving] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [sent, setSent] = useState<string | null>(null);
 
-  if (!questions || !questions.length) return null;
+  if (!questions || !questions.length)
+    return sent ? (
+      <Alert>
+        <CheckCircle2 />
+        <AlertTitle>{sent}</AlertTitle>
+      </Alert>
+    ) : null;
 
-  const resolve = async (ref: string) => {
-    setResolving(ref);
+  const act = async (ref: string, run: () => Promise<unknown>) => {
+    setBusy(ref);
+    setErrors((all) => ({ ...all, [ref]: "" }));
     try {
-      await api.resolveQuestion(ref);
+      await run();
       onResolved();
+    } catch (error) {
+      setErrors((all) => ({ ...all, [ref]: (error as Error).message }));
     } finally {
-      setResolving(null);
+      setBusy(null);
     }
   };
+  const answer = (q: OpenQuestion) =>
+    act(q.reference, async () => {
+      const result = await api.answerQuestion(q.reference, drafts[q.reference] ?? "");
+      setDrafts((all) => ({ ...all, [q.reference]: "" }));
+      const who = q.associate ?? phoneLabel(q.phone);
+      setSent(
+        result.delivered === "sent"
+          ? `Answer to ${q.reference} sent to ${who} on WhatsApp.`
+          : `Answer to ${q.reference} saved. ${who} gets it the next time they write (WhatsApp's 24-hour window).`,
+      );
+    });
 
   return (
     <Card className="border-warning/40 bg-warning/5">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="text-warning size-5" />
-            <div>
-              <CardTitle>Waiting for an expert ({questions.length})</CardTitle>
-              <CardDescription>
-                Questions associates could not answer on the floor, waiting on a specialist.
-              </CardDescription>
-            </div>
+        <div className="flex items-center gap-2">
+          <HelpCircle className="text-warning size-5" />
+          <div>
+            <CardTitle>Waiting for an expert ({questions.length})</CardTitle>
+            <CardDescription>
+              Questions associates could not answer on the floor. Write the answer and it goes to the associate who
+              asked, on WhatsApp.
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent>
+        {sent && (
+          <Alert className="mb-3">
+            <CheckCircle2 />
+            <AlertTitle>{sent}</AlertTitle>
+          </Alert>
+        )}
         <div className="space-y-3">
           {questions.map((q) => (
-            <div
-              key={q.reference}
-              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border bg-background p-3 text-sm"
-            >
+            <div key={q.reference} className="bg-background flex flex-col gap-3 rounded-lg border p-3 text-sm">
               <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="font-mono font-semibold">
                     {q.reference}
                   </Badge>
-                  <Badge variant="secondary" className="capitalize text-xs">
+                  <Badge variant="secondary" className="text-xs capitalize">
                     {q.area}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">Owner: {q.owner}</span>
+                  <span className="text-muted-foreground text-xs">Owner: {q.owner}</span>
                 </div>
-                {q.question ? <p className="text-sm font-medium text-foreground mt-1">"{q.question}"</p> : null}
-                <span className="text-xs text-muted-foreground">Associate: {q.phone}</span>
+                {q.question ? <p className="text-foreground mt-1 text-sm font-medium">"{q.question}"</p> : null}
+                <span className="text-muted-foreground text-xs">
+                  Asked by {q.associate ? `${q.associate} · ` : ""}
+                  <a className="underline" href={`tel:+${q.phone}`}>
+                    {phoneLabel(q.phone)}
+                  </a>
+                  {q.asked_at
+                    ? ` · ${new Date(q.asked_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`
+                    : ""}
+                </span>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={resolving === q.reference}
-                onClick={() => resolve(q.reference)}
-              >
-                {resolving === q.reference ? (
-                  <Loader2 className="animate-spin size-3.5" />
-                ) : (
-                  <CheckCircle2 className="size-3.5 text-success" />
-                )}
-                Mark Answered
-              </Button>
+              <Textarea
+                rows={3}
+                maxLength={900}
+                aria-label={`Answer to ${q.reference}`}
+                placeholder="Write the answer for the associate…"
+                value={drafts[q.reference] ?? ""}
+                onChange={(event) => setDrafts((all) => ({ ...all, [q.reference]: event.target.value }))}
+              />
+              {errors[q.reference] ? <p className="text-destructive text-xs">{errors[q.reference]}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={busy === q.reference || !(drafts[q.reference] ?? "").trim()}
+                  onClick={() => answer(q)}
+                >
+                  {busy === q.reference ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                  Send answer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy === q.reference}
+                  onClick={() => act(q.reference, () => api.resolveQuestion(q.reference))}
+                >
+                  <CheckCircle2 className="text-success size-3.5" />
+                  Mark answered without a reply
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -1368,12 +1421,18 @@ function SignIn({ onDone }: { onDone: () => void }) {
   );
 }
 
-type Section = "overview" | "floor" | "feed" | "aftersales" | "charges" | "objections" | "notify" | "brief";
+type Section = "overview" | "floor" | "feed" | "experts" | "aftersales" | "charges" | "objections" | "notify" | "brief";
 
 const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string; group?: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, about: "" },
   { id: "floor", label: "Associates", icon: Users, about: "Scores, customers taken and who is quiet today." },
   { id: "feed", label: "Live floor", icon: Radio, about: "Conversations as the associates have them." },
+  {
+    id: "experts",
+    label: "Expert questions",
+    icon: HelpCircle,
+    about: "What associates could not answer on the floor. Answer here and it goes to them on WhatsApp.",
+  },
   {
     id: "aftersales",
     label: "After-sales",
@@ -1413,6 +1472,7 @@ function count(floor: Floor | null, section: Section): number | undefined {
   if (section === "floor") return floor.rows.length;
   if (section === "feed") return floor.feed?.length;
   if (section === "objections") return floor.objections?.length;
+  if (section === "experts") return floor.openQuestions?.length;
   if (section === "aftersales") return floor.followUps?.filter((row) => row.due).length;
   return undefined;
 }
@@ -1541,7 +1601,7 @@ export default function App() {
             {escalations ? (
               <button
                 type="button"
-                onClick={() => setActive("overview")}
+                onClick={() => setActive("experts")}
                 className="text-brand flex items-center gap-2 text-left font-medium"
               >
                 <HelpCircle className="size-4" /> {escalations}{" "}
@@ -1641,6 +1701,15 @@ export default function App() {
             <AssociateTable floor={floor} onChange={reload} />
           ) : active === "feed" ? (
             <LiveFloorFeed feed={floor.feed} />
+          ) : active === "experts" ? (
+            <>
+              <OpenEscalations questions={floor.openQuestions} onResolved={reload} />
+              {!floor.openQuestions?.length && (
+                <p className="text-muted-foreground text-sm">
+                  No question is waiting. When an associate asks something the agent cannot answer, it comes here.
+                </p>
+              )}
+            </>
           ) : active === "aftersales" ? (
             <AfterSales followUps={floor.followUps} onDone={reload} />
           ) : active === "charges" ? (

@@ -24,6 +24,8 @@ export type OpenQuestion = {
   area: string;
   owner: string;
   phone: string;
+  /** The associate's name from the roster, when they are on it. */
+  associate?: string | null;
   question?: string;
   asked_at?: string;
 };
@@ -177,6 +179,11 @@ export const api = {
   charges: () => call<Charges>("/charges"),
   uploadCharges: (csv: string) => call<Charges>("/charges", { method: "POST", body: JSON.stringify({ csv }) }),
   doneFollowUp: (id: number) => call<{ ok: true; id: number }>(`/followup/${id}/done`, { method: "POST" }),
+  answerQuestion: (reference: string, answer: string) =>
+    call<{ ok: true; delivered: "sent" | "waiting" }>(`/expert/${encodeURIComponent(reference)}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    }),
   resolveQuestion: (reference: string) =>
     call<{ ok: true; reference: string }>(`/expert/${encodeURIComponent(reference)}/resolve`, { method: "POST" }),
 };

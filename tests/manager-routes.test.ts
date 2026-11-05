@@ -26,7 +26,20 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
   const session: Session = Object.assign(newSession("919820000001"), { associate: "Ramesh" });
   const db = {
     today: async (): Promise<Session[]> => [session],
-    openQuestions: async () => [],
+    openQuestions: async () => [
+      {
+        reference: "SIQ-4321",
+        area: "air conditioners",
+        owner: "AC specialist",
+        phone: "919820000002",
+        question: "does the AC need a stabiliser?",
+        asked_at: "2026-11-06T05:00:00.000Z",
+      },
+    ],
+    answerQuestion: async (ref: string, answer: string) =>
+      ref === "SIQ-4321" || ref === "SIQ-7777"
+        ? { phone: ref === "SIQ-4321" ? "919820000002" : "919820000009", question: `asked ${answer.length}` }
+        : null,
     roster: async () => [
       { phone: "919820000001", name: "Ramesh" },
       { phone: "919820000002", name: "Asha" },
@@ -414,4 +427,33 @@ test("the manager uploads the store's charges: a bad file saves nothing, a good 
   } finally {
     setAfterSalesData(null);
   }
+});
+
+test("the expert's answer goes to the associate who asked, now inside the window or when they next write", async () => {
+  const { app, sent, held } = await harness();
+  const floor = await (await app.request("/api/manager/floor", { headers: { cookie: AUTH } })).json();
+  assert.equal(floor.openQuestions[0].associate, "Asha", "the portal names who asked");
+  assert.equal(floor.openQuestions[0].phone, "919820000002");
+
+  const res = await app.request(
+    ...post("/api/manager/expert/SIQ-4321/answer", { answer: "Yes, take the V-Guard one." }),
+  );
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).delivered, "sent");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.phone, "919820000002");
+  assert.match(sent[0]!.reply.text, /answered SIQ-4321\*\n\nYou asked: "asked 26"\n\nYes, take the V-Guard one\.$/);
+
+  // Not written to us in 24 hours: held like a notice, never sent outside Meta's window.
+  const waiting = await app.request(...post("/api/manager/expert/SIQ-7777/answer", { answer: "No." }));
+  assert.equal((await waiting.json()).delivered, "waiting");
+  assert.equal(sent.length, 1);
+  assert.deepEqual(held.at(-1)!.phones, ["919820000009"]);
+
+  assert.equal((await app.request(...post("/api/manager/expert/SIQ-4321/answer", { answer: "  " }))).status, 400);
+  assert.equal((await app.request(...post("/api/manager/expert/SIQ-0000/answer", { answer: "x" }))).status, 404);
+  assert.equal(
+    (await app.request(...post("/api/manager/expert/SIQ-4321/answer", { answer: "x".repeat(901) }))).status,
+    400,
+  );
 });
