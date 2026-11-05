@@ -13,7 +13,7 @@ work by reading, in order:
 
 1. `index.md` — the current checkpoint
 2. `status/recent-changes.md` — what moved recently
-3. `outputs/2026-10-29-agent-handoff.md` — conventions, what is next, what not to touch
+3. `outputs/2026-11-05-agent-handoff.md` — the current state, where it runs, what is next, what not to touch
 4. `sources/2026-10-29-store-iq-build.md` — the full record, including the mistakes
 
 Use the code, tests and git to verify the vault, not to replace it.
