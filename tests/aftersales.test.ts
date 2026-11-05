@@ -341,3 +341,54 @@ test("an expert question is answered once, and the answer is kept with it", asyn
     await db.close();
   }
 });
+
+test("Sold before take-or-deliver asks it, asks for the home card, and the follow-ups wait for the answer", async () => {
+  const live = withAfterSales({ ...pack, charges: [], install_requirements: {} });
+  for (const [answer, expected] of [
+    ["deliver:LTV-DEL", 3],
+    ["deliver:carry", 2],
+  ] as const) {
+    const db = await openDatabase("memory://");
+    try {
+      const session = await db.session(ASSOCIATE);
+      await decide(tap("select:TCL-55C6KS"), session, live, manager({}).fetch, db);
+      const sold = await decide(tap("sold"), session, live, manager({}).fetch, db);
+      const text = sold.text.replace(/\*/g, "");
+      assert.match(text, /🎉/);
+      assert.match(text, /Shall I save this on the customer's home card\? Send me their name and mobile number\./);
+      assert.match(text, /Will you take it with you, or shall we deliver it home\?/);
+      assert.deepEqual(
+        sold.buttons?.map((button) => button.id),
+        ["deliver:yes", "deliver:carry", "summary:customer"],
+      );
+      assert.equal((await db.followUps({ phone: ASSOCIATE })).length, 0, "nothing set before it is answered");
+
+      const next = await decide(tap(answer), session, live, manager({}).fetch, db);
+      assert.match(next.text, /Before I book the installer/, "then the site, as before");
+      const set = await db.followUps({ phone: ASSOCIATE });
+      assert.equal(set.length, expected, answer);
+      assert.equal(
+        set.some((row) => /arrive/.test(row.what)),
+        answer !== "deliver:carry",
+        "no delivery call for a carry",
+      );
+      await decide(tap("site:ok"), session, live, manager({}).fetch, db);
+      assert.equal((await db.followUps({ phone: ASSOCIATE })).length, expected, "set once, not on every tap");
+    } finally {
+      await db.close();
+    }
+  }
+});
+
+test("a sale with a home card already open does not ask for one", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    const session = await db.session(ASSOCIATE);
+    session.customer = { id: "c-9", phone: "9876543210", name: "Vidya" };
+    await decide(tap("select:TCL-55C6KS"), session, pack, manager({}).fetch, db);
+    const sold = await decide(tap("sold"), session, pack, manager({}).fetch, db);
+    assert.doesNotMatch(sold.text, /home card/);
+  } finally {
+    await db.close();
+  }
+});

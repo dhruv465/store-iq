@@ -107,7 +107,9 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   The manager sees and closes them under **After-sales** in the portal. A heavy product's pick asks
   **take it or deliver** before the total (decided by the user 6 Nov 2026); "deliver" shows the delivery
   rates and installation charges for the associate to tell the customer, and the distance tapped or typed
-  ("7 km") picks the delivery line from the charges' own names (`deliveryFor()`). An AC's pipe run ("outdoor unit
+  ("7 km") picks the delivery line from the charges' own names (`deliveryFor()`). Sold asks it too if it is
+  still open, and the follow-ups wait for the answer: one who takes it home gets no "did it arrive?".
+  Sold also asks for the home card when none is open, so the purchase is saved. An AC's pipe run ("outdoor unit
   5 m away") is multiplied out in code (`priceRun()`), because the guard refuses a sum the model makes.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything

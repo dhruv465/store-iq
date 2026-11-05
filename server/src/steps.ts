@@ -400,9 +400,9 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
     };
   }
 
-  const plan = followUpPlan(product, session.customer?.name, lang);
+  const plan = followUpPlan(product, session.customer?.name, lang, selection.delivery === "carry");
   const planLine = `↳ ${t(lang, "fu.set", { body: plan.map((step) => step.short).join(" · ") })}`;
-  const first = cheer
+  const said = cheer
     ? t(lang, "sold.cheer", {
         who: firstName(associate),
         name: shortName(product),
@@ -410,6 +410,18 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
         card: session.customer?.name ? t(lang, "sold.card", { v: session.customer.name }) : "",
       })
     : t(lang, "sold.recap", { name: shortName(product), total });
+  // No card yet: the sale is the moment to ask again, or what they bought is lost with the chat.
+  const first = cheer && !session.customer ? `${said} ${t(lang, "sold.askcard")}` : said;
+  // Sold before take-or-deliver was answered: asked now, and the follow-ups wait for it.
+  if (delivery.length && !selection.delivery)
+    return {
+      text: [first, t(lang, "dl.ask"), `↳ ${t(lang, "why.deliversold")}`].join("\n"),
+      buttons: [
+        { id: "deliver:yes", title: t(lang, "btn.deliver") },
+        { id: "deliver:carry", title: t(lang, "btn.carry") },
+        { id: "summary:customer", title: t(lang, "btn.summary") },
+      ],
+    };
   // The store visits watched an install fail because nobody asked about the wall first, so the site
   // is asked now, out loud, while the customer is still at the counter.
   if (needs.length && !session.site_checked)

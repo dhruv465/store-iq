@@ -871,6 +871,7 @@ export function startInteraction(session: Session): void {
   delete session.selection;
   session.consent = false;
   delete session.sold;
+  delete session.followups_set;
   delete session.reporting_problem;
   delete session.site_checked;
   session.card_confirmed = false;
@@ -923,6 +924,7 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     };
     session.consent = false;
     session.sold = false;
+    delete session.followups_set;
     return followThrough(session, pack, event.name ?? session.phone);
   }
   const added = event.action?.match(/^add:([A-Za-z0-9_-]+)$/);
@@ -1456,14 +1458,20 @@ async function answer(
     }
   }
 
-  const wasSold = !!session.sold;
   const free = deterministic(event, session, pack, notes);
-  // Sold: the check-backs go on the associate's list, each with its day.
-  if (store?.addFollowUps && session.sold && !wasSold && session.selection) {
-    const sold = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
-    if (sold)
-      await store.addFollowUps(
-        followUpPlan(sold, session.customer?.name, session.language).map((step) => ({
+  // Sold: the check-backs go on the associate's list, each with its day. A heavy product's wait until
+  // take-or-deliver is answered, so a customer who carries it home is never called about a delivery.
+  const sold = session.sold && session.selection && pack.products.find((p) => p.sku === session.selection?.sku);
+  if (
+    store?.addFollowUps &&
+    sold &&
+    !session.followups_set &&
+    (session.selection!.delivery || !deliveryCharges(pack, sold).length)
+  ) {
+    session.followups_set = true;
+    await store.addFollowUps(
+      followUpPlan(sold, session.customer?.name, session.language, session.selection!.delivery === "carry").map(
+        (step) => ({
           phone: session.phone,
           ...(session.associate ? { owner: session.associate } : {}),
           ...(session.customer
@@ -1476,8 +1484,9 @@ async function answer(
           product: sold.name,
           what: step.what,
           due_on: storeDay(step.days),
-        })),
-      );
+        }),
+      ),
+    );
   }
   if (free && store?.followUps && wantsBrief(event.text, event.action) && (free.buttons ?? []).length < 3) {
     const due = await store.followUps({ phone: session.phone, dueBy: storeDay() });

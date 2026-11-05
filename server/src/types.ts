@@ -89,6 +89,8 @@ export type Session = {
   consent: boolean;
   /** The associate tapped Sold: the close, the purchase on the card, and the follow-ups raised. */
   sold?: boolean;
+  /** This sale's check-backs are on the associate's list. A heavy product waits for take-or-deliver. */
+  followups_set?: boolean;
   /** The next thing they say is what is wrong with something this customer bought. */
   reporting_problem?: boolean;
   /** The next thing they say is a store visit, not a customer. Set by asking to log one, cleared

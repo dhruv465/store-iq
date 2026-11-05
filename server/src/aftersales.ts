@@ -268,12 +268,15 @@ export type FollowUp = { days: number; what: string; short: string };
 
 /** The check-backs after a sale, from the day it was sold: delivery, the installer's call, and that
  *  it works. A product with nothing to install skips the installer. */
-export function followUpPlan(product: Product, customer: string | undefined, lang: Lang): FollowUp[] {
+export function followUpPlan(product: Product, customer: string | undefined, lang: Lang, carried = false): FollowUp[] {
   const who = customer || t(lang, "as.thecustomer");
   const installs = !!categoryOf(product);
   const name = product.name.split(/[,(]/)[0]!.trim().slice(0, 60);
   return [
-    { days: 1, what: t(lang, "fu.delivery", { who, name }), short: t(lang, "fu.s.delivery") },
+    // A heavy product is delivered unless they took it; anything else goes home in their hands.
+    ...(installs && !carried
+      ? [{ days: 1, what: t(lang, "fu.delivery", { who, name }), short: t(lang, "fu.s.delivery") }]
+      : []),
     ...(installs
       ? [{ days: 2, what: t(lang, "fu.installer", { who, name }), short: t(lang, "fu.s.installer", { d: 2 }) }]
       : []),
