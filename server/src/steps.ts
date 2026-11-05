@@ -3,7 +3,7 @@ import { isAssessed, stated } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
 import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
-import { categoryOf, deliveryCharges, extrasLine, followUpPlan, isSample } from "./aftersales.js";
+import { applicableCharges, categoryOf, deliveryCharges, extrasLine, followUpPlan, isSample } from "./aftersales.js";
 
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
  *  no request spent, no figure invented, and an answer in milliseconds rather than seconds. */
@@ -395,7 +395,7 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
             id: `add:${line.id}`,
             title: t(lang, /mount/i.test(line.title) ? "btn.mount" : "btn.plan"),
           })),
-        { id: "charges", title: t(lang, "btn.charges") },
+        ...(applicableCharges(pack, product).length ? [{ id: "charges", title: t(lang, "btn.charges") }] : []),
       ].slice(0, 3),
     };
   }
@@ -455,7 +455,7 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
     ].join("\n"),
     long: true,
     buttons: [
-      { id: "charges", title: t(lang, "btn.charges") },
+      ...(applicableCharges(pack, product).length ? [{ id: "charges", title: t(lang, "btn.charges") }] : []),
       { id: "summary:customer", title: t(lang, "btn.summary") },
       { id: "new_customer", title: t(lang, "btn.new") },
     ],

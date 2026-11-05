@@ -118,6 +118,22 @@ export function defaultCharges(pack: Pack, product: Product): string[] {
     .map((charge) => charge.id);
 }
 
+/** Charges available for this product, never another product in the same search pack. */
+export function applicableCharges(pack: Pack, product: Product): any[] {
+  const category = categoryOf(product);
+  if (!category) return [];
+  const own = category.charges.filter((charge) => pack.charges.some((other) => other.id === charge.id));
+  if (own.length) return own;
+  const kinds = new Set(
+    pack.products
+      .map(categoryOf)
+      .filter((value): value is Category => !!value)
+      .map((value) => value.kind),
+  );
+  // shortcut: opaque pack-level IDs, map IDs to products before mixed-category use.
+  return pack.charges.length && kinds.size === 1 && kinds.has(category.kind) ? pack.charges : [];
+}
+
 const rupees = (amount: number): string => (amount ? `Rs ${amount.toLocaleString("en-IN")}` : "free");
 
 /** The charges that are not on the bill yet, but are if the home needs them. */
@@ -144,7 +160,7 @@ export function extrasLine(pack: Pack, product: Product, picked: string[], lang:
 export function chargesList(pack: Pack, product: Product, lang: Lang): string {
   const category = categoryOf(product);
   const ours = (category?.charges ?? []).filter((charge) => pack.charges.some((other) => other.id === charge.id));
-  const listed: Record<string, any>[] = ours.length ? ours : pack.charges;
+  const listed = applicableCharges(pack, product);
   if (!listed.length) return t(lang, "as.nocharges");
   const priced = (charge: Record<string, any>): string =>
     typeof charge.amount_rupees === "number"

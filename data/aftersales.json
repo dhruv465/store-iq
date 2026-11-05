@@ -67,7 +67,7 @@
     },
     {
       "kind": "television",
-      "match": "television|\\btv\\b|\\binch\\b.*\\b(q?led|oled)\\b",
+      "match": "television|\\btv\\b|\\b(?:1[0-9]|[2-9]\\d|\\d{3})\\s*inch\\b.*\\b(?:4k|q?led|uhd|mini.?led)\\b",
       "plan": "LED",
       "charges": [
         { "id": "LTV-DEL", "title": "Home delivery within 5 km", "amount_rupees": 0, "default": true },

@@ -703,6 +703,6 @@ test("a pick from this conversation's search shows the breakdown at once, on the
   assert.match(reply.text, /1,64,900/);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
-    ["sold", "charges"],
+    ["sold"],
   );
 });

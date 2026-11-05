@@ -81,7 +81,7 @@ test("a pitch, which puts a product up for sale, reads out up to six lines befor
       buttons: [{ id: "select:TCL-55C6KS", title: "TCL 55" }],
     }),
   );
-  assert.equal(reply.text.split("\n").filter((line) => line.trim()).length, 6);
+  assert.equal(reply.text.split("\n").filter((line) => line.trim()).length, 5);
   assert.ok(reply.text.includes("54,990") && !reply.text.includes("seventh"));
 });
 
