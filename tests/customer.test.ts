@@ -96,6 +96,22 @@ test("a new customer is read from the words, not a fixed phrase, and the card is
   assert.match(reply.text, /^Home card saved for Asha\./);
 });
 
+test("an article before new customer resets the old product conversation", async () => {
+  const session = newSession(ASSOCIATE);
+  session.history = [
+    { who: "associate", text: "customer needs an AC" },
+    { who: "storeiq", text: "What kind of room is it for?" },
+  ];
+  const interaction = session.interaction_id;
+  const model = manager({});
+
+  await decide(said("A new customer just walked in"), session, pack, model.fetch);
+
+  assert.notEqual(session.interaction_id, interaction, "the new customer starts a fresh interaction");
+  assert.doesNotMatch(model.prompts.at(-1)!, /customer needs an AC|What kind of room is it for/);
+  assert.match(model.prompts.at(-1)!, /They have just started a new customer/);
+});
+
 test("a returning customer gets their old card and history back", async () => {
   const session = newSession(ASSOCIATE);
   const saved = {

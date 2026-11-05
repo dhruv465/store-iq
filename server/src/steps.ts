@@ -8,7 +8,7 @@ import { applicableCharges, categoryOf, deliveryCharges, extrasLine, followUpPla
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
  *  no request spent, no figure invented, and an answer in milliseconds rather than seconds. */
 
-const NEW_CUSTOMER_WORDS = /^\s*(new customer|next customer|naya customer|new client|reset|done with)\b/i;
+const NEW_CUSTOMER_WORDS = /^\s*(?:a\s+)?(new customer|next customer|naya customer|new client|reset|done with)\b/i;
 
 /** The card belongs to one customer on the floor; the associate says when the next one walks up. */
 export function wantsNewCustomer(text: string | undefined, action: string | undefined): boolean {
