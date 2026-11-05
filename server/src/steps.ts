@@ -381,8 +381,8 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
     return {
       text: [
         t(lang, "bd.total", { body: itemised.lines.join("; "), total }),
-        money || extras,
-        `↳ ${money && extras ? extras : t(lang, "why.breakdown")}`,
+        money,
+        extras,
       ]
         .filter((line) => line && line !== "↳ ")
         .join("\n"),

@@ -701,6 +701,7 @@ test("a pick from this conversation's search shows the breakdown at once, on the
   assert.equal(store.told.length, 0, "a tap is the code's");
   assert.equal(session.selection?.sku, "CODE70");
   assert.match(reply.text, /1,64,900/);
+  assert.doesNotMatch(reply.text, /charge|delivery/i);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
     ["sold"],
