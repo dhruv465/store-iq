@@ -3,6 +3,7 @@ import { isAssessed, stated } from "./brain.js";
 import type { Reply, Session, Step } from "./types.js";
 import { t, v, type Lang } from "./i18n.js";
 import { STEPS } from "./types.js";
+import { extrasLine, followUpPlan } from "./aftersales.js";
 
 /** The brief and the review are facts about the pack and the shift, so they never reach the model:
  *  no request spent, no figure invented, and an answer in milliseconds rather than seconds. */
@@ -183,10 +184,12 @@ function mark(session: Session, step: Scored): 0 | 1 | 2 {
     // Options shown with their prices is half of it.
     case "complete":
       return session.selection ? 2 : session.shortlist.length ? 1 : 0;
+    // Sold is the close. The customer summary's yes is no longer the close: the breakdown is the
+    // associate's own, and a customer standing there needs no message to agree to buy.
     case "close":
-      return session.consent ? 2 : done("close") ? 1 : 0;
+      return session.sold ? 2 : done("close") ? 1 : 0;
     case "follow_through":
-      return done("follow_through") ? (session.consent ? 2 : 1) : 0;
+      return done("follow_through") ? (session.sold ? 2 : 1) : 0;
   }
 }
 
@@ -226,9 +229,20 @@ export function reviewReply(session: Session): Reply {
 }
 
 const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|consent|summary bhejo)\s*[.!?]*\s*$/i;
+/** "Yes, share summary of breakdown" was answered "tap They agreed": the associate wanted the cost
+ *  sheet in front of them, with the customer standing right there. A short message asking for the
+ *  breakdown, the summary or the full cost is that. */
+const BREAKDOWN_WORDS =
+  /\b(breakdown|break-up|breakup|summary|full cost|total cost|cost sheet|itemi[sz]ed|charges sheet)\b/i;
 
-export function wantsFollowThrough(text: string | undefined, action: string | undefined): boolean {
-  return action === "follow_through" || (!!text && FOLLOW_WORDS.test(text));
+/** The loose words only count once something is picked: "total cost of the LG fridge?" before a
+ *  pick is a question about a product, not a request for the breakdown. */
+export function wantsFollowThrough(text: string | undefined, action: string | undefined, picked = false): boolean {
+  return (
+    action === "follow_through" ||
+    (!!text &&
+      (FOLLOW_WORDS.test(text) || (picked && BREAKDOWN_WORDS.test(text) && text.trim().split(/\s+/).length <= 8)))
+  );
 }
 
 /** Section 6.6: the total is computed here, never by the model, so it cannot be wrong. */
@@ -238,7 +252,8 @@ export function itemisedTotal(
 ): { lines: string[]; total: number } | null {
   const product = pack.products.find((candidate) => candidate.sku === selection.sku);
   if (!product) return null;
-  const lines = [`${product.name} — Rs ${product.price_rupees.toLocaleString("en-IN")}`];
+  // The catalogue's spec list in brackets is for the website; the name and model code are for the floor.
+  const lines = [`${product.name.split("(")[0]!.trim()} — Rs ${product.price_rupees.toLocaleString("en-IN")}`];
   let total = product.price_rupees;
   for (const id of selection.accessories) {
     const accessory = (pack.accessories ?? []).find((candidate) => candidate.id === id);
@@ -256,19 +271,37 @@ export function itemisedTotal(
           ? Math.round((product.price_rupees * charge.percent_of_price) / 100)
           : null;
     if (amount === null) return null;
-    lines.push(`${charge.title} — Rs ${amount.toLocaleString("en-IN")}`);
-    total += amount;
+    const qty = selection.qty?.[id] ?? 1;
+    lines.push(
+      `${charge.title}${qty > 1 ? ` × ${qty}` : ""} — ${amount ? `Rs ${(amount * qty).toLocaleString("en-IN")}` : "free"}`,
+    );
+    total += amount * qty;
   }
   return { lines, total };
 }
 
-/** Section 4H: the customer summary, a task with an owner, and the installation job's site needs. */
-export function followThrough(session: Session, pack: Pack, associate: string): Reply {
+/** A product's name as said on the floor: the part before its spec list. */
+export function shortName(product: Product): string {
+  return product.name.split(/[,(]/)[0]!.trim().slice(0, 60);
+}
+
+/** The associate's own first name, or nothing when all we have is their number. */
+function firstName(associate: string): string {
+  const first = associate.trim().split(/\s+/)[0] ?? "";
+  return /\d/.test(first) ? "" : first;
+}
+
+/** Sections 4F to 4H. A pick puts the whole cost in front of the associate at once, with nothing to
+ *  agree to: the customer is standing there, and the breakdown is for the associate. Sold closes it,
+ *  says well done, checks the site and sets the follow-ups. The customer summary is its own tap, and
+ *  only it waits for the customer's yes. */
+export function followThrough(session: Session, pack: Pack, associate: string, cheer = false): Reply {
+  const lang = session.language;
   const selection = session.selection;
   if (!selection) {
     const options = session.shortlist.length ? session.shortlist : pack.products.map((product) => product.sku);
     return {
-      text: t(session.language, "ft.which"),
+      text: t(lang, "ft.which"),
       buttons: options.slice(0, 3).map((sku) => ({
         id: `select:${sku}`,
         title: (pack.products.find((product) => product.sku === sku)?.brand ?? sku).slice(0, 20),
@@ -278,73 +311,106 @@ export function followThrough(session: Session, pack: Pack, associate: string): 
   const itemised = itemisedTotal(pack, selection);
   if (!itemised) return { text: "That selection is not in today's data pack, so I cannot total it." };
   const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
+  const total = itemised.total.toLocaleString("en-IN");
   const needs = siteNeeds(pack, selection);
-  // The offer gate holds here too: no MRP saving, offer figure or net total until the home is
-  // assessed and a difference has been demonstrated — the same test the model is held to.
-  const gateOpen = isAssessed(session.card) && session.demonstrated;
 
-  if (!session.consent)
+  if (!session.sold) {
+    // The offer gate holds here too: no MRP saving, offer figure or net total until the home is
+    // assessed and a difference has been demonstrated — the same test the model is held to.
+    const gateOpen = isAssessed(session.card) && session.demonstrated;
+    const saving =
+      gateOpen && product.mrp_rupees - product.price_rupees > 0
+        ? t(lang, "off.save", {
+            save: (product.mrp_rupees - product.price_rupees).toLocaleString("en-IN"),
+            mrp: product.mrp_rupees.toLocaleString("en-IN"),
+            price: product.price_rupees.toLocaleString("en-IN"),
+          })
+        : "";
+    const money = [saving, ...closeLines(pack, product, itemised.total, lang, gateOpen)].filter(Boolean).join(" ");
+    const extras = extrasLine(pack, product, selection.charges, lang);
     return {
       text: [
-        t(session.language, "ft.read", {
-          name: itemised.lines.length > 1 ? itemised.lines.join("; ") : product.name,
-          total: itemised.total.toLocaleString("en-IN"),
-        }),
-        // The saving off MRP is the first figure the close hangs on, and it is pack arithmetic.
-        ...(gateOpen && product.mrp_rupees - product.price_rupees > 0
-          ? [
-              t(session.language, "off.save", {
-                save: (product.mrp_rupees - product.price_rupees).toLocaleString("en-IN"),
-                mrp: product.mrp_rupees.toLocaleString("en-IN"),
-                price: product.price_rupees.toLocaleString("en-IN"),
-              }),
-            ]
-          : []),
-        // "Tap once they agree" is what the buttons already say, so the last line carries the
-        // reason instead and the whole close fits the floor's three.
-        `↳ ${t(session.language, "why.consent")}`,
-      ].join("\n"),
+        t(lang, "bd.total", { body: itemised.lines.join("; "), total }),
+        money || extras,
+        `↳ ${money && extras ? extras : t(lang, "why.breakdown")}`,
+      ]
+        .filter((line) => line && line !== "↳ ")
+        .join("\n"),
       buttons: [
-        { id: "consent:yes", title: t(session.language, "btn.agreed") },
-        { id: "consent:no", title: t(session.language, "btn.declined") },
-      ],
+        { id: "sold", title: t(lang, "btn.sold") },
+        // A care plan or mount offered with the pick, still not on the bill, stays a tap away.
+        ...(selection.offered ?? [])
+          .filter((line) => !selection.accessories.includes(line.id))
+          .map((line) => ({
+            id: `add:${line.id}`,
+            title: t(lang, /mount/i.test(line.title) ? "btn.mount" : "btn.plan"),
+          })),
+        { id: "charges", title: t(lang, "btn.charges") },
+      ].slice(0, 3),
     };
+  }
 
-  // The store visits watched an install fail because nobody asked about the wall first, and watched
-  // nobody check afterwards that the thing worked. So the site is a question asked now, out loud,
-  // and the last task is the check-back.
-  // The close: the pack's offers with their conditions, then the net payable after them, so the
-  // associate reads the two figures in order — the big number, then the number they pay.
-  const closing = closeLines(pack, product, itemised.total, session.language, gateOpen);
-
-  // The closing figures are deliberately not here. With them this turn ran to four lines and the
-  // floor's limit dropped the last one — which was the site question itself, the whole point of the
-  // turn: the associate saw two buttons and the reason for asking, and never the thing to ask. The
-  // offers and the net payable arrive on the next turn, once the wall has been checked.
+  const plan = followUpPlan(product, session.customer?.name, lang);
+  const planLine = `↳ ${t(lang, "fu.set", { body: plan.map((step) => step.short).join(" · ") })}`;
+  const first = cheer
+    ? t(lang, "sold.cheer", {
+        who: firstName(associate),
+        name: shortName(product),
+        total,
+        card: session.customer?.name ? t(lang, "sold.card", { v: session.customer.name }) : "",
+      })
+    : t(lang, "sold.recap", { name: shortName(product), total });
+  // The store visits watched an install fail because nobody asked about the wall first, so the site
+  // is asked now, out loud, while the customer is still at the counter.
   if (needs.length && !session.site_checked)
     return {
-      text: [
-        t(session.language, "ft.send", {
-          body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
-        }),
-        t(session.language, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }),
-        `↳ ${t(session.language, "why.sitecheck")}`,
-      ].join("\n"),
+      text: [first, t(lang, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }), planLine].join("\n"),
       buttons: [
-        { id: "site:ok", title: t(session.language, "btn.sitefine") },
-        { id: "site:problem", title: t(session.language, "btn.siteproblem") },
+        { id: "site:ok", title: t(lang, "btn.sitefine") },
+        { id: "site:problem", title: t(lang, "btn.siteproblem") },
+        { id: "summary:customer", title: t(lang, "btn.summary") },
       ],
     };
-
   return {
     text: [
-      // The first itemised line already names the product; do not say it twice.
-      t(session.language, "ft.send", {
-        body: `${itemised.lines.join("; ")}. Total Rs ${itemised.total.toLocaleString("en-IN")}.`,
+      first,
+      needs.length
+        ? t(lang, "sold.site", { body: needs.slice(0, 3).join(", "), owner: associate })
+        : t(lang, "ft.task", { owner: associate }),
+      planLine,
+    ].join("\n"),
+    buttons: [
+      { id: "charges", title: t(lang, "btn.charges") },
+      { id: "summary:customer", title: t(lang, "btn.summary") },
+      { id: "new_customer", title: t(lang, "btn.new") },
+    ],
+  };
+}
+
+/** The customer's own copy, if they want one: read out, a yes, and then the words to forward. It is
+ *  the one thing here that reaches the customer, so it is the one thing that waits for their yes. */
+export function customerSummary(session: Session, pack: Pack, associate: string): Reply {
+  const lang = session.language;
+  const selection = session.selection;
+  const itemised = selection && itemisedTotal(pack, selection);
+  if (!selection || !itemised) return followThrough(session, pack, associate);
+  const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
+  const total = itemised.total.toLocaleString("en-IN");
+  if (!session.consent)
+    return {
+      text: [t(lang, "ft.read", { name: shortName(product), total }), `↳ ${t(lang, "why.consent")}`].join("\n"),
+      buttons: [
+        { id: "consent:yes", title: t(lang, "btn.agreed") },
+        { id: "consent:no", title: t(lang, "btn.declined") },
+      ],
+    };
+  const needs = siteNeeds(pack, selection);
+  return {
+    text: [
+      t(lang, "ft.send", {
+        body: `${itemised.lines.join("; ")}. Total Rs ${total}.${needs.length ? ` ${t(lang, "sum.site", { body: needs.slice(0, 3).join(", ") })}` : ""}`,
       }),
-      ...closing,
-      t(session.language, "ft.task", { owner: associate }),
-      `↳ ${t(session.language, "ft.verify", { owner: associate })}`,
+      `↳ ${t(lang, "sum.forward")}`,
     ].join("\n"),
   };
 }

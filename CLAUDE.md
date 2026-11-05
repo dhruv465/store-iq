@@ -34,7 +34,8 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    and the options were composed in code: those were written over a stub of televisions and answered
    the wrong product. A refused figure gets one retry that names it, and what is refused twice does
    not go out. **Do not weaken the guard to get a reply through.** Still composed in code: the
-   consent draft and itemised total (rule 3, arithmetic), the card read-back, the brief and the score.
+   breakdown and itemised total (arithmetic), Sold and its follow-ups, the consent draft (rule 3), a
+   saved customer's card, the card read-back, the brief and the score.
 2. **The offer gate.** No offer, discount, exchange, EMI or finance figure before the customer's
    needs are known *and* a difference demonstrated — **unless the associate asks outright**. A
    question in their own words opens it, and they get the real offer from the catalogue or "none is
@@ -43,6 +44,11 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    *leading* with price, which the store visits found in 6 of 6 conversations; it is not a refusal
    to answer. `askedAboutOffers()` in `brain.ts`. **Do not close it again.**
 3. **Consent.** Nothing reaches a customer without an explicit tap. Changing the product withdraws it.
+   Consent is for the **customer's own summary** only, an optional tap after the sale. The breakdown
+   is the associate's and shows at the pick with no gate; the close is the associate's **Sold** tap,
+   which congratulates them, records the purchase on the customer's card, asks the site out loud and
+   raises the follow-ups. Decided by the user 5 Nov 2026, after a walk where "share summary of
+   breakdown" was answered "tap They agreed" with the customer standing there.
 4. **No written questions.** The model asks. `questionFlow` and `nextQuestion` were deleted on
    2026-10-30 — six questions with buttons and eight more — because a written list can only ever be
    about a television, and it made the product a form with a chat window around it. The code tells
@@ -82,6 +88,13 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   `catalog.ts` can GET an allowlist of paths and nothing else, and the FDK is deliberately not
   installed because its handles carry write methods.
 - Money is written `Rs 54,990`, never `₹`.
+- Delivery and installation charges for heavy products (fridge, AC, washing machine, TV) come from
+  `data/aftersales.json`: **sample figures** until the store's own list replaces them (the charges
+  reply says so). `withAfterSales()` adds them only to a pack with no charges of its own. resQ care
+  plans are real, from the catalogue (`carePlanFor()`). Follow-ups live in the `followups` table and
+  reach the associate on hello, the brief, and "follow ups"; there is no push outside the 24-hour window.
+  The manager sees and closes them under **After-sales** in the portal. An AC's pipe run ("outdoor unit
+  5 m away") is multiplied out in code (`priceRun()`), because the guard refuses a sum the model makes.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything
   from `.env`. Check presence only — `grep -c '^NAME=.\+' .env` — and edit the file with a script

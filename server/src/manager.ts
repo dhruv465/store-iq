@@ -18,6 +18,7 @@ import {
 } from "./extras.js";
 import { falConfig, falSpend } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
+import { storeDay } from "./aftersales.js";
 import { loadPack, type Pack } from "./pack.js";
 import { languageFrom, t } from "./i18n.js";
 import { discardVideoBrief, startVideoBrief, takeVideoBrief, videoBrief } from "./video.js";
@@ -182,6 +183,13 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
       summary: managerView(sessions, open).text,
       // Who is waiting on an answer, and which associate is holding the customer meanwhile.
       openQuestions: open,
+      // After the sale: every open check-back on the floor, the overdue ones first by date.
+      followUps: (await db.followUps({ limit: 50 })).map((row) => ({
+        ...row,
+        associate: roster.find((member) => member.phone === row.phone)?.name ?? row.owner ?? row.phone,
+        overdue: row.due_on < storeDay(),
+        due: row.due_on <= storeDay(),
+      })),
       visits: await db.recentVisits(),
       rows: floorRows(perAssociate(sessions, roster)),
       reachable: recipients(roster, reachable).to.length,
@@ -205,6 +213,14 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
     const resolved = await db.resolveQuestion(reference);
     if (!resolved) return c.json({ error: "Question not found or already answered." }, 404);
     return c.json({ ok: true, reference });
+  });
+
+  app.post("/api/manager/followup/:id/done", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id < 1) return c.json({ error: "A follow-up id is required." }, 400);
+    const done = await db.doneFollowUp(id, null);
+    if (!done) return c.json({ error: "Follow-up not found or already done." }, 404);
+    return c.json({ ok: true, id });
   });
 
   app.post("/api/manager/roster", async (c) => {

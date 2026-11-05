@@ -4,6 +4,7 @@ import {
   allowedNumbers,
   canonUnit,
   factsFor,
+  carePlanFor,
   liveBrief,
   mountFor,
   pairsIn,
@@ -14,6 +15,19 @@ import {
   type Search,
 } from "./pack.js";
 import { catalogConfig } from "./catalog.js";
+import {
+  categoryOf,
+  chargesList,
+  defaultCharges,
+  followUpPlan,
+  pipeMetres,
+  priceRun,
+  storeDay,
+  wantsFollowUps,
+  wantsSold,
+  withAfterSales,
+} from "./aftersales.js";
+import type { NewFollowUp, OpenFollowUp } from "./db.js";
 import { falConfig, falText, falTranscribe, falVision, readJson, shapeInstruction } from "./fal.js";
 import { greetingReply, isGreeting } from "./ask.js";
 import {
@@ -33,6 +47,7 @@ import {
   cardParts,
   itemisedTotal,
   cardSummary,
+  customerSummary,
   followThrough,
   reviewReply,
   shiftBrief,
@@ -71,8 +86,9 @@ Hard rules, never bent:
 - Never guess a customer's wealth or level from how they look. The associate sets that.
 - At most 2 short lines, except three options which take three lines. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
 - The reason for an answer is two fields. "because" is the name of the one thing in WHAT THE CUSTOMER HAS SAID that this answer serves — a name under facts, or budget_rupees — exactly as it is written there or as you file it this turn. "reason" is what that means for what to say or show, in a few words, with no figures: because "main use" and reason "a fast-moving ball is the thing to show". The associate sees the customer's own words and then yours. If nothing the customer said explains this answer, both are null.
-- You never send anything to a customer, and never say you are sending or have sent something. Only the associate's tap on the agree button sends the summary. If they tell you the customer agreed, tell them to tap it.
-- A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
+- You never send anything to a customer, and never say you are sending or have sent something. When the associate says the customer has bought it, tell them to tap "Sold": that records the sale on the customer's card and sets the follow-ups.
+- After a sale, help with what comes next from what you can see: delivery, installation, the site, the charges in FACTS, and checking it works. A charge FACTS has is quoted from FACTS; one it does not have is with the service desk.
+- A button is what the associate would really tap next in THIS conversation: an answer to the question you just asked, or the next thing to do. Its title is at most 20 characters, counted, and is the words tapping it says, so it must make sense on its own as their next message to you: "Any offers on it?" and "Show more" work, and a question you would be asking them, such as "What's their budget?", does not. After a question, each button is a real answer the customer could give, not a topic: for "What will they use it for most?" that is "Gaming", "Camera", "Battery life", and never "Budget", "Usage", "Brand". To pick a product to sell, its id is "select:<sku>" with a sku from FACTS and its title tells it apart from the others, such as "Silver" or "LG 7 Kg", with no price. Every other button leaves the id empty. Never a specification, a price, or a fact you have just stated. Never offer a button for something you cannot answer from FACTS or the customer's card, such as warranty details or service history. If no button would really be tapped, send none: no buttons is better than filler. Buttons must be different from each other.
 - Name a product by its name, never by its sku: the sku is only for a "select:" button id.
 - Write money as "Rs 54,990", never the rupee sign: it does not survive JSON mode. Group it the Indian way — "Rs 3,14,900" and "Rs 1,79,900", never "Rs 314,900".
 - Answer in the same language and script they just used. Latin script in, Latin script out. Never switch them to Devanagari on your own.`;
@@ -682,7 +698,7 @@ function prompt(event: Event, session: Session, pack: Pack, notes: string[] = []
     Object.keys(pack.shift_brief ?? {}).length ? `TODAY'S BRIEF:\n${JSON.stringify(pack.shift_brief)}` : "",
     Object.keys(session.card).length ? `WHAT THE CUSTOMER HAS SAID:\n${JSON.stringify(session.card)}` : "",
     picked ? `THEY HAVE PICKED: ${picked.name}.` : "",
-    `CUSTOMER NUMBER: ${named.length ? `not given, and a card is saved under the name ${named.join(", ")}` : session.customer ? `given${session.customer.name ? `; the customer is ${session.customer.name}, and you are talking to the associate, not to ${session.customer.name}` : ""}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
+    `CUSTOMER NUMBER: ${named.length ? `not given, and a card is saved under the name ${named.join(", ")}` : session.customer ? `given${session.customer.name ? `; the customer is ${session.customer.name}, and you are talking to the associate, not to ${session.customer.name}` : ""}${session.customer.bought?.length ? `; they bought before: ${session.customer.bought.map((row) => `${row.name}, Rs ${row.total.toLocaleString("en-IN")} on ${row.on}`).join("; ")}` : ""}` : session.customer_asked ? "none, already asked for" : "none yet"}.`,
     `STEPS DONE: ${session.steps_done.join(", ") || "none"}. CURRENT STEP: ${session.step}.`,
     gate,
     // What the code knows and the model does not: a gate just hit, a tap, a search that came back
@@ -789,13 +805,10 @@ export function reasonFrom(card: Session["card"], because: unknown, so: unknown)
   return need.trim() ? `${need.trim()}: ${so.replace(/^\s*↳\s*/, "").trim()}` : null;
 }
 
-/** The agree tap first, then whatever else the reply offered, within the floor's three. */
-export function awaitingConsent(reply: Reply, lang: Lang): NonNullable<Reply["buttons"]> {
-  const others = (reply.buttons ?? []).filter((button) => !button.id.startsWith("consent:"));
-  return [
-    { id: "consent:yes", title: t(lang, "btn.agreed") },
-    ...(others.length ? others : [{ id: "consent:no", title: t(lang, "btn.declined") }]),
-  ].slice(0, 3);
+/** The Sold tap first, then whatever else the reply offered, within the floor's three. */
+export function awaitingSale(reply: Reply, lang: Lang): NonNullable<Reply["buttons"]> {
+  const others = (reply.buttons ?? []).filter((button) => button.id !== "sold" && !button.id.startsWith("consent:"));
+  return [{ id: "sold", title: t(lang, "btn.sold") }, ...others].slice(0, 3);
 }
 
 /** A line offered with the pick stays priceable on every later turn, like the pick itself. */
@@ -849,6 +862,8 @@ export function startInteraction(session: Session): void {
   // The last customer's pick, and their yes, are not this customer's.
   delete session.selection;
   session.consent = false;
+  delete session.sold;
+  delete session.reporting_problem;
   delete session.site_checked;
   session.card_confirmed = false;
   session.assessed = false;
@@ -884,13 +899,20 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   const picked = event.action?.match(/^select:([A-Za-z0-9_-]+)$/);
   if (picked) {
     const sku = picked[1]!;
-    if (!pack.products.some((product) => product.sku === sku)) return { text: t(session.language, "ft.gone") };
+    const product = pack.products.find((candidate) => candidate.sku === sku);
+    if (!product) return { text: t(session.language, "ft.gone") };
+    // Delivery and installation are on the bill from the start; a charge from the last pick stays
+    // only if this pack still prices it.
+    const defaults = defaultCharges(pack, product);
     session.selection = {
       sku,
       accessories: [],
-      charges: session.selection?.charges ?? [],
+      charges: defaults.length
+        ? defaults
+        : (session.selection?.charges ?? []).filter((id) => pack.charges.some((charge) => charge.id === id)),
     };
     session.consent = false;
+    session.sold = false;
     return followThrough(session, pack, event.name ?? session.phone);
   }
   const added = event.action?.match(/^add:([A-Za-z0-9_-]+)$/);
@@ -903,21 +925,78 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
     session.consent = false;
     return followThrough(session, pack, event.name ?? session.phone);
   }
-  if (event.action === "consent:yes") {
-    // A yes to nothing is not a close: it scored Close and Follow through with no product picked.
+  if (wantsSold(event.text, event.action)) {
+    // A sale of nothing is not a close: it asks which one instead.
     if (!session.selection) return followThrough(session, pack, event.name ?? session.phone);
-    session.consent = true;
+    const cheer = !session.sold;
+    session.sold = true;
     if (!session.steps_done.includes("close")) session.steps_done.push("close");
     if (!session.steps_done.includes("follow_through")) session.steps_done.push("follow_through");
     session.step = "follow_through";
     recordPurchase(session, pack);
-    return followThrough(session, pack, event.name ?? session.phone);
+    return followThrough(session, pack, event.name ?? session.phone, cheer);
+  }
+  if (event.action === "summary:customer") return customerSummary(session, pack, event.name ?? session.phone);
+  if (event.action === "consent:yes") {
+    // The customer's yes is to their own copy of the summary, and only that: it is not the sale.
+    if (session.selection) session.consent = true;
+    return customerSummary(session, pack, event.name ?? session.phone);
+  }
+  if (event.action === "charges") {
+    const product = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
+    if (!product) return followThrough(session, pack, event.name ?? session.phone);
+    return { text: chargesList(pack, product, session.language) };
+  }
+  if (event.action === "cust:serve") return { text: t(session.language, "cc.serving") };
+  if (event.action === "cust:problem") {
+    const last = session.customer?.bought?.at(-1);
+    if (!last) return { text: t(session.language, "cc.serving") };
+    session.reporting_problem = true;
+    return { text: t(session.language, "prob.ask", { name: last.name.split(/[,(]/)[0]!.trim() }) };
   }
   if (event.action === "consent:no") {
     session.consent = false;
     return { text: t(session.language, "ft.noconsent") };
   }
-  if (wantsFollowThrough(event.text, event.action)) {
+  // "The outdoor unit is 5 metres away": the pipe past what is included, multiplied out here. The
+  // model may only quote figures the data holds, so "2 × Rs 850" was refused when it did the sum.
+  const metres = event.action ? null : pipeMetres(event.text);
+  const running = metres && session.selection && pack.products.find((p) => p.sku === session.selection?.sku);
+  const run = running && priceRun(pack, running, session.selection!, metres!);
+  if (run && session.selection) {
+    session.consent = false;
+    recordPurchase(session, pack);
+    const itemised = itemisedTotal(pack, session.selection);
+    if (itemised)
+      return {
+        text: [
+          run.extra
+            ? t(session.language, "pipe.extra", {
+                m: metres!,
+                included: run.included,
+                extra: run.extra,
+                rate: run.rate.toLocaleString("en-IN"),
+                amount: (run.extra * run.rate).toLocaleString("en-IN"),
+              })
+            : t(session.language, "pipe.none", { m: metres!, included: run.included }),
+          t(session.language, "bd.total", {
+            body: itemised.lines.join("; "),
+            total: itemised.total.toLocaleString("en-IN"),
+          }),
+          `↳ ${t(session.language, "why.pipe")}`,
+        ].join("\n"),
+        buttons: session.sold
+          ? [
+              { id: "summary:customer", title: t(session.language, "btn.summary") },
+              { id: "new_customer", title: t(session.language, "btn.new") },
+            ]
+          : [
+              { id: "sold", title: t(session.language, "btn.sold") },
+              { id: "charges", title: t(session.language, "btn.charges") },
+            ],
+      };
+  }
+  if (wantsFollowThrough(event.text, event.action, !!session.selection)) {
     session.step = "follow_through";
     return followThrough(session, pack, event.name ?? session.phone);
   }
@@ -952,16 +1031,21 @@ export type SavedCustomer = {
   purchases?: Purchase[];
 };
 
-/** The pick and its itemised total go on the customer's home card once the customer has said yes, so
- *  their next visit shows what they bought. Once per product a day: the yes can be tapped twice. */
+/** The pick and its itemised total go on the customer's home card once it is sold, so their next
+ *  visit shows what they bought. Once per product a day: Sold can be tapped twice. */
 export function recordPurchase(session: Session, pack: Pack): void {
-  if (!session.customer || !session.consent || !session.selection) return;
+  if (!session.customer || !session.sold || !session.selection) return;
   const itemised = itemisedTotal(pack, session.selection);
   const product = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
   if (!itemised || !product) return;
   const on = new Date().toISOString().slice(0, 10);
   const bought = session.customer.bought ?? [];
-  if (bought.some((row) => row.sku === product.sku && row.on === on)) return;
+  // Already on the card today: the total follows a line added after the sale, such as the pipe.
+  const same = bought.find((row) => row.sku === product.sku && row.on === on);
+  if (same) {
+    same.total = itemised.total;
+    return;
+  }
   session.customer.bought = [...bought, { sku: product.sku, name: product.name, total: itemised.total, on }].slice(-10);
 }
 
@@ -969,10 +1053,75 @@ export type Store = {
   today(): Promise<Session[]>;
   findCustomer?(phone: string): Promise<SavedCustomer | null>;
   namesIn?(said: string): Promise<string[]>;
+  customersNamed?(said: string): Promise<(SavedCustomer & { phone: string })[]>;
+  addFollowUps?(rows: NewFollowUp[]): Promise<void>;
+  followUps?(filter: { phone?: string; dueBy?: string; customer_id?: string }): Promise<OpenFollowUp[]>;
+  doneFollowUp?(id: number, phone: string): Promise<OpenFollowUp | null>;
   logVisit(row: { reference: string; phone: string; associate?: string; store: string; body: string }): Promise<void>;
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
 };
+
+/** Asking about a saved customer's card, what they bought or their history. */
+const CARD_ASK =
+  /\b(home\s?card|card|bought|purchase[sd]?|purchases|history|record|details|data|profile|kya liya|kya kharida|kharida)\b|कार्ड|खरीद|घेतलं/i;
+/** About the customer whose card is already open: these words, without a name or a number. */
+const OWN_HISTORY =
+  /\b(home\s?card|bought|purchases?|purchase history|previous|history|kya liya|kya kharida|kharida)\b|खरीद|घेतलं/i;
+
+/** A saved customer becomes the one being served: their card, their words and what they bought. */
+export function openCard(session: Session, found: SavedCustomer, phone: string): void {
+  session.customer = {
+    id: found.id,
+    phone,
+    ...(found.name ? { name: found.name } : {}),
+    ...(found.purchases?.length ? { bought: found.purchases } : {}),
+  };
+  session.card = { ...found.card, ...session.card };
+  session.history = [...found.history, ...session.history].slice(-12);
+}
+
+/** A returning customer at a glance: who, what they bought, what they wanted, what is next for them.
+ *  Every button does something with data that exists. */
+export function customerCard(session: Session, phone: string, open: OpenFollowUp[]): Reply {
+  const lang = session.language;
+  const bought = session.customer?.bought ?? [];
+  const parts = cardParts(session);
+  const next = open[0];
+  return {
+    text: [
+      `${t(lang, "cc.head", { name: session.customer?.name ?? phone, last4: phone.slice(-4) })} · ${
+        bought.length
+          ? t(lang, "cc.bought", {
+              body: bought
+                .slice(-2)
+                .map(
+                  (row) => `${row.name.split(/[,(]/)[0]!.trim()}, Rs ${row.total.toLocaleString("en-IN")} (${row.on})`,
+                )
+                .join("; "),
+            })
+          : t(lang, "cc.nobought")
+      }`,
+      [
+        parts.length ? t(lang, "cc.home", { body: parts.slice(0, 4).join("; ") }) : "",
+        next ? t(lang, "cc.open", { what: next.what, due: next.due_on }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      `↳ ${t(lang, "cc.why")}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    buttons: [
+      { id: "cust:serve", title: t(lang, "btn.serve") },
+      ...(bought.length ? [{ id: "cust:problem", title: t(lang, "btn.problem") }] : []),
+      {
+        id: open.length ? "followups:customer" : "new_customer",
+        title: t(lang, open.length ? "btn.followups" : "btn.new"),
+      },
+    ],
+  };
+}
 
 /** The customer's mobile number in the associate's own words, or null. Read by the code, not the
  *  model: asked "9876543210 ka data batao", the model passed no number on and nothing was looked up.
@@ -1082,7 +1231,11 @@ async function answer(
     return reply;
   }
   if (!event.action && !event.image && isGreeting(event.text))
-    return greetingReply(session.language, Object.keys(base.shift_brief ?? {}).length > 0 || !!catalogConfig());
+    return greetingReply(
+      session.language,
+      Object.keys(base.shift_brief ?? {}).length > 0 || !!catalogConfig(),
+      store?.followUps ? (await store.followUps({ phone: session.phone, dueBy: storeDay() })).length : 0,
+    );
   for (const [field, value] of Object.entries(heard))
     if (value !== null && value !== undefined) (session.card as Record<string, unknown>)[field] = value;
 
@@ -1097,7 +1250,10 @@ async function answer(
       return { ...base, products: [], offers: [] };
     }
   };
-  let pack = withOffered(withShown(session.search ? await fetchFor(session.search) : base, session), session);
+  // Delivery and installation are priced from the after-sales list for the heavy products in view.
+  let pack = withAfterSales(
+    withOffered(withShown(session.search ? await fetchFor(session.search) : base, session), session),
+  );
   // No file brief on the live catalogue, so the brief is the store's own: stock and offers today.
   if (wantsBrief(event.text, event.action) && catalogConfig() && !Object.keys(base.shift_brief ?? {}).length)
     pack = { ...pack, shift_brief: await liveBrief(base, request).catch(() => ({})) };
@@ -1109,8 +1265,149 @@ async function answer(
     await store.logQuestion({ reference, phone: session.phone, area, owner, question });
     return reply;
   }
+  // What is wrong with something this customer bought, said in the line after "Problem with it".
+  if (store && session.reporting_problem && event.text && !event.action) {
+    delete session.reporting_problem;
+    const reference = newReference();
+    const last = session.customer?.bought?.at(-1);
+    const who = session.customer?.name ?? t(session.language, "as.thecustomer");
+    const owner =
+      base.experts?.find((expert) => /service|install/i.test(expert.area))?.name ?? t(session.language, "prob.desk");
+    await store.logQuestion({
+      reference,
+      phone: session.phone,
+      area: "after-sales service",
+      owner,
+      question: `${who}, ${last?.name ?? ""}: ${event.text}`.slice(0, 400),
+    });
+    await store.addFollowUps?.([
+      {
+        phone: session.phone,
+        ...(session.associate ? { owner: session.associate } : {}),
+        ...(session.customer
+          ? {
+              customer_id: session.customer.id,
+              customer_phone: session.customer.phone,
+              ...(session.customer.name ? { customer_name: session.customer.name } : {}),
+            }
+          : {}),
+        product: last?.name ?? "",
+        what: t(session.language, "fu.service", { who, problem: event.text.slice(0, 80) }),
+        due_on: storeDay(1),
+      },
+    ]);
+    return remember({
+      text: [
+        t(session.language, "prob.raised", { owner, reference }),
+        t(session.language, "prob.say"),
+        `↳ ${t(session.language, "prob.why")}`,
+      ].join("\n"),
+    });
+  }
+
+  // The associate's own check-backs: what is due, and a tap to mark one done.
+  const doneId = event.action?.match(/^fu:done:(\d+)$/)?.[1];
+  if (store?.doneFollowUp && doneId) {
+    const row = await store.doneFollowUp(Number(doneId), session.phone);
+    const left = (await store.followUps?.({ phone: session.phone, dueBy: storeDay() }))?.length ?? 0;
+    return remember({
+      text: [
+        row ? t(session.language, "fu.done", { what: row.what }) : t(session.language, "fu.none"),
+        left ? t(session.language, "fu.left", { n: left }) : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      ...(left ? { buttons: [{ id: "followups", title: t(session.language, "btn.followups") }] } : {}),
+    });
+  }
+  if (store?.followUps && (wantsFollowUps(event.text, event.action) || event.action === "followups:customer")) {
+    const rows =
+      event.action === "followups:customer" && session.customer
+        ? await store.followUps({ customer_id: session.customer.id })
+        : await store.followUps({ phone: session.phone, dueBy: storeDay() });
+    if (!rows.length) return remember({ text: t(session.language, "fu.none") });
+    // Three lines and no reason line: the floor keeps two lines when there is a reason, and the
+    // third check-back is the one that would go.
+    const shown = rows.slice(0, 3);
+    return remember({
+      text: shown
+        .map((row, index) => t(session.language, "fu.line", { n: index + 1, what: row.what, due: row.due_on }))
+        .join("\n"),
+      buttons: shown.map((row, index) => ({
+        id: `fu:done:${row.id}`,
+        title: t(session.language, "btn.done", { n: index + 1 }),
+      })),
+    });
+  }
+
+  // A saved customer's card, asked for by name or number, is the code's to show: the model offered
+  // "Warranty details" and "Service history" it had no data for, then could not find the purchase.
+  const chosen = event.action?.match(/^cust:(\d{10})$/)?.[1];
+  const said = event.text ?? "";
+  const asksCard =
+    !event.action && CARD_ASK.test(said) && !/^\s*(card|home card|show the card)\s*[.!?]*\s*$/i.test(said);
+  if (store?.findCustomer && (chosen || asksCard)) {
+    const asked = chosen ?? mobileIn(said);
+    let target: (SavedCustomer & { phone: string }) | null = null;
+    if (asked) {
+      const found = await store.findCustomer(asked);
+      if (found) target = { ...found, phone: asked };
+    } else if (store.customersNamed) {
+      const rows = await store.customersNamed(said);
+      const current = rows.find((row) => row.phone === session.customer?.phone);
+      if (rows.length > 1 && !current)
+        return remember({
+          text: t(session.language, "cc.which", { name: rows[0]!.name ?? "" }),
+          buttons: rows.slice(0, 3).map((row) => ({
+            id: `cust:${row.phone}`,
+            title: `${(row.name ?? "").split(" ")[0]!.slice(0, 12)} ··${row.phone.slice(-4)}`,
+          })),
+        });
+      target = current ?? (rows.length === 1 ? rows[0]! : null);
+    }
+    // "Previous purchases", with this customer's card already open.
+    const aboutCurrent = !!session.customer && !target && OWN_HISTORY.test(said);
+    if (target || aboutCurrent) {
+      if (target && target.phone !== session.customer?.phone) {
+        startInteraction(session);
+        openCard(session, target, target.phone);
+      }
+      const customer = session.customer!;
+      const open = store.followUps ? await store.followUps({ customer_id: customer.id }) : [];
+      return remember(customerCard(session, customer.phone, open));
+    }
+  }
+
+  const wasSold = !!session.sold;
   const free = deterministic(event, session, pack, notes);
-  // A television just picked: its brand's wall mount, from the store, as a tap that adds it to the total.
+  // Sold: the check-backs go on the associate's list, each with its day.
+  if (store?.addFollowUps && session.sold && !wasSold && session.selection) {
+    const sold = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
+    if (sold)
+      await store.addFollowUps(
+        followUpPlan(sold, session.customer?.name, session.language).map((step) => ({
+          phone: session.phone,
+          ...(session.associate ? { owner: session.associate } : {}),
+          ...(session.customer
+            ? {
+                customer_id: session.customer.id,
+                customer_phone: session.customer.phone,
+                ...(session.customer.name ? { customer_name: session.customer.name } : {}),
+              }
+            : {}),
+          product: sold.name,
+          what: step.what,
+          due_on: storeDay(step.days),
+        })),
+      );
+  }
+  if (free && store?.followUps && wantsBrief(event.text, event.action) && (free.buttons ?? []).length < 3) {
+    const due = await store.followUps({ phone: session.phone, dueBy: storeDay() });
+    if (due.length)
+      free.buttons = [...(free.buttons ?? []), { id: "followups", title: t(session.language, "btn.followups") }];
+  }
+  // A product just picked: resQ's care plan for its price band, and a television's own wall mount,
+  // from the store, each a tap that adds it to the total.
   const product = event.action?.startsWith("select:") && pack.products.find((p) => p.sku === session.selection?.sku);
   // Not when the store already gives one free with it: that was a paid bracket offered for a TV
   // whose own promotion was "Free with it: Samsung Wallmount Bracket".
@@ -1120,13 +1417,24 @@ async function answer(
       (offer) =>
         Array.isArray(offer.on) && offer.on.includes(product.name) && /mount|bracket/i.test(String(offer.title)),
     );
-  if (free && product && session.selection && !session.consent && !freeMount) {
-    const mount = await mountFor(product, request).catch(() => null);
-    if (mount && !session.selection.accessories.includes(mount.id)) {
-      session.selection.offered = [mount];
+  if (free && product && session.selection && !session.sold) {
+    const [mount, plan] = await Promise.all([
+      freeMount ? null : mountFor(product, request).catch(() => null),
+      carePlanFor(product, categoryOf(product)?.plan, request).catch(() => null),
+    ]);
+    const offered = [mount, plan].filter(
+      (line): line is NonNullable<typeof line> => !!line && !session.selection!.accessories.includes(line.id),
+    );
+    if (offered.length) {
+      session.selection.offered = offered;
+      const [sold, ...rest] = free.buttons ?? [];
       free.buttons = [
-        ...(free.buttons ?? []),
-        { id: `add:${mount.id}`, title: t(session.language, "btn.mount") },
+        ...(sold ? [sold] : []),
+        ...offered.map((line) => ({
+          id: `add:${line.id}`,
+          title: t(session.language, line === mount ? "btn.mount" : "btn.plan"),
+        })),
+        ...rest,
       ].slice(0, 3);
     }
   }
@@ -1154,14 +1462,7 @@ async function answer(
     if (found) {
       // Another customer's card was open: this number is someone else standing there.
       if (session.customer) startInteraction(session);
-      session.customer = {
-        id: found.id,
-        phone: number,
-        ...(found.name ? { name: found.name } : {}),
-        ...(found.purchases?.length ? { bought: found.purchases } : {}),
-      };
-      session.card = { ...found.card, ...session.card };
-      session.history = [...found.history, ...session.history].slice(-12);
+      openCard(session, found, number);
       loaded = true;
       const parts = cardParts(session);
       customerLine = [
@@ -1210,7 +1511,7 @@ async function answer(
       if (search.kind && session.search?.kind && search.kind !== session.search.kind) delete session.shown;
       const found = await fetchFor(search);
       // A store that did not answer gets nothing substituted, not even what it said a turn ago.
-      pack = failed ? found : withOffered(withShown(found, session), session);
+      pack = failed ? found : withAfterSales(withOffered(withShown(found, session), session));
       session.search = search;
       // Changing the product withdraws the consent, and the picked one is not on this search.
       if (session.selection && !pack.products.some((product) => product.sku === session.selection?.sku)) {
@@ -1236,10 +1537,12 @@ async function answer(
     notes.push(
       `On the associate's screen from earlier: ${onScreen.map((product) => product.name).join("; ")}. "These", "them", "it" and "the first one" mean those, unless they name something else.`,
     );
-  const picked = session.selection && !session.consent && pack.products.find((p) => p.sku === session.selection?.sku);
+  const picked = session.selection && pack.products.find((p) => p.sku === session.selection?.sku);
   if (picked)
     notes.push(
-      `The customer picked ${picked.name} and the summary is waiting for the associate to tap "${t(session.language, "btn.agreed")}". Nothing has been sent, and you cannot send it.`,
+      session.sold
+        ? `They sold ${picked.name} to this customer, and the follow-ups are set. Help with what comes after: delivery, installation, the site, the charges in FACTS.`
+        : `The customer picked ${picked.name}, and its full cost is on the associate's screen. Nothing has been sent, and you cannot send it. When the customer buys it, the associate taps "${t(session.language, "btn.sold")}".`,
     );
 
   const told = (card: Decision["card"]): string =>
@@ -1359,9 +1662,8 @@ async function answer(
     ...(buttons ?? []).filter((button) => button.id.startsWith("select:")).map((button) => button.id.slice(7)),
     ...session.shortlist,
   ]);
-  // Consent is a tap. Typed "he agreed" was answered "sending the summary" with nothing sent, so
-  // while a pick waits, the tap that does send it is always on the reply.
-  if (session.selection && !session.consent) reply = { ...reply, buttons: awaitingConsent(reply, session.language) };
+  // The sale is a tap. While a pick waits, the tap that closes it is always on the reply.
+  if (session.selection && !session.sold) reply = { ...reply, buttons: awaitingSale(reply, session.language) };
   // A manager who does not know the answer finds out. The question goes to the named expert and
   // comes back as a notice, so the associate is not left with "I do not have that".
   if (decision.unknown && store) reply = unknownReply(reply, session.language);

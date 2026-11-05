@@ -48,6 +48,27 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
       return 1;
     },
     resolveQuestion: async (ref: string): Promise<boolean> => ref === "SIQ-1234",
+    followUps: async () => [
+      {
+        id: 7,
+        phone: "919820000001",
+        owner: null,
+        what: "Call Asha: did the fridge arrive?",
+        due_on: "2000-01-01",
+        customer_name: "Asha",
+        product: "LG fridge",
+      },
+      {
+        id: 8,
+        phone: "919820000002",
+        owner: null,
+        what: "Call Ravi: is the AC working?",
+        due_on: "2999-01-01",
+        customer_name: "Ravi",
+        product: "AC",
+      },
+    ],
+    doneFollowUp: async (id: number, phone: string | null) => (id === 7 && phone === null ? { id: 7 } : null),
     logBroadcast: async (row: SentBroadcast): Promise<void> => void history.push(row),
     broadcasts: async (kind: string) => history.filter((row) => row.kind === kind),
   } as unknown as DB;
@@ -335,4 +356,27 @@ test("an expert question can be marked resolved from the portal", async () => {
 
   const notFound = await app.request(...post("/api/manager/expert/SIQ-9999/resolve", {}));
   assert.equal(notFound.status, 404);
+});
+
+test("the floor carries every open after-sales check-back, overdue first, under its owner's name", async () => {
+  const { app } = await harness();
+  const floor = (await (await app.request("/api/manager/floor", { headers: { cookie: AUTH } })).json()) as {
+    followUps: { id: number; associate: string; overdue: boolean; due: boolean }[];
+  };
+  assert.deepEqual(
+    floor.followUps.map((row) => [row.id, row.associate, row.overdue, row.due]),
+    [
+      [7, "Ramesh", true, true],
+      [8, "Asha", false, false],
+    ],
+  );
+  assert.ok(!JSON.stringify(floor.followUps).includes("customer_phone"), "no customer's number in the portal");
+});
+
+test("the manager can close any follow-up from the portal", async () => {
+  const { app } = await harness();
+  const res = await app.request(...post("/api/manager/followup/7/done", {}));
+  assert.equal(res.status, 200);
+  assert.equal((await app.request(...post("/api/manager/followup/9/done", {}))).status, 404);
+  assert.equal((await app.request(...post("/api/manager/followup/abc/done", {}))).status, 400);
 });

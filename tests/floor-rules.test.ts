@@ -29,8 +29,11 @@ const WALK: ({ text: string } | { action: string })[] = [
   { text: "recommend" },
   { action: "select:TCL-55C6KS" },
   { action: "add:TV-WALL" },
-  { action: "consent:yes" },
+  { action: "sold" },
   { action: "site:ok" },
+  { action: "summary:customer" },
+  { action: "consent:yes" },
+  { action: "charges" },
   { text: "what is the EMI" },
   { text: "review" },
 ];

@@ -27,10 +27,14 @@ export function isGreeting(text: string | undefined): boolean {
 /** Hello is answered the way a manager answers it in the aisle: by asking what is going on. Not a
  *  menu of what this thing can do, and not the first question of a questionnaire. It stays written
  *  rather than generated because a greeting is not worth one of the day's model requests. */
-export function greetingReply(lang: Lang, hasBrief = false): Reply {
+export function greetingReply(lang: Lang, hasBrief = false, due = 0): Reply {
   return {
-    text: [t(lang, "greet.back"), `↳ ${t(lang, "greet.reason")}`].filter(Boolean).join("\n"),
+    text: [t(lang, "greet.back"), due ? t(lang, "fu.due", { n: due }) : "", `↳ ${t(lang, "greet.reason")}`]
+      .filter(Boolean)
+      .join("\n"),
     buttons: [
+      // The first message of the day is usually hello: the check-backs due today ride on it.
+      ...(due ? [{ id: "followups", title: t(lang, "btn.followups") }] : []),
       ...(hasBrief ? [{ id: "brief", title: t(lang, "btn.brief") }] : []),
       { id: "new_customer", title: t(lang, "btn.new") },
     ],

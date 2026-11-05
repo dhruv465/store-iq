@@ -178,6 +178,59 @@ export async function mountFor(
   return null;
 }
 
+/** Whether a resQ plan's own price band, as its name writes it, holds this price: "from Rs.20000 to
+ *  Rs.30000", "upto Rs.15000", "above Rs.3L", with L as a lakh. A band the code cannot read is no. */
+export function bandHolds(name: string, price: number): boolean {
+  const rupees = (said: string): number => {
+    const [, figure, lakh] = said.match(/([\d.]+)\s*(l)?/i) ?? [];
+    return Number(figure) * (lakh ? 100_000 : 1);
+  };
+  const from = name.match(/from\s+rs\.?\s*([\d.]+\s*l?)\s+to\s+rs\.?\s*([\d.]+\s*l?)/i);
+  if (from) return price >= rupees(from[1]!) && price <= rupees(from[2]!);
+  const upto = name.match(/up\s*to\s+rs\.?\s*([\d.]+\s*l?)/i);
+  if (upto) return price <= rupees(upto[1]!);
+  const above = name.match(/above\s+rs\.?\s*([\d.]+\s*l?)/i);
+  if (above) return price > rupees(above[1]!);
+  return false;
+}
+
+/** resQ's own care plan for this product's price band, from the store, the longest one it sells.
+ *  The complete solution was where the store visits found us strongest, and its price is real. */
+export async function carePlanFor(
+  product: Product,
+  planWord: string | undefined,
+  request: typeof fetch = fetch,
+): Promise<Pack["accessories"][number] | null> {
+  const config = catalogConfig();
+  if (!config || !planWord) return null;
+  const found = await getProducts(
+    config,
+    { q: `resQ Care Plan ${planWord}`, page_size: 48, page_no: 1, page_type: "number", sort_on: "popular" },
+    request,
+  );
+  const word = new RegExp(`\\b${planWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  const plans = (found.items as Row[])
+    .map((row) => adaptProduct(fromFdk(row)).product)
+    .filter(
+      (plan) =>
+        /resq/i.test(plan.brand) &&
+        plan.sku &&
+        plan.price_rupees > 0 &&
+        word.test(plan.name) &&
+        bandHolds(plan.name, product.price_rupees),
+    )
+    .map((plan) => ({ plan, years: Number(plan.name.match(/(\d+)\s*year/i)?.[1] ?? 0) }))
+    .sort((a, b) => b.years - a.years);
+  const best = plans[0];
+  if (!best) return null;
+  return {
+    id: best.plan.sku,
+    title: best.years ? `resQ ${best.years}-year care plan` : best.plan.name.slice(0, 40),
+    price_rupees: best.plan.price_rupees,
+    for: product.sku,
+  };
+}
+
 /** The shift brief from the store itself: televisions in stock with their prices, and the offers
  *  running on them today. The data has no stock history, no video and no quiz, so there are none. */
 const briefs = new Map<string, Pack["shift_brief"]>();

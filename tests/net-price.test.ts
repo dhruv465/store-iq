@@ -49,23 +49,19 @@ test("the net payable is the itemised total less every applicable offer", () => 
   assert.equal(netPayable(pack, TCL, 54990 + 1499), 49365);
 });
 
-test("with the gate open the summary leads with the MRP saving and the send ends at the net", () => {
+test("with the gate open the breakdown carries the MRP saving, the offers and the net, all at once", () => {
   const session = newSession("919820000001");
   session.card = { ...HOME_CARD };
   session.demonstrated = true;
   tap(session, "select:TCL-55C6KS");
-  const draft = tap(session, "add:TV-WALL")!;
-  assert.match(draft.text, /Rs 35,000 off MRP today: listed Rs 89,990, here Rs 54,990/);
-  assert.doesNotMatch(draft.text, /Net with those/, "the net waits until after consent");
-  const asked = tap(session, "consent:yes")!;
-  assert.match(asked.text, /Total Rs 56,489/, "the gross stays visible, so both figures are on the table");
-  assert.match(asked.text, /wall type/, "the thing to check, not just the reason for checking");
-  assert.doesNotMatch(asked.text, /− Rs/, "the offers wait one turn");
-  const sent = tap(session, "site:ok")!;
-  assert.match(sent.text, /Total Rs 56,489/);
-  assert.match(sent.text, /HDFC credit card instant discount: − Rs 4,124/);
-  assert.match(sent.text, /− Rs 3,000 if they have working old TV, same household/);
-  assert.match(sent.text, /Net with those: Rs 49,365 to pay in all/);
+  const breakdown = tap(session, "add:TV-WALL")!;
+  assert.match(breakdown.text, /Total Rs 56,489/, "the gross stays visible, so both figures are on the table");
+  assert.match(breakdown.text, /Rs 35,000 off MRP today: listed Rs 89,990, here Rs 54,990/);
+  assert.match(breakdown.text, /HDFC credit card instant discount: − Rs 4,124/);
+  assert.match(breakdown.text, /− Rs 3,000 if they have working old TV, same household/);
+  assert.match(breakdown.text, /Net with those: Rs 49,365 to pay in all/);
+  const sold = tap(session, "sold")!;
+  assert.match(sold.text, /wall type/, "the thing to check, not just the reason for checking");
 });
 
 test("with the gate closed the closing lines wait behind it", () => {
@@ -73,9 +69,8 @@ test("with the gate closed the closing lines wait behind it", () => {
   tap(session, "select:TCL-55C6KS");
   const draft = tap(session, "add:TV-WALL")!;
   assert.doesNotMatch(draft.text, /off MRP today/, "no MRP saving before the home is assessed");
-  const sent = tap(session, "consent:yes")!;
-  assert.doesNotMatch(sent.text, /− Rs/, "no offer figure before the home is assessed");
-  assert.doesNotMatch(sent.text, /Net with those/);
+  assert.doesNotMatch(draft.text, /− Rs/, "no offer figure before the home is assessed");
+  assert.doesNotMatch(draft.text, /Net with those/);
 });
 
 test("the close adapts to the associate's language, pack figures aside", () => {

@@ -28,6 +28,18 @@ export type OpenQuestion = {
   asked_at?: string;
 };
 
+/** A check-back after a sale: delivery, the installer's call, that it works, or a service problem. */
+export type FollowUp = {
+  id: number;
+  what: string;
+  due_on: string;
+  customer_name: string | null;
+  product: string;
+  associate: string;
+  overdue: boolean;
+  due: boolean;
+};
+
 export type ObjectionInsight = {
   claim: string;
   count: number;
@@ -70,6 +82,7 @@ export type Floor = {
   summary: string;
   rows: FloorRow[];
   openQuestions?: OpenQuestion[];
+  followUps?: FollowUp[];
   reachable: number;
   waiting: number;
   rosterEmpty: boolean;
@@ -150,6 +163,7 @@ export const api = {
   discardVideoBrief: () => call<{ ok: true }>("/video-brief", { method: "DELETE" }),
   sendVideoBrief: (video: string) =>
     call<{ queued: number; waiting: number }>("/video-brief/send", { method: "POST", body: JSON.stringify({ video }) }),
+  doneFollowUp: (id: number) => call<{ ok: true; id: number }>(`/followup/${id}/done`, { method: "POST" }),
   resolveQuestion: (reference: string) =>
     call<{ ok: true; reference: string }>(`/expert/${encodeURIComponent(reference)}/resolve`, { method: "POST" }),
 };

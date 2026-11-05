@@ -687,7 +687,7 @@ test("moving to another product withdraws the pick and its consent", async () =>
   assert.equal(session.consent, false);
 });
 
-test("a pick from this conversation's search reaches the consent draft, on the store's price", async () => {
+test("a pick from this conversation's search shows the breakdown at once, on the store's price", async () => {
   const q = `iphone pick ${++unique}`;
   const store = shop(() => page([row(70, "Apple iPhone 18 Pro 256 GB, Silver", 164900)]));
   const session = newSession("919820000001");
@@ -703,6 +703,6 @@ test("a pick from this conversation's search reaches the consent draft, on the s
   assert.match(reply.text, /1,64,900/);
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
-    ["consent:yes", "consent:no"],
+    ["sold", "charges"],
   );
 });

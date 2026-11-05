@@ -194,7 +194,7 @@ test("given only the number, the reply is the saved line and no filler", async (
   assert.equal(reply.text.trim(), "Home card saved for Asha.");
 });
 
-test("a number alone brings the card back before the model writes, even when the model passes nothing on", async () => {
+test("a number asked about is the code's card, with buttons that each do something", async () => {
   const session = newSession(ASSOCIATE);
   const saved = {
     "9876543210": { id: "c-1", name: "Meena", card: { facts: { "main use": "cricket" } }, history: [] },
@@ -202,9 +202,14 @@ test("a number alone brings the card back before the model writes, even when the
   // What the live model did with "<number> ka data batao": no customer field at all.
   const model = manager({ customer: null, lines: ["She was looking at TVs for cricket."] });
   const reply = await decide(said("9876543210 ka data batao"), session, pack, model.fetch, cards(saved) as never);
-  assert.match(model.prompts[0]!, /cricket/, "the model wrote with her card in front of it");
-  assert.match(model.prompts[0]!, /That number is Meena from an earlier visit/);
-  assert.match(reply.text, /^Welcome back, Meena\. Last time: main use: cricket\./);
+  assert.equal(model.prompts.length, 0, "no model request for a card on file");
+  assert.match(reply.text, /^Meena ··3210 · Nothing bought on file yet/);
+  assert.match(reply.text, /Home:\*? main use: cricket/);
+  assert.deepEqual(
+    reply.buttons?.map((button) => button.id),
+    ["cust:serve", "new_customer"],
+    "no Problem button with nothing bought, no Warranty or Service history it cannot show",
+  );
   assert.equal(session.customer?.id, "c-1");
 });
 
@@ -216,7 +221,7 @@ test("a number nobody has saved, asked about out of the blue, is said to be unkn
   assert.equal(session.customer, undefined);
 });
 
-test("what the customer agreed to buy goes on their home card, once", () => {
+test("what the customer bought goes on their home card, once", () => {
   const session = newSession(ASSOCIATE);
   const product = pack.products[0]!;
   session.customer = { id: "c-4", phone: "9876512345", name: "Suresh" };
@@ -224,11 +229,14 @@ test("what the customer agreed to buy goes on their home card, once", () => {
   // A function, so the first assert does not narrow what the later ones read.
   const bought = () => session.customer?.bought;
   recordPurchase(session, pack);
-  assert.equal(bought(), undefined, "no yes, no purchase");
+  assert.equal(bought(), undefined, "not sold, no purchase");
   session.consent = true;
   recordPurchase(session, pack);
+  assert.equal(bought(), undefined, "a yes to the summary is not a sale");
+  session.sold = true;
   recordPurchase(session, pack);
-  assert.equal(bought()?.length, 1, "the yes tapped twice is one purchase");
+  recordPurchase(session, pack);
+  assert.equal(bought()?.length, 1, "Sold tapped twice is one purchase");
   assert.equal(bought()?.[0]?.name, product.name);
   assert.equal(bought()?.[0]?.total, product.price_rupees);
 });

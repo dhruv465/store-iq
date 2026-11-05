@@ -77,11 +77,18 @@ export type Session = {
     sku: string;
     accessories: string[];
     charges: string[];
+    /** How many of a charge sold by the unit, such as metres of copper pipe past what is included. */
+    qty?: Record<string, number>;
     /** Real catalogue lines offered with the pick, such as the brand's wall mount, at their real price. */
     offered?: Pack["accessories"];
   };
-  /** Section 4H: the customer summary only goes out with consent. */
+  /** Section 4H: the customer summary only goes out with consent. The breakdown is the associate's
+   *  own and never waits for it. */
   consent: boolean;
+  /** The associate tapped Sold: the close, the purchase on the card, and the follow-ups raised. */
+  sold?: boolean;
+  /** The next thing they say is what is wrong with something this customer bought. */
+  reporting_problem?: boolean;
   /** The next thing they say is a store visit, not a customer. Set by asking to log one, cleared
    *  as soon as it is filed, so a visit can never be mistaken for a home. */
   logging_visit?: boolean;

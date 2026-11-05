@@ -10,7 +10,7 @@ import {
   askedAboutOffers,
   offerLeaked,
   unknownReply,
-  awaitingConsent,
+  awaitingSale,
   reasonFrom,
   render,
   rememberShown,
@@ -374,12 +374,12 @@ test("a reason is the customer's own need and what it means, or nothing", () => 
   assert.equal(reasonFrom(card, "facts", "x"), null);
 });
 
-test("while a pick waits for consent, the agree tap is always on the reply", () => {
+test("while a pick waits, the Sold tap is always on the reply", () => {
   assert.deepEqual(
-    awaitingConsent({ text: "ok" }, "en").map((b) => b.id),
-    ["consent:yes", "consent:no"],
+    awaitingSale({ text: "ok" }, "en").map((b) => b.id),
+    ["sold"],
   );
-  const kept = awaitingConsent(
+  const kept = awaitingSale(
     {
       text: "ok",
       buttons: [
@@ -392,9 +392,9 @@ test("while a pick waits for consent, the agree tap is always on the reply", () 
   );
   assert.deepEqual(
     kept.map((b) => b.id),
-    ["consent:yes", "say:a", "say:b"],
+    ["sold", "say:a", "say:b"],
   );
-  assert.equal(kept[0]!.title, "हाँ कहा");
+  assert.equal(kept[0]!.title, "✅ बिक गया");
 });
 
 test("a real mount offered with the pick is its own line in the total, at its own price", () => {
@@ -411,16 +411,18 @@ test("a real mount offered with the pick is its own line in the total, at its ow
   const reply = followThrough(session, priced, "Asha");
   const total = (tv.price_rupees + 1000).toLocaleString("en-IN");
   assert.match(reply.text, new RegExp(`Brand Wall Mount WM-1 — Rs 1,000`));
-  assert.match(reply.text, new RegExp(`total Rs ${total}`));
-  assert.equal(reply.buttons?.[0]?.id, "consent:yes");
+  assert.match(reply.text, new RegExp(`Total Rs ${total}`));
+  assert.equal(reply.buttons?.[0]?.id, "sold");
 });
 
 test("a new customer does not inherit the last one's pick or their yes", () => {
   const session = newSession("910000000000");
   session.selection = { sku: pack.products[0]!.sku, accessories: [], charges: [] };
   session.consent = true;
+  session.sold = true;
   session.site_checked = true;
   startInteraction(session);
+  assert.equal(session.sold, undefined);
   assert.equal(session.selection, undefined);
   assert.equal(session.consent, false);
   assert.equal(session.site_checked, undefined);

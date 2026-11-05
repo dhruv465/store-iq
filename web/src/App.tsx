@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
   ChevronUp,
   Clock,
   HelpCircle,
@@ -28,6 +29,7 @@ import {
   api,
   NeedsSignIn,
   type FeedItem,
+  type FollowUp,
   type Floor,
   type ObjectionInsight,
   type OpenQuestion,
@@ -634,6 +636,84 @@ function OpenEscalations({ questions, onResolved }: { questions?: OpenQuestion[]
   );
 }
 
+/** After the sale. In October the installer left because nobody asked about the wall, and nobody
+ *  checked the AC worked; these are the check-backs, and who owes each one. */
+function AfterSales({
+  followUps,
+  onDone,
+  dueOnly = false,
+}: {
+  followUps?: FollowUp[] | undefined;
+  onDone: () => void;
+  dueOnly?: boolean;
+}) {
+  const [closing, setClosing] = useState<number | null>(null);
+  if (!followUps) return null;
+  if (dueOnly && !followUps.length) return null;
+
+  const done = async (id: number) => {
+    setClosing(id);
+    try {
+      await api.doneFollowUp(id);
+      onDone();
+    } finally {
+      setClosing(null);
+    }
+  };
+  const overdue = followUps.filter((row) => row.overdue).length;
+
+  return (
+    <Card className={overdue ? "border-warning/40 bg-warning/5" : undefined}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <ClipboardList className={cn("size-5", overdue ? "text-warning" : "text-muted-foreground")} />
+          <div>
+            <CardTitle>
+              {dueOnly ? "After-sales due today" : "After-sales follow-ups"} ({followUps.length})
+            </CardTitle>
+            <CardDescription>
+              {overdue ? `${overdue} overdue. ` : ""}Delivery, the installer's call, and that it works, each with its
+              owner.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!followUps.length ? (
+          <p className="text-muted-foreground text-sm">Nothing open. Each sale adds its check-backs here.</p>
+        ) : (
+          <div className="space-y-3">
+            {followUps.map((row) => (
+              <div
+                key={row.id}
+                className="bg-background flex flex-col items-start justify-between gap-3 rounded-lg border p-3 text-sm sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={row.overdue ? "destructive" : row.due ? "secondary" : "outline"}>
+                      {row.overdue ? "Overdue" : row.due ? "Due today" : "Upcoming"} · {row.due_on}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">Owner: {row.associate}</span>
+                  </div>
+                  <p className="text-foreground font-medium">{row.what}</p>
+                </div>
+                <Button variant="outline" size="sm" disabled={closing === row.id} onClick={() => done(row.id)}>
+                  {closing === row.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="text-success size-3.5" />
+                  )}
+                  Done
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** Adding an associate, opened from the header wherever the manager is. */
 function AddAssociateDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -1132,12 +1212,18 @@ function SignIn({ onDone }: { onDone: () => void }) {
   );
 }
 
-type Section = "overview" | "floor" | "feed" | "objections" | "notify" | "brief";
+type Section = "overview" | "floor" | "feed" | "aftersales" | "objections" | "notify" | "brief";
 
 const SECTIONS: { id: Section; label: string; icon: typeof Users; about: string; group?: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, about: "" },
   { id: "floor", label: "Associates", icon: Users, about: "Scores, customers taken and who is quiet today." },
   { id: "feed", label: "Live floor", icon: Radio, about: "Conversations as the associates have them." },
+  {
+    id: "aftersales",
+    label: "After-sales",
+    icon: ClipboardList,
+    about: "Every check-back after a sale: delivery, the installer's call, that it works.",
+  },
   {
     id: "objections",
     label: "Objections",
@@ -1165,6 +1251,7 @@ function count(floor: Floor | null, section: Section): number | undefined {
   if (section === "floor") return floor.rows.length;
   if (section === "feed") return floor.feed?.length;
   if (section === "objections") return floor.objections?.length;
+  if (section === "aftersales") return floor.followUps?.filter((row) => row.due).length;
   return undefined;
 }
 
@@ -1380,6 +1467,7 @@ export default function App() {
             <>
               <TodayOverview floor={floor} />
               <OpenEscalations questions={floor.openQuestions} onResolved={reload} />
+              <AfterSales followUps={floor.followUps?.filter((row) => row.due)} onDone={reload} dueOnly />
               <AssociateTable floor={floor} onChange={reload} />
               <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
                 <ProductDemandTable products={floor.products} />
@@ -1391,6 +1479,8 @@ export default function App() {
             <AssociateTable floor={floor} onChange={reload} />
           ) : active === "feed" ? (
             <LiveFloorFeed feed={floor.feed} />
+          ) : active === "aftersales" ? (
+            <AfterSales followUps={floor.followUps} onDone={reload} />
           ) : active === "objections" ? (
             <ObjectionHeatmap objections={floor.objections} />
           ) : active === "notify" ? (

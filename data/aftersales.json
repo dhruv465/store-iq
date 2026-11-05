@@ -1,0 +1,84 @@
+{
+  "note": "SAMPLE delivery and installation charges for the demo, not the store's own rates. Replace each amount_rupees with the store's list. A category the live catalogue has no charge for gets these; a data pack that brings its own charges keeps them.",
+  "sample": true,
+  "categories": [
+    {
+      "kind": "refrigerator",
+      "match": "refrigerator|fridge",
+      "plan": "Refrigerator",
+      "charges": [
+        { "id": "FRG-DEL", "title": "Home delivery within 5 km", "amount_rupees": 0, "default": true },
+        { "id": "FRG-DEL-FAR", "title": "Delivery beyond 5 km", "amount_rupees": 399 },
+        { "id": "FRG-INST", "title": "Installation and demo", "amount_rupees": 0, "default": true },
+        { "id": "FRG-STAB", "title": "Voltage stabiliser", "amount_rupees": 1899 },
+        { "id": "FRG-OLD", "title": "Old fridge pickup", "amount_rupees": 299 }
+      ],
+      "site": {
+        "FRG-INST": [
+          "door, lift and stair width for it",
+          "a level floor at the spot",
+          "a power socket the cord reaches",
+          "a hand's gap behind it for air"
+        ]
+      }
+    },
+    {
+      "kind": "air conditioner",
+      "match": "air conditioner|\\b(split|window|inverter)\\s+ac\\b|\\bac\\b",
+      "plan": "Air Conditioner",
+      "charges": [
+        { "id": "AC-DEL", "title": "Home delivery within 5 km", "amount_rupees": 0, "default": true },
+        { "id": "AC-DEL-FAR", "title": "Delivery beyond 5 km", "amount_rupees": 499 },
+        { "id": "AC-INST", "title": "Split AC installation", "amount_rupees": 1500, "default": true },
+        { "id": "AC-BRACKET", "title": "Outdoor unit bracket", "amount_rupees": 1200, "default": true },
+        { "id": "AC-N2", "title": "Nitrogen leak test", "amount_rupees": 500, "default": true },
+        {
+          "id": "AC-PIPE",
+          "title": "Extra copper pipe, per metre beyond 3 metres",
+          "amount_rupees": 850,
+          "per_metre_beyond": 3
+        },
+        { "id": "AC-CORE", "title": "Wall hole (core cutting)", "amount_rupees": 600 },
+        { "id": "AC-STAB", "title": "Voltage stabiliser", "amount_rupees": 2499 }
+      ],
+      "site": {
+        "AC-INST": [
+          "a hole in the wall for the pipe, or core cutting booked",
+          "where the outdoor unit goes, on a wall that takes a bracket",
+          "how far the outdoor unit is from the indoor one",
+          "a power point near the indoor unit"
+        ]
+      }
+    },
+    {
+      "kind": "washing machine",
+      "match": "washing machine|\\bwasher\\b",
+      "plan": "Washing Machine",
+      "charges": [
+        { "id": "WM-DEL", "title": "Home delivery within 5 km", "amount_rupees": 0, "default": true },
+        { "id": "WM-DEL-FAR", "title": "Delivery beyond 5 km", "amount_rupees": 399 },
+        { "id": "WM-INST", "title": "Installation and demo", "amount_rupees": 0, "default": true },
+        { "id": "WM-HOSE", "title": "Inlet hose extension", "amount_rupees": 350 },
+        { "id": "WM-STAND", "title": "Washing machine stand", "amount_rupees": 1499 }
+      ],
+      "site": {
+        "WM-INST": ["a water tap with a threaded mouth nearby", "a drain outlet", "a power socket", "a level floor"]
+      }
+    },
+    {
+      "kind": "television",
+      "match": "television|\\btv\\b|\\binch\\b.*\\b(q?led|oled)\\b",
+      "plan": "LED",
+      "charges": [
+        { "id": "LTV-DEL", "title": "Home delivery within 5 km", "amount_rupees": 0, "default": true },
+        { "id": "LTV-DEL-FAR", "title": "Delivery beyond 5 km", "amount_rupees": 299 },
+        { "id": "LTV-DEMO", "title": "Table-top installation and demo", "amount_rupees": 0, "default": true },
+        { "id": "LTV-WALL", "title": "Wall mount installation", "amount_rupees": 799 }
+      ],
+      "site": {
+        "LTV-DEMO": ["a table deep enough for the stand", "a power socket"],
+        "LTV-WALL": ["wall type: concrete or brick", "a power socket within reach", "height from the floor"]
+      }
+    }
+  ]
+}

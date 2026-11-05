@@ -102,6 +102,20 @@ create table if not exists customers (
   updated_at timestamptz not null default now()
 );
 alter table customers add column if not exists purchases jsonb not null default '[]';
+create table if not exists followups (
+  id serial primary key,
+  phone text not null,
+  owner text,
+  customer_id text,
+  customer_name text,
+  customer_phone text,
+  product text not null,
+  what text not null,
+  due_on text not null,
+  done_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists followups_open on followups (phone, due_on) where done_at is null;
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -116,6 +130,26 @@ create table if not exists sessions (
 export function pricedEarly(session: Session, reply: Reply): boolean {
   return !session.assessed && /\bRs ?[\d,]{4,}/.test(reply.text);
 }
+
+export type NewFollowUp = {
+  phone: string;
+  owner?: string;
+  customer_id?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  product: string;
+  what: string;
+  due_on: string;
+};
+export type OpenFollowUp = {
+  id: number;
+  phone?: string;
+  owner?: string | null;
+  what: string;
+  due_on: string;
+  customer_name: string | null;
+  product: string;
+};
 
 /** What DB needs from a database: PGlite on the laptop and in tests, Postgres on the server. */
 type Queryable = {
@@ -258,6 +292,71 @@ export class DB {
         const first = name.split(" ")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         return new RegExp(`(^|[^\\p{L}\\p{M}])${first}($|[^\\p{L}\\p{M}])`, "iu").test(said);
       });
+  }
+
+  /** Saved customers whose name is in these words, with their number: one match opens their card,
+   *  more than one is asked about, by the last digits of each number. */
+  async customersNamed(said: string): Promise<(SavedCustomer & { phone: string })[]> {
+    const names = await this.namesIn(said);
+    if (!names.length) return [];
+    const result = await this.pg.query<SavedCustomer & { phone: string }>(
+      `select id, phone, name, card, history, purchases from customers where name = any($1) order by updated_at desc limit 5`,
+      [names],
+    );
+    return result.rows;
+  }
+
+  /** The check-backs after a sale, each against the associate who sold it. A turn that is retried
+   *  raises the same ones again, so one already open for the same day is not raised twice. */
+  async addFollowUps(rows: NewFollowUp[]): Promise<void> {
+    for (const row of rows)
+      await this.pg.query(
+        `insert into followups (phone, owner, customer_id, customer_name, customer_phone, product, what, due_on)
+         select $1, $2, $3, $4, $5, $6, $7, $8
+         where not exists (
+           select 1 from followups where phone = $1 and what = $7 and due_on = $8 and done_at is null
+         )`,
+        [
+          row.phone,
+          row.owner ?? null,
+          row.customer_id ?? null,
+          row.customer_name ?? null,
+          row.customer_phone ?? null,
+          row.product,
+          row.what,
+          row.due_on,
+        ],
+      );
+  }
+
+  /** Open follow-ups: an associate's due by a day, or everything open for one customer. */
+  async followUps(filter: {
+    phone?: string;
+    dueBy?: string;
+    customer_id?: string;
+    limit?: number;
+  }): Promise<OpenFollowUp[]> {
+    const result = await this.pg.query<OpenFollowUp>(
+      `select id, phone, owner, what, due_on, customer_name, product from followups
+       where done_at is null
+         and ($1::text is null or phone = $1)
+         and ($2::text is null or due_on <= $2)
+         and ($3::text is null or customer_id = $3)
+       order by due_on, id limit $4`,
+      [filter.phone ?? null, filter.dueBy ?? null, filter.customer_id ?? null, filter.limit ?? 10],
+    );
+    return result.rows;
+  }
+
+  /** Done, by the associate it belongs to: a tap from anyone else's phone changes nothing. The
+   *  manager's portal passes no phone, and may close any of them. */
+  async doneFollowUp(id: number, phone: string | null): Promise<OpenFollowUp | null> {
+    const result = await this.pg.query<OpenFollowUp>(
+      `update followups set done_at = now() where id = $1 and ($2::text is null or phone = $2) and done_at is null
+       returning id, phone, owner, what, due_on, customer_name, product`,
+      [id, phone],
+    );
+    return result.rows[0] ?? null;
   }
 
   async send(phone: string, reply: Reply): Promise<void> {

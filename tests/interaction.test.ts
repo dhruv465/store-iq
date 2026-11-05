@@ -85,6 +85,6 @@ test("the score is the judges' seven steps, not our nine stages", () => {
   session.card_confirmed = true;
   session.demonstrated = true;
   session.selection = { sku: "TCL-55C6KS", accessories: [], charges: ["TV-DELIVERY"] };
-  session.consent = true;
+  session.sold = true;
   assert.equal(score(session).points, 14);
 });

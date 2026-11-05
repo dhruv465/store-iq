@@ -68,7 +68,7 @@ test("a conversation that goes all the way scores the full 14 and reaches Guide"
   session.card_confirmed = true;
   session.demonstrated = true;
   session.selection = { sku: "TCL-55C6KS", accessories: [], charges: ["TV-DELIVERY"] };
-  session.consent = true;
+  session.sold = true;
   assert.equal(score(session).points, MAX_SCORE);
   assert.ok(score(session).points >= GUIDE);
 });

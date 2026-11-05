@@ -88,7 +88,7 @@ test("free-text card values pass through rather than being mistranslated", async
 
 test("the review's advice is spoken in the associate's language too", () => {
   const english =
-    /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|With consent/;
+    /When the customer is half right|Ask about the home|Turn one spec|Point at one difference|Give the full cost|Tap Sold/;
   assert.match(reviewReply(Object.assign(filled("en"), { steps_done: [] })).text, english);
   for (const lang of ["hi", "mr"] as const) {
     const session = filled(lang);
