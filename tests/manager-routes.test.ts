@@ -74,6 +74,7 @@ async function harness(options: { reachable?: string[] } = {}): Promise<{
     doneFollowUp: async (id: number, phone: string | null) => (id === 7 && phone === null ? { id: 7 } : null),
     logBroadcast: async (row: SentBroadcast): Promise<void> => void history.push(row),
     broadcasts: async (kind: string) => history.filter((row) => row.kind === kind),
+    spendTotals: async () => ({ today: 0.0123, total: 0.5, since: "2026-11-03", kinds: { model: 0.5 } }),
     saveSetting: async (key: string, value: unknown): Promise<void> => void settings.set(key, value),
   } as unknown as DB;
   process.env.ADMIN_PASSWORD = PASSWORD;

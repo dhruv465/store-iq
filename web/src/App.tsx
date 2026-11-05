@@ -136,17 +136,27 @@ function TodayOverview({ floor }: { floor: Floor }) {
           hint={quiet ? "no customers yet" : "everyone has served"}
         />
         <Stat
-          label="Model cost"
-          value={floor.spend === undefined ? "—" : `$${floor.spend.toFixed(2)}`}
+          label="Model cost today"
+          value={floor.spend ? usd(floor.spend.today) : "—"}
           hint={
-            floor.spend !== undefined && total > 0
-              ? `$${(floor.spend / total).toFixed(4)} a customer`
-              : "since the server started"
+            floor.spend
+              ? `${usd(floor.spend.total)} in all${floor.spend.since ? ` since ${shortDay(floor.spend.since)}` : ""}` +
+                (total > 0 ? ` · ${usd(floor.spend.today / total)} a customer` : "")
+              : "fal is not set up"
           }
         />
       </div>
     </section>
   );
+}
+
+/** Dollars as fal bills them: a turn costs a fraction of a cent, so small amounts keep four places. */
+function usd(amount: number): string {
+  return amount === 0 ? "$0" : amount < 1 ? `$${amount.toFixed(4)}` : `$${amount.toFixed(2)}`;
+}
+
+function shortDay(day: string): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 function ScoreBadge({ score }: { score: number }) {

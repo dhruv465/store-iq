@@ -78,6 +78,10 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   response schema, so the JSON shape is asked for in words and read by `readJson()`.
   **The label photo is on fal too** (`openrouter/router/vision`, same key and model). Gemini answers
   the turn and the photo only when there is no `FAL_KEY`.
+  **What fal bills is kept** in the `spend` table by store day and kind (model, voice, photo, video)
+  through `onSpend()` in `fal.ts`, so the portal's model cost survives a deploy. A text or photo call
+  returns its cost in `usage.cost`; a voice note does not, so its `x-fal-billable-units` header (minutes)
+  is multiplied by fal's pricing API. fal's usage API needs an admin key we do not have.
 - The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and
   `CATALOG_APPLICATION_TOKEN` are set: `searchFrom()` in `brain.ts` asks the model for one search
   and `searchPack()` in `pack.ts` runs it, in FDK `getProducts` parameters, with

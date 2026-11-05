@@ -121,6 +121,13 @@ create table if not exists settings (
   value jsonb not null,
   updated_at timestamptz not null default now()
 );
+create table if not exists spend (
+  day text not null,
+  kind text not null,
+  usd double precision not null default 0,
+  calls integer not null default 0,
+  primary key (day, kind)
+);
 create table if not exists sessions (
   phone text primary key,
   version integer not null default 0,
@@ -135,6 +142,8 @@ create table if not exists sessions (
 export function pricedEarly(session: Session, reply: Reply): boolean {
   return !session.assessed && /\bRs ?[\d,]{4,}/.test(reply.text);
 }
+
+export type SpendTotals = { today: number; total: number; since: string | null; kinds: Record<string, number> };
 
 export type NewFollowUp = {
   phone: string;
@@ -597,6 +606,29 @@ export class DB {
       `select distinct phone from inbox where received_at > now() - interval '24 hours'`,
     );
     return rows.rows.map((row) => row.phone);
+  }
+
+  /** What fal billed, kept by store day and kind, so a deploy does not forget what the model cost. */
+  async addSpend(day: string, kind: string, usd: number): Promise<void> {
+    await this.pg.query(
+      `insert into spend (day, kind, usd, calls) values ($1, $2, $3, 1)
+       on conflict (day, kind) do update set usd = spend.usd + excluded.usd, calls = spend.calls + 1`,
+      [day, kind, usd],
+    );
+  }
+
+  async spendTotals(today: string): Promise<SpendTotals> {
+    const rows = await this.pg.query<{ day: string; kind: string; usd: number }>(
+      `select day, kind, usd from spend order by day`,
+    );
+    const totals: SpendTotals = { today: 0, total: 0, since: rows.rows[0]?.day ?? null, kinds: {} };
+    for (const row of rows.rows) {
+      const usd = Number(row.usd);
+      totals.total += usd;
+      if (row.day === today) totals.today += usd;
+      totals.kinds[row.kind] = (totals.kinds[row.kind] ?? 0) + usd;
+    }
+    return totals;
   }
 
   /** A setting the manager saved from the portal, such as the store's charges list. */

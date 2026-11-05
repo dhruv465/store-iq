@@ -92,8 +92,9 @@ export type Floor = {
   objections?: ObjectionInsight[];
   products?: ProductInsight[];
   feed?: FeedItem[];
-  /** What the model has cost since the server started, in US dollars, and which model it is. */
-  spend?: number;
+  /** What fal has billed, in US dollars: today (store day), in all since `since`, and by kind
+   *  (model, voice, photo, video). Kept in the database, so a deploy does not reset it. */
+  spend?: { today: number; total: number; since: string | null; kinds: Record<string, number> };
   model?: string;
 };
 

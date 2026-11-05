@@ -32,18 +32,31 @@ export type FalConfig = { key: string; model: string };
  *   openrouter/auto                answered `{"ok":<|endoftext|>true}`. Never route through it. */
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 
-/** What this process has spent, since fal returns the cost of every call it bills and nothing
- *  else records it. It resets when the server restarts, which under `npm run dev` is often, so it
- *  answers "what is this costing" rather than "what has it cost". fal's dashboard is the ledger. */
+/** What fal has billed this process, from the cost it returns with every call. The database keeps the
+ *  running total across restarts through `onSpend()`; this copy is for the log and `/health`. */
 let spent = 0;
+export type SpendKind = "model" | "photo" | "voice" | "video";
+let recorder: ((kind: SpendKind, usd: number) => Promise<void>) | null = null;
 
 export function falSpend(): number {
   return spent;
 }
 
-/** For what fal bills without saying so in the answer: a voice and a video are priced per unit. */
-export function addSpend(cost: number): void {
-  spent += cost;
+/** Where every bill is kept beyond this process: the database, set at start. */
+export function onSpend(record: ((kind: SpendKind, usd: number) => Promise<void>) | null): void {
+  recorder = record;
+}
+
+function bill(kind: SpendKind, usd: number): void {
+  if (!(usd > 0)) return;
+  spent += usd;
+  // A ledger that cannot be written must never cost the associate their answer.
+  recorder?.(kind, usd).catch((error) => console.error("Spend not recorded:", error));
+}
+
+/** For what fal bills without saying so in the answer: a video is priced per second of film. */
+export function addSpend(cost: number, kind: SpendKind = "video"): void {
+  bill(kind, cost);
 }
 
 export function falConfig(env = process.env): FalConfig | null {
@@ -114,7 +127,7 @@ export async function falText(
   };
   if (body.error) throw Error(`fal refused: ${body.error}`);
   if (!body.output?.trim()) throw Error("Empty fal response");
-  spent += body.usage?.cost ?? 0;
+  bill("model", body.usage?.cost ?? 0);
   return { text: body.output, cost: body.usage?.cost ?? 0 };
 }
 
@@ -187,7 +200,7 @@ export async function falVision(
     usage?: { cost?: number };
   };
   if (body.error) throw Error(`fal refused the photo: ${body.error}`);
-  spent += body.usage?.cost ?? 0;
+  bill("photo", body.usage?.cost ?? 0);
   return (body.output ?? "").trim();
 }
 
@@ -228,8 +241,31 @@ export async function falTranscribe(
     error?: string;
   };
   if (body.error) throw Error(`fal refused the audio: ${body.error}`);
+  // fal bills a voice note in minutes without saying the cost: the units come in a header, the price
+  // from fal's own pricing list.
+  const units = Number(response.headers.get("x-fal-billable-units"));
+  if (units > 0) bill("voice", units * (await voicePrice(config, request)));
   if (!body.text?.trim()) throw Error(NOTHING_HEARD);
   return body.text.trim().slice(0, limit);
+}
+
+let perMinute: number | null = null;
+/** fal's price per billed unit of speech-to-text, asked once a process; 0 (and asked again next time)
+ *  when the pricing list does not answer, so a voice note is never held up by it. */
+async function voicePrice(config: FalConfig, request: typeof fetch): Promise<number> {
+  if (perMinute !== null) return perMinute;
+  try {
+    const response = await request(
+      "https://api.fal.ai/v1/models/pricing?endpoint_id=fal-ai/elevenlabs/speech-to-text",
+      { headers: { authorization: `Key ${config.key}` }, signal: AbortSignal.timeout(5000) },
+    );
+    const body = (await response.json()) as { prices?: { unit_price?: number }[] };
+    const price = body.prices?.[0]?.unit_price;
+    if (typeof price === "number" && price >= 0) return (perMinute = price);
+  } catch (error) {
+    console.error("fal pricing not read:", error instanceof Error ? error.message : error);
+  }
+  return 0;
 }
 
 /** JSON out of a model that was only asked for it in words.

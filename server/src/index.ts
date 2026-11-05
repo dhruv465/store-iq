@@ -2,12 +2,12 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./webhook.js";
 import { openDatabase, openPostgres, pricedEarly, storeKind } from "./db.js";
 import { startingPack } from "./pack.js";
-import { falConfig } from "./fal.js";
+import { falConfig, onSpend } from "./fal.js";
 import { startWorker } from "./worker.js";
 import { managerRoutes } from "./manager.js";
 import { assertModelAvailable, decide } from "./brain.js";
 import type { Event } from "./types.js";
-import { setAfterSalesData, type File as AfterSales } from "./aftersales.js";
+import { setAfterSalesData, storeDay, type File as AfterSales } from "./aftersales.js";
 
 const port = Number(process.env.PORT || 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error("PORT must be 1-65535");
@@ -21,6 +21,8 @@ try {
   // The store's own charges, uploaded from the portal, replace the sample file's.
   const charges = await db.setting<AfterSales>("aftersales");
   if (charges) setAfterSalesData(charges);
+  // Every bill fal returns is kept, so the manager's model cost survives a deploy.
+  onSpend((kind, usd) => db.addSpend(storeDay(), kind, usd));
   const whatsapp = !!(
     process.env.WHATSAPP_ACCESS_TOKEN &&
     process.env.WHATSAPP_GRAPH_VERSION &&

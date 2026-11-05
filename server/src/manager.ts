@@ -16,7 +16,7 @@ import {
   type ProductInsight,
   type Rostered,
 } from "./extras.js";
-import { falConfig, falSpend } from "./fal.js";
+import { falConfig } from "./fal.js";
 import { GUIDE, MAX_SCORE } from "./steps.js";
 import { afterSalesData, chargesCsv, isSample, readChargesCsv, setAfterSalesData, storeDay } from "./aftersales.js";
 import { loadPack, type Pack } from "./pack.js";
@@ -199,7 +199,7 @@ export function managerRoutes(app: Hono, db: DB, pack?: Pack, request: typeof fe
       guide: GUIDE,
       from,
 
-      spend: Number(falSpend().toFixed(6)),
+      spend: await db.spendTotals(storeDay()),
       model: catalogModel(),
       objections: objectionInsights(sessions, packData),
       products: productInsights(sessions, packData),

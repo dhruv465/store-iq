@@ -1,6 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { falConfig, falText, falTranscribe, falVision, readJson, shapeInstruction } from "../server/src/fal.js";
+import {
+  falConfig,
+  falText,
+  falTranscribe,
+  falVision,
+  onSpend,
+  readJson,
+  shapeInstruction,
+} from "../server/src/fal.js";
+import { openDatabase } from "../server/src/db.js";
 import { decide } from "../server/src/brain.js";
 import { loadPack } from "../server/src/pack.js";
 import { newSession, type Event } from "../server/src/types.js";
@@ -186,4 +195,50 @@ test("a quick answer never sends the second request, and a hard failure is not r
   await assert.rejects(falText({ key: "k", model: "m" }, "s", "u", refused, 30));
   await new Promise((resolve) => setTimeout(resolve, 60));
   assert.equal(calls, 1);
+});
+
+test("every bill fal sends is kept by kind, a voice note priced from fal's own list", async () => {
+  const config = falConfig({ FAL_KEY: "k" })!;
+  const billed: [string, number][] = [];
+  onSpend(async (kind, usd) => void billed.push([kind, usd]));
+  try {
+    await falText(config, "system", "user", spy("hello").fetch);
+    const stub = (async (url: string | URL) => {
+      const at = String(url);
+      if (at.includes("upload/initiate"))
+        return Response.json({ upload_url: "https://up.example/x", file_url: "https://files.example/x" });
+      if (at.startsWith("https://up.example")) return new Response("", { status: 200 });
+      if (at.includes("models/pricing"))
+        return Response.json({ prices: [{ endpoint_id: "fal-ai/elevenlabs/speech-to-text", unit_price: 0.03 }] });
+      return Response.json({ text: "fridge for a family of four" }, { headers: { "x-fal-billable-units": "2" } });
+    }) as unknown as typeof fetch;
+    assert.equal(
+      await falTranscribe(config, { bytes: new Uint8Array([1]), mimeType: "audio/ogg" }, stub),
+      "fridge for a family of four",
+    );
+    assert.deepEqual(billed, [
+      ["model", 0.000071],
+      ["voice", 0.06],
+    ]);
+  } finally {
+    onSpend(null);
+  }
+});
+
+test("the ledger keeps today's cost and the running total across days", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    assert.deepEqual(await db.spendTotals("2026-11-06"), { today: 0, total: 0, since: null, kinds: {} });
+    await db.addSpend("2026-11-05", "model", 0.01);
+    await db.addSpend("2026-11-06", "model", 0.002);
+    await db.addSpend("2026-11-06", "model", 0.003);
+    await db.addSpend("2026-11-06", "voice", 0.03);
+    const totals = await db.spendTotals("2026-11-06");
+    assert.equal(totals.since, "2026-11-05");
+    assert.equal(Number(totals.today.toFixed(6)), 0.035);
+    assert.equal(Number(totals.total.toFixed(6)), 0.045);
+    assert.equal(Number(totals.kinds.model!.toFixed(6)), 0.015);
+  } finally {
+    await db.close();
+  }
 });
