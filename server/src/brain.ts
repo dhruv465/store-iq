@@ -83,7 +83,7 @@ How to be:
 - When the customer believes something that is partly wrong ("a bigger screen always uses much more electricity"), give one line starting "Say:" that agrees with what is true and corrects the rest, kindly, from FACTS, and nothing else: do not list the options again. Quote a figure only for what FACTS says it measures: a speaker's watts are sound output, not power use, and when FACTS has no energy figure, say to compare the energy labels on the models.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. When CUSTOMER NUMBER says what they bought before, that is their purchase history: answer any question about what they bought, when, or for how much from it, however it is asked, and never say you have no access to past purchases. For a problem with something they bought, put what is wrong in "problem": the code raises it with service and tells the associate, so never say you have raised or logged it yourself. When they only say there is a problem, ask what is wrong with it. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
+- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. When CUSTOMER NUMBER says what they bought before, that is their purchase history: answer any question about what they bought, when, or for how much from it, however it is asked, and never say you have no access to past purchases. For a problem with something they bought, name it and tell the associate to send what is wrong with it, so it is logged for service. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
@@ -125,8 +125,6 @@ export type Decision = {
    *  so the reply carries the button that puts the question to a human. */
   unknown?: boolean;
   objection?: string | null;
-  /** A fault with something this customer already bought, which the code raises with service. */
-  problem?: string | null;
   /** The contest scores a reason in each answer. Told to explain itself, the model narrated the
    *  conversation, so a reason is now one of the customer's own needs (`because`, a card entry)
    *  followed by what it means (`reason`), and a need the card does not hold shows no reason. */
@@ -209,12 +207,6 @@ const schema = {
       type: "STRING",
       nullable: true,
       description: "a doubt or wrong belief the customer raised this turn, in plain words, for the manager's report",
-    },
-    problem: {
-      type: "STRING",
-      nullable: true,
-      description:
-        'what is wrong with something this customer already bought, in the associate\'s words, when this message says what it is ("no sound since yesterday"). null when nothing is wrong, or when it only says there is a problem without what',
     },
     because: {
       type: "STRING",
@@ -1567,11 +1559,9 @@ async function answer(
     await store.logQuestion({ reference, phone: session.phone, area, owner, question });
     return reply;
   }
-  // What is wrong with something this customer bought: said in the line after "Problem with it", or in
-  // the model's "problem" when the associate just says it ("her TV remote is not working"), which was
-  // answered "I have raised this with our service team" with nothing raised.
-  const raise = async (problem: string): Promise<string[]> => {
-    if (!store) return [];
+  // What is wrong with something this customer bought, said in the line after "Problem with it".
+  if (store && session.reporting_problem && event.text && !event.action) {
+    delete session.reporting_problem;
     const reference = newReference();
     const last = session.customer?.bought?.at(-1);
     const who = session.customer?.name ?? t(session.language, "as.thecustomer");
@@ -1582,7 +1572,7 @@ async function answer(
       phone: session.phone,
       area: "after-sales service",
       owner,
-      question: `${who}, ${last?.name ?? ""}: ${problem}`.slice(0, 400),
+      question: `${who}, ${last?.name ?? ""}: ${event.text}`.slice(0, 400),
     });
     await store.addFollowUps?.([
       {
@@ -1596,15 +1586,17 @@ async function answer(
             }
           : {}),
         product: last?.name ?? "",
-        what: t(session.language, "fu.service", { who, problem: problem.slice(0, 80) }),
+        what: t(session.language, "fu.service", { who, problem: event.text.slice(0, 80) }),
         due_on: storeDay(1),
       },
     ]);
-    return [t(session.language, "prob.raised", { owner, reference }), t(session.language, "prob.say")];
-  };
-  if (store && session.reporting_problem && event.text && !event.action) {
-    delete session.reporting_problem;
-    return remember({ text: [...(await raise(event.text)), `↳ ${t(session.language, "prob.why")}`].join("\n") });
+    return remember({
+      text: [
+        t(session.language, "prob.raised", { owner, reference }),
+        t(session.language, "prob.say"),
+        `↳ ${t(session.language, "prob.why")}`,
+      ].join("\n"),
+    });
   }
 
   // The associate's own check-backs: what is due, and a tap to mark one done.
@@ -2178,17 +2170,6 @@ async function answer(
         .trim(),
     };
   }
-  const problem = typeof decision.problem === "string" ? decision.problem.trim() : "";
-  if (store && problem && session.customer?.bought?.length) reply = { text: (await raise(problem)).join("\n") };
-  // Found by number, a customer who bought here gets the card's own taps, "Problem with it" first.
-  else if (loaded && session.customer?.bought?.length && !reply.buttons?.length)
-    reply = {
-      ...reply,
-      buttons: [
-        { id: "cust:problem", title: t(session.language, "btn.problem") },
-        { id: "cust:history", title: t(session.language, "btn.history") },
-      ],
-    };
   const nothingSaid = !reply.text.trim() || !decision.lines?.some((line) => typeof line === "string" && line.trim());
   return remember(
     withoutUnavailableCharges(
