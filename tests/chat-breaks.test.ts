@@ -76,6 +76,7 @@ test("a budget said in thousands is the figure it means", () => {
 test("money is grouped the Indian way whatever the model wrote", () => {
   assert.equal(moneySafe("Surface Rs 215,990 hai"), "Surface Rs 2,15,990 hai");
   assert.equal(moneySafe("Rs 118,999."), "Rs 1,18,999.");
+  assert.equal(moneySafe("Lenovo, ₹11,999 में"), "Lenovo, Rs 11,999 में");
   assert.equal(moneySafe("saves Rs 3899, and more"), "saves Rs 3,899, and more");
   assert.equal(moneySafe("Rs 54,990 or Rs 26,315.46"), "Rs 54,990 or Rs 26,315.46");
 });

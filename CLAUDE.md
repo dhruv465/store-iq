@@ -72,6 +72,17 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
 5. **The 24-hour window.** Replies go only to numbers that wrote to us inside Meta's window. Never
    remove `withinWindow()`.
 
+## The developer brief, followed to the letter
+
+`~/Downloads/reliance-digital-store-iq-developer-brief.pdf` is what the judges score. Decided by the user 6 Nov
+2026: every reply keeps to **three lines and three buttons** (`floor()`; only `Reply.long` handovers written in
+code run longer). An assess turn opens with **`I heard:`** (the card, read back so it can be corrected) above the
+next question. Options are **one line each**: name, price, one reason and `Show:` what to demonstrate. A label
+photo is **translated** for this customer, not answered with a list. A TV on the wall is billed **wall
+installation** and the brand's mount when the catalogue has one (`onTheWall()`, `mountOnWall()`). The shift
+brief carries a **practice question** from `data/practice.json` and today's approved video. The brief's own
+section 5 conversation is the test walk.
+
 ## Working here
 
 ```bash
@@ -121,7 +132,7 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
   rates and installation charges for the associate to tell the customer, and the distance tapped or typed
   ("7 km") picks the delivery line from the charges' own names (`deliveryFor()`). Sold asks it too if it is
   still open, and the follow-ups wait for the answer: one who takes it home gets no "did it arrive?".
-  An open customer card survives the model reading "customer aayi hai" or "the old customer is back" as a new arrival: a card loaded by the number in that message, or open with no new number given, stays until the model says someone new is there, and the customer's own name and number given after the card was offered never start a new visit. Their purchases are in the prompt, so any phrasing of "what did she buy" is answered, and the guard accepts their name, price and date. The model's home-card offer goes out only with a customer in play, and a voice-note hello ("Hello, good morning.") is the written greeting with the brief. Sold also asks for the home card when none is open (only the number, when the name was already said), so the purchase is saved. Sold then hands over, in up to six lines (`Reply.long`): the delivery questions (address and floor, day and who receives it) and the bill with every charge and the extras, so the associate does not have to come back for them. An AC's pipe run ("outdoor unit
+  An open customer card survives the model reading "customer aayi hai" or "the old customer is back" as a new arrival: a card loaded by the number in that message, or open with no new number given, stays until the model says someone new is there, and the customer's own name and number given after the card was offered never start a new visit. Their purchases are in the prompt, so any phrasing of "what did she buy" is answered, and the guard accepts their name, price and date. The model's home-card offer goes out only with a customer in play, and a voice-note hello ("Hello, good morning.") is the written greeting with the brief. Sold also asks for the home card when none is open (only the number, when the name was already said), so the purchase is saved. Sold keeps to the brief's three lines (decided by the user 6 Nov 2026, "follow the entire dev brief"): the sale, the site question, and the follow-ups with their owner; once the site is settled, the install job with its owner and one line asking address, day and who receives it. "Customer agrees. Prepare the summary." (the brief's own words) closes it and answers with the summary to send and the install job. An AC's pipe run ("outdoor unit
   5 m away") is multiplied out in code (`priceRun()`), because the guard refuses a sum the model makes.
 - Every user-facing string goes through `server/src/i18n.ts` in `en`, `hi` and `mr`.
 - **Never read a secret.** Do not print, `cat`, `sed`, `grep` the value of, or interpolate anything

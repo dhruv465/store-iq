@@ -21,7 +21,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-COPY data/pack.json ./data/pack.json
+COPY data/pack.json data/aftersales.json data/practice.json ./data/
 COPY --from=portal /app/web/dist ./web/dist
 # The container keeps nothing: DATABASE_URL points at Postgres, which outlives each deploy. memory://
 # is only the fallback for a local run of the image, and on Render the server refuses it.

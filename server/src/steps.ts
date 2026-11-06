@@ -218,7 +218,7 @@ const FOLLOW_WORDS = /^\s*(summary|follow.?through|prepare the summary|close it|
  *  sheet in front of them, with the customer standing right there. A short message asking for the
  *  breakdown, the summary or the full cost is that. */
 const BREAKDOWN_WORDS =
-  /\b(breakdown|break-up|breakup|summary|full cost|total cost|cost sheet|itemi[sz]ed|charges sheet)\b/i;
+  /\b(breakdown|break-up|breakup|summary|full cost|total cost|complete cost|cost sheet|itemi[sz]ed|charges sheet)\b/i;
 
 /** The loose words only count once something is picked: "total cost of the LG fridge?" before a
  *  pick is a question about a product, not a request for the breakdown. */
@@ -226,7 +226,7 @@ export function wantsFollowThrough(text: string | undefined, action: string | un
   return (
     action === "follow_through" ||
     (!!text &&
-      (FOLLOW_WORDS.test(text) || (picked && BREAKDOWN_WORDS.test(text) && text.trim().split(/\s+/).length <= 8)))
+      (FOLLOW_WORDS.test(text) || (picked && BREAKDOWN_WORDS.test(text) && text.trim().split(/\s+/).length <= 12)))
   );
 }
 
@@ -331,16 +331,18 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
   const product = pack.products.find((candidate) => candidate.sku === selection.sku)!;
   const total = itemised.total.toLocaleString("en-IN");
   const needs = siteNeeds(pack, selection);
+  // Wall installation billed with no bracket from the catalogue: said, not left for the customer to find.
+  const onWall = selection.charges.some((id) => /wall/i.test(pack.charges.find((c) => c.id === id)?.title ?? ""));
+  const bracket = selection.accessories.some((id) =>
+    /mount|bracket/i.test((pack.accessories ?? []).find((a) => a.id === id)?.title ?? ""),
+  );
+  const body = [...itemised.lines, ...(onWall && !bracket ? [t(lang, "bd.nomount")] : [])].join("; ");
 
   // A heavy product goes home in a van or in their arms: asked before the total, since it changes it.
   const delivery = deliveryCharges(pack, product);
   if (!session.sold && delivery.length && !selection.delivery)
     return {
-      text: [
-        t(lang, "bd.total", { body: itemised.lines.join("; "), total }),
-        t(lang, "dl.ask"),
-        `↳ ${t(lang, "why.deliver")}`,
-      ].join("\n"),
+      text: [t(lang, "bd.total", { body, total }), t(lang, "dl.ask"), `↳ ${t(lang, "why.deliver")}`].join("\n"),
       buttons: [
         { id: "deliver:yes", title: t(lang, "btn.deliver") },
         { id: "deliver:carry", title: t(lang, "btn.carry") },
@@ -363,13 +365,7 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
     const money = [saving, ...closeLines(pack, product, itemised.total, lang, gateOpen)].filter(Boolean).join(" ");
     const extras = extrasLine(pack, product, selection.charges, lang);
     return {
-      text: [
-        t(lang, "bd.total", { body: itemised.lines.join("; "), total }),
-        money,
-        extras,
-      ]
-        .filter((line) => line && line !== "↳ ")
-        .join("\n"),
+      text: [t(lang, "bd.total", { body, total }), money, extras].filter((line) => line && line !== "↳ ").join("\n"),
       buttons: [
         { id: "sold", title: t(lang, "btn.sold") },
         // A care plan or mount offered with the pick, still not on the bill, stays a tap away.
@@ -385,7 +381,9 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
   }
 
   const plan = followUpPlan(product, session.customer?.name, lang, selection.delivery === "carry");
-  const planLine = `↳ ${t(lang, "fu.set", { body: plan.map((step) => step.short).join(" · ") })}`;
+  // Brief 4H: a task with an owner. The owner is the associate who sold it.
+  const owner = firstName(associate) || associate;
+  const planLine = `↳ ${t(lang, "fu.set", { body: plan.map((step) => step.short).join(" · "), owner })}`;
   const said = cheer
     ? t(lang, "sold.cheer", {
         who: firstName(associate),
@@ -395,15 +393,6 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
       })
     : t(lang, "sold.recap", { name: shortName(product), total });
   // No card yet: the sale is the moment to ask again, or what they bought is lost with the chat.
-  // What the associate asks and tells at the counter once it is sold, so they do not have to come back
-  // for it: where and when it goes, and every charge on the bill and off it.
-  const extras = extrasLine(pack, product, selection.charges, lang);
-  const handover = [
-    ...(selection.delivery === "deliver" ? [t(lang, "sold.dl1"), t(lang, "sold.dl2")] : []),
-    t(lang, "sold.bill", {
-      body: [t(lang, "bd.total", { body: itemised.lines.join("; "), total }), extras].filter(Boolean).join(" "),
-    }),
-  ];
   const askCard = session.named ? t(lang, "cc.asknumber", { name: session.named }) : t(lang, "sold.askcard");
   const first = cheer && !session.customer ? `${said} ${askCard}` : said;
   // Sold before take-or-deliver was answered: asked now, and the follow-ups wait for it.
@@ -420,8 +409,9 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
   // is asked now, out loud, while the customer is still at the counter.
   if (needs.length && !session.site_checked)
     return {
-      text: [first, t(lang, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }), ...handover, planLine].join("\n"),
-      long: true,
+      // The brief's three lines: the sale, the site, and the tasks with their owner. Where it goes and
+      // when is asked once the site is settled; the bill was on screen at the pick.
+      text: [first, t(lang, "ft.sitecheck", { body: needs.slice(0, 3).join(", ") }), planLine].join("\n"),
       buttons: [
         { id: "site:ok", title: t(lang, "btn.sitefine") },
         { id: "site:problem", title: t(lang, "btn.siteproblem") },
@@ -432,12 +422,10 @@ export function followThrough(session: Session, pack: Pack, associate: string, c
     text: [
       first,
       needs.length
-        ? t(lang, "sold.site", { body: needs.slice(0, 3).join(", "), owner: associate })
-        : t(lang, "ft.task", { owner: associate }),
-      ...handover,
-      planLine,
+        ? t(lang, "sold.site", { body: needs.slice(0, 3).join(", "), owner })
+        : t(lang, "ft.task", { owner }),
+      selection.delivery === "deliver" ? t(lang, "sold.dl") : planLine,
     ].join("\n"),
-    long: true,
     buttons: [
       ...(applicableCharges(pack, product).length ? [{ id: "charges", title: t(lang, "btn.charges") }] : []),
       { id: "summary:customer", title: t(lang, "btn.summary") },
@@ -469,6 +457,10 @@ export function customerSummary(session: Session, pack: Pack, associate: string)
       t(lang, "ft.send", {
         body: `${itemised.lines.join("; ")}. Total Rs ${total}.${needs.length ? ` ${t(lang, "sum.site", { body: needs.slice(0, 3).join(", ") })}` : ""}`,
       }),
+      // Brief 4H: the installation job, with its owner and the site it needs.
+      ...(needs.length
+        ? [t(lang, "sold.site", { body: needs.slice(0, 3).join(", "), owner: firstName(associate) || associate })]
+        : []),
       `↳ ${t(lang, "sum.forward")}`,
     ].join("\n"),
   };

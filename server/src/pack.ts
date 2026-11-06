@@ -256,7 +256,10 @@ export async function liveBrief(base: Pack, request: typeof fetch = fetch): Prom
         "",
     );
   const stocked = pack.products.filter((product) => product.stock_units > 0);
+  // Brief 4A: one question to practise, a different one each day, from the store's own list.
+  const practice: Record<string, unknown>[] = JSON.parse(await readFile(resolve("data/practice.json"), "utf8"));
   const brief = {
+    question: practice[Math.floor(Date.parse(day) / 86_400_000) % practice.length],
     stock_changes: stocked
       .slice(0, 3)
       .map((product) => `${short(product)} Rs ${product.price_rupees.toLocaleString("en-IN")}`),

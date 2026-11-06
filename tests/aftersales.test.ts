@@ -38,10 +38,7 @@ const tap = (action: string): Event => ({
 test("a large catalogue screen without a type label still gets television after-sales", () => {
   const television = { ...pack.products[0]!, name: "Sony 139 cm", size_inch: 55, categories: ["Electronics"] };
   assert.equal(categoryOf(television)?.kind, "television");
-  assert.equal(
-    categoryOf({ ...television, name: "Sony 32 inch monitor", size_inch: 32 })?.kind,
-    undefined,
-  );
+  assert.equal(categoryOf({ ...television, name: "Sony 32 inch monitor", size_inch: 32 })?.kind, undefined);
 });
 
 test("resQ's price band is read off the plan's own name", () => {
@@ -375,11 +372,6 @@ test("Sold before take-or-deliver asks it, asks for the home card, and the follo
 
       const next = await decide(tap(answer), session, live, manager({}).fetch, db);
       assert.match(next.text, /Before I book the installer/, "then the site, as before");
-      // Asked and told at the counter, so the associate does not come back for it.
-      const plain = next.text.replace(/\*/g, "");
-      assert.equal(/Which address, and which floor/.test(plain), answer !== "deliver:carry");
-      assert.equal(/who will be home to receive it/.test(plain), answer !== "deliver:carry");
-      assert.match(plain, /• Breakdown: .*Total Rs/);
       const set = await db.followUps({ phone: ASSOCIATE });
       assert.equal(set.length, expected, answer);
       assert.equal(
@@ -387,7 +379,13 @@ test("Sold before take-or-deliver asks it, asks for the home card, and the follo
         answer !== "deliver:carry",
         "no delivery call for a carry",
       );
-      await decide(tap("site:ok"), session, live, manager({}).fetch, db);
+      const settled = await decide(tap("site:ok"), session, live, manager({}).fetch, db);
+      // Where and when it goes is asked once the site is settled, inside the brief's three lines.
+      assert.equal(
+        /Which address and floor, which day/.test(settled.text.replace(/\*/g, "")),
+        answer !== "deliver:carry",
+      );
+      assert.ok(settled.text.split("\n").filter((line) => line.trim()).length <= 3);
       assert.equal((await db.followUps({ phone: ASSOCIATE })).length, expected, "set once, not on every tap");
     } finally {
       await db.close();

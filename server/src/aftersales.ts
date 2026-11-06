@@ -112,6 +112,16 @@ export function setDelivery(
   selection.delivery = charge ? "deliver" : "carry";
 }
 
+/** Brief 4F: a television going on the wall is installed on the wall, so the table-top default gives
+ *  way to the category's wall installation, as far as this pack prices it. */
+export function onTheWall(pack: Pack, product: Product, charges: string[]): string[] {
+  const own = categoryOf(product)?.charges ?? [];
+  const wall = own.find((charge) => /wall/i.test(charge.title) && pack.charges.some((other) => other.id === charge.id));
+  if (!wall) return charges;
+  const table = new Set(own.filter((charge) => /table/i.test(charge.title)).map((charge) => charge.id));
+  return [...charges.filter((id) => !table.has(id) && id !== wall.id), wall.id];
+}
+
 /** The charges every sale of this kind carries, as far as this pack prices them. */
 export function defaultCharges(pack: Pack, product: Product): string[] {
   const category = categoryOf(product);

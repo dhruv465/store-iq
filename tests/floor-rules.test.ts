@@ -126,3 +126,51 @@ test("a doubt the customer raised reaches the manager's report, in the model's w
   assert.deepEqual(session.objections, ["too costly"]);
   assert.ok(session.steps_done.includes("validate"), "answering a doubt is the Validate step");
 });
+
+test("a question after the customer's answer reads back what was heard first, in place of the reason", async () => {
+  const session = newSession("919820000077");
+  const reply = await decide(
+    { id: "h1", phone: session.phone, modality: "text", text: "customer wants a monitor for office work" },
+    session,
+    pack,
+    manager({
+      card: { facts: [{ name: "main use", value: "office work" }] },
+      lines: ['Ask: "How big a screen do they want?"'],
+      because: "main use",
+      reason: "office work needs a screen size",
+    }).fetch,
+  );
+  assert.match(reply.text, /^\*I heard:\* main use: office work\.[\s\S]*How big a screen/);
+  assert.doesNotMatch(reply.text, /↳/);
+});
+
+test("three questions asked and nothing shown yet tells the model to show options, not ask a fourth", async () => {
+  const session = newSession("919820000078");
+  session.history = ["What will they use it for?", "How big a screen?", "On a table or the wall?"].flatMap((q) => [
+    { who: "storeiq" as const, text: `Ask: "${q}"` },
+    { who: "associate" as const, text: "ok" },
+  ]);
+  const model = manager({ lines: ['Ask: "Gaming or general use?"'] });
+  await decide({ id: "h2", phone: session.phone, modality: "text", text: "gaming" }, session, pack, model.fetch);
+  assert.match(model.prompts.join(" "), /has answered enough/);
+});
+
+test("options put only on buttons, under a bare heading, are asked for again with a line each", async () => {
+  const session = newSession("919820000079");
+  const select = [
+    { id: "select:SON-K55S30", title: "Sony 55" },
+    { id: "select:TCL-55C6KS", title: "TCL 55" },
+  ];
+  const model = manager([
+    { lines: ["Here are some good options:"], buttons: select },
+    { lines: ["Sony 55 inch, Rs 57,990, for sports.", "TCL 55 inch, Rs 54,990, for movies."], buttons: select },
+  ]);
+  const reply = await decide(
+    { id: "o1", phone: session.phone, modality: "text", text: "show options" },
+    session,
+    pack,
+    model.fetch,
+  );
+  assert.equal(model.calls, 2);
+  assert.match(reply.text, /TCL 55 inch/);
+});

@@ -764,3 +764,59 @@ test("a pick is pitched above its breakdown, and a pitch line with a made-up fig
   assert.match(reply.text, /Dolby Atmos[\s\S]*70,990/);
   assert.doesNotMatch(reply.text, /15 years/);
 });
+
+test("a three-line pitch never pushes the price and total, or the delivery question, off the pick", async () => {
+  const q = `tv pick ${++unique}`;
+  const store = shop(
+    () => page([row(72, "Sony Bravia 126 cm 4K TV", 70990)]),
+    {},
+    {
+      lines: ["Fits the hall.", "Dolby Atmos, so movies sound like a theatre.", "4K, so cricket stays sharp."],
+    },
+  );
+  const session = newSession("919820000001");
+  session.search = { q };
+  const reply = await decide(
+    { id: "p3", phone: session.phone, modality: "interactive", action: "select:CODE72" },
+    session,
+    base,
+    store.fetch,
+  );
+  assert.match(reply.text, /Fits the hall[\s\S]*Total Rs 70,990[\s\S]*deliver/);
+  assert.ok(reply.text.split("\n").filter((line) => line.trim()).length <= 3, reply.text);
+});
+
+test("a TV going on the wall is billed wall installation, from the card or from asking the complete cost with wall mounting", async () => {
+  const pick = async (session: ReturnType<typeof newSession>, uid: number) => {
+    session.search = { q: `tv wall ${++unique}` };
+    const store = shop(() => page([row(uid, "Sony Bravia 126 cm 4K TV", 70990)]), {}, { lines: ["Fits the hall."] });
+    const event = {
+      id: `w${uid}`,
+      phone: session.phone,
+      modality: "interactive" as const,
+      action: `select:CODE${uid}`,
+    };
+    return { reply: await decide(event, session, base, store.fetch), store };
+  };
+  const onCard = newSession("919820000002");
+  onCard.card = { facts: { placement: "on the wall" } };
+  const { reply } = await pick(onCard, 73);
+  assert.match(reply.text, /Wall mount installation — Rs 799[\s\S]*Total Rs 71,789/);
+  assert.doesNotMatch(reply.text, /Table-top/);
+  assert.match(reply.text, /wall bracket not in the catalogue, ask the service desk/);
+
+  const asked = newSession("919820000003");
+  const { store } = await pick(asked, 74);
+  const total = await decide(
+    {
+      id: "w2",
+      phone: asked.phone,
+      modality: "text",
+      text: "Show me the complete cost for Model B with wall mounting.",
+    },
+    asked,
+    base,
+    store.fetch,
+  );
+  assert.match(total.text, /Wall mount installation — Rs 799[\s\S]*Total Rs 71,789/);
+});

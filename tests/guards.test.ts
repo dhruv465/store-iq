@@ -69,7 +69,7 @@ test("the reply is capped at three lines and three buttons", () => {
   assert.equal(reply.buttons?.length, 3);
 });
 
-test("a pitch, which puts a product up for sale, reads out up to six lines before its price", () => {
+test("a pitch keeps to three lines and never loses its price", () => {
   const lines = ["fits", "feature one", "feature two", "feature three", 'Ask: "picture it"', "Rs 54,990", "seventh"];
   const reply = floor(
     render({
@@ -81,7 +81,7 @@ test("a pitch, which puts a product up for sale, reads out up to six lines befor
       buttons: [{ id: "select:TCL-55C6KS", title: "TCL 55" }],
     }),
   );
-  assert.equal(reply.text.split("\n").filter((line) => line.trim()).length, 5);
+  assert.equal(reply.text.split("\n").filter((line) => line.trim()).length, 3);
   assert.ok(reply.text.includes("54,990") && !reply.text.includes("seventh"));
 });
 

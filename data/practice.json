@@ -1,0 +1,20 @@
+[
+  {
+    "text": "A customer says a bigger screen always uses much more power. What do you say first?",
+    "options": ["Agree with them", "Compare the labels", "Show a smaller TV"],
+    "answer": "Compare the labels",
+    "reason": "Size is one factor. The energy label on each model is the real figure, so you correct it with facts, not opinion."
+  },
+  {
+    "text": "A customer asks the price before anything else. What do you do?",
+    "options": ["Quote the cheapest", "Ask how they watch", "Offer EMI"],
+    "answer": "Ask how they watch",
+    "reason": "Price before needs is the habit the store visits found in 6 of 6 conversations. One question about their room or use makes the price make sense."
+  },
+  {
+    "text": "The customer watches cricket. Which difference do you demonstrate?",
+    "options": ["Sound modes", "Smooth motion", "Smart apps"],
+    "answer": "Smooth motion",
+    "reason": "A fast ball shows the refresh rate difference in seconds, and it is the difference that matters to them."
+  }
+]

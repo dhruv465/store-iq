@@ -60,7 +60,7 @@ test("a pick shows the associate the whole cost at once, with nothing to agree t
   const breakdown = tap(session, "add:TV-WALL")!;
   assert.match(
     breakdown.text,
-    /^Breakdown: TCL 55 inch C6K QD-Mini LED — Rs 54,990; Wall mount installation — Rs 1,499\. Total Rs 56,489\./,
+    /^Breakdown: TCL 55 inch C6K QD-Mini LED — Rs 54,990; Wall mount installation — Rs 1,499; wall bracket not in the catalogue, ask the service desk\. Total Rs 56,489\./,
   );
   assert.equal(breakdown.buttons?.[0]?.id, "sold");
   assert.ok(
@@ -103,7 +103,11 @@ test("Sold says well done, asks the site question out loud, and sets the follow-
     /^🎉 Sold — well done, Ramesh! TCL 55 inch C6K QD-Mini LED, Rs 56,489, on Vidya Sathe's card\./,
   );
   assert.match(reply.text, /Before I book the installer — .*concrete or brick/);
-  assert.match(reply.text, /Follow-ups set: delivery tomorrow · day 2 installer's call · day 3 working check/);
+  assert.match(
+    reply.text,
+    /Follow-ups set, owner Ramesh: delivery tomorrow · day 2 installer's call · day 3 working check/,
+  );
+  assert.equal(reply.text.split("\n").length, 3, "the brief's three lines");
   assert.deepEqual(
     reply.buttons?.map((button) => button.id),
     ["site:ok", "site:problem", "summary:customer"],
@@ -323,4 +327,22 @@ test("a price quoted before the home is known is recorded against the conversati
   assert.equal(pricedEarly(session, { text: 'Ask: "How far will you sit from the TV?"' }), false);
   session.assessed = true;
   assert.equal(pricedEarly(session, { text: "Total Rs 56,489." }), false, "after the home, a price is the job");
+});
+
+test("the brief's own words, 'Customer agrees. Prepare the summary.', close it and give the summary and the install job", () => {
+  const session = newSession("919820000001");
+  tap(session, "select:TCL-55C6KS");
+  tap(session, "add:TV-WALL");
+  const event: Event = {
+    id: "agree",
+    phone: session.phone,
+    modality: "text",
+    text: "Customer agrees. Prepare the summary.",
+    name: ASSOCIATE,
+  };
+  const reply = deterministic(event, session, pack)!;
+  assert.equal(session.sold, true);
+  assert.match(reply.text, /^Send: ".*Total Rs 56,489\..*concrete or brick/);
+  assert.match(reply.text, /Install job: .* · owner Ramesh/);
+  assert.ok(reply.text.split("\n").length <= 3);
 });

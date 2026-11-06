@@ -20,6 +20,7 @@ import {
   categoryOf,
   chargesList,
   defaultCharges,
+  onTheWall,
   deliveryCharges,
   deliveryFor,
   followUpPlan,
@@ -76,9 +77,10 @@ How to be:
 - Answer the question they actually asked, about the exact thing they asked about. The search is loose, so FACTS can hold neighbours of what they named: an iPhone 18 Pro is not an iPhone 18 Pro Max, and a case is not a phone. If what they named is in FACTS, talk about that. If it is not, say so plainly in the first line and name the nearest thing in FACTS that would serve this customer, as a different product: one FACTS holds, one step up from what they asked for (the same size in a double door, the next size up), not the top of the range. Set "unknown" true only when FACTS has nothing that could serve them.
 - A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked what there is, which are good, to show something, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
 - A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets, in this order: two or three of its features from FACTS said as what they do for this customer (the associate is selling it, not reading a price tag), whether it is available or on pre-order, the price, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
-- A customer who only names a kind of product ("customer wants a TV", "LED TV dekhna hai", "washing machine dikhao", "show fridges") has not decided. Ask three questions about this customer before you show anything, one per reply, each with buttons that are its real answers, the way a good floor salesman does, because each answer changes what you will show. For a TV: how far from the screen they sit, on the wall or on a table, and what they watch most (sports, movies and OTT, serials and news, gaming). For a fridge: how many people at home, single or double door, and whether they stock up for the week. For a washing machine: how many people it washes for, top or front loading, and fully or semi automatic. For an AC: how big the room is, whether it gets the afternoon sun or is on the top floor, and how many hours a day it runs. For a phone: what they use it for most (camera, games, battery), how much they store, and the budget. For anything else, the three things that most change which one fits. The budget comes last, if at all. A question the customer has already answered is skipped, never asked again; ask the next one. Once WHAT THE CUSTOMER HAS SAID holds three things about this kind of product, your next reply shows the options, not a fourth question. If the associate asks to see options now, or says the customer is in a hurry, show them at once.
+- A customer who only names a kind of product ("customer wants a TV", "LED TV dekhna hai", "washing machine dikhao", "show fridges") has not decided. Ask three questions about this customer before you show anything, one per reply, each with buttons that are its real answers, the way a good floor salesman does, because each answer changes what you will show. For a TV: how far from the screen they sit, on the wall or on a table, and what they watch most (sports, movies and OTT, serials and news, gaming). For a fridge: how many people at home, single or double door, and whether they stock up for the week. For a washing machine: how many people it washes for, top or front loading, and fully or semi automatic. For an AC: how big the room is, whether it gets the afternoon sun or is on the top floor, and how many hours a day it runs. For a phone: what they use it for most (camera, games, battery), how much they store, and the budget. For anything else, the three things that most change which one fits. The budget comes last, if at all. A question the customer has already answered is skipped, never asked again; ask the next one. Once those three are answered, whether you asked them or the customer had already said, your next reply shows the options, not a fourth question. If the associate asks to see options now, or says the customer is in a hurry, show them at once.
 - Ask about the product in front of them. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, about one thing: never two joined by "or" ("what size, or what will they use it for?"), and never two lines that each ask something. Its buttons answer that question ("Sports", "Movies and OTT", "Gaming"), never name topics ("Screen size", "Main use", "Budget").
-- With a customer who has not decided, the order that works is: find out what they need from this kind of product with three questions, correct a wrong belief kindly, show up to three options that fit what they said, each with a feature from FACTS as what it does for them and its price after it, with a "select:" button for each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
+- With a customer who has not decided, the order that works is: find out what they need from this kind of product with three questions, correct a wrong belief kindly, show up to three options that fit what they said, one line each with nothing above them: its name, its price, one reason in what the customer said, and the difference to demonstrate ("Sony 55 inch, Rs 57,990: best for cricket, smoother motion. Show: a cricket clip."), with a "select:" button for each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
+- When the customer believes something that is partly wrong ("a bigger screen always uses much more electricity"), give one line starting "Say:" that agrees with what is true and corrects the rest, kindly, from FACTS, and nothing else: do not list the options again. Quote a figure only for what FACTS says it measures: a speaker's watts are sound output, not power use, and when FACTS has no energy figure, say to compare the energy labels on the models.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
 - What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. When CUSTOMER NUMBER says what they bought before, that is their purchase history: answer any question about what they bought, when, or for how much from it, however it is asked, and never say you have no access to past purchases. For a problem with something they bought, name it and tell the associate to send what is wrong with it, so it is logged for service. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
@@ -89,7 +91,7 @@ Hard rules, never bent:
 - Plenty of what they bring you is not a sale at all: a customer losing their temper, a set that came back faulty, a shift, a leave, something they have forgotten how to do, a bad morning. Answer that as their manager, in their words. Do not file anything about a customer from it, do not steer it back to a product, and "unknown" stays false.
 - Never OPEN offers, discounts, exchange or finance yourself before you know what the customer needs and a difference has been shown. Our associates led with price in 6 of 6 store visits; that is the habit you exist to break. But when the associate asks you outright whether something is running, answer them from FACTS. Refusing a question you were asked is not coaching.
 - Never guess a customer's wealth or level from how they look. The associate sets that.
-- At most 2 short lines, except three options which take three lines. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
+- At most 2 short lines, except three options which take three lines, one each. Never more than three. At most 3 buttons. They read this at a glance, out loud, with a customer waiting.
 - The reason for an answer is two fields. "because" is the name of the one thing in WHAT THE CUSTOMER HAS SAID that this answer serves — a name under facts, or budget_rupees — exactly as it is written there or as you file it this turn. "reason" is what that means for what to say or show, in a few words, with no figures: because "main use" and reason "a fast-moving ball is the thing to show". The associate sees the customer's own words and then yours. If nothing the customer said explains this answer, both are null.
 - You never send anything to a customer, and never say you are sending or have sent something. When the associate says the customer has bought it, tell them to tap "Sold": that records the sale on the customer's card and sets the follow-ups.
 - After a sale, help with what comes next from what you can see: delivery, installation, the site, the charges in FACTS, and checking it works. A charge FACTS has is quoted from FACTS; one it does not have is with the service desk.
@@ -165,7 +167,7 @@ const schema = {
           type: "ARRAY",
           nullable: true,
           description:
-            "what the customer said they need from this product, such as main use or capacity. Not the product they named, not its colour or storage.",
+            "what the customer said they need from this product, such as main use or capacity, named and worded in the language of your reply, in the associate's words. Never copied from FACTS. Not the product they named, not its colour or storage.",
           items: {
             type: "OBJECT",
             required: ["name", "value"],
@@ -186,7 +188,8 @@ const schema = {
     lines: {
       type: "ARRAY",
       items: { type: "STRING" },
-      description: "1 or 2 short lines for the associate to say",
+      description:
+        '1 or 2 short lines for the associate to say. Options are one line each, three at most, with no heading line: name, price, one reason and "Show:" what to demonstrate. When what they asked for is not here, the first option line starts by saying so',
     },
     buttons: {
       type: "ARRAY",
@@ -213,7 +216,8 @@ const schema = {
     reason: {
       type: "STRING",
       nullable: true,
-      description: "what that need means for what to say or show, a few words, no figures. null when because is null",
+      description:
+        "what that need means for what to say or show, a few words, no figures, in the language of your reply. null when because is null",
     },
     opening: {
       type: "BOOLEAN",
@@ -583,13 +587,17 @@ export function offerExpert(reply: Reply, lang: Lang, when = true): Reply {
 }
 
 export function moneySafe(text: string): string {
-  return text
-    .replace(/","\s?(?=[\d₹])/g, "Rs ")
-    .replace(/\bRs\s+₹/g, "Rs ")
-    .replace(
-      /\bRs\.?\s?(\d+(?:,\d+)*)/g,
-      (_, amount: string) => `Rs ${Number(amount.replace(/,/g, "")).toLocaleString("en-IN")}`,
-    );
+  return (
+    text
+      .replace(/","\s?(?=[\d₹])/g, "Rs ")
+      .replace(/\bRs\s+₹/g, "Rs ")
+      // A Hindi reply wrote "₹11,999" on its own (6 Nov walk).
+      .replace(/₹\s?(?=\d)/g, "Rs ")
+      .replace(
+        /\bRs\.?\s?(\d+(?:,\d+)*)/g,
+        (_, amount: string) => `Rs ${Number(amount.replace(/,/g, "")).toLocaleString("en-IN")}`,
+      )
+  );
 }
 
 export function pretty(reply: Reply): Reply {
@@ -617,8 +625,8 @@ export function floor(reply: Reply): Reply {
   // When something has to go, the reason goes last and the words to say survive.
   const reason = lines.findLast((line) => line.startsWith("↳"));
   const said = lines.filter((line) => !line.startsWith("↳"));
-  // A pitch (a product put up for sale) reads out its features before its price, which takes six.
-  const cap = reply.long || (reply.buttons ?? []).some((button) => button.id.startsWith("select:")) ? 6 : 3;
+  // The brief's three lines, a pitch or options too; only a handover the code writes runs longer.
+  const cap = reply.long ? 6 : 3;
   const kept = reason ? [...said.slice(0, cap - 1), reason] : said.slice(0, cap);
   // WhatsApp refuses two buttons with one title, and three Apple phones are three "Apple"s.
   const buttons = (reply.buttons ?? [])
@@ -640,7 +648,7 @@ export function floor(reply: Reply): Reply {
 const DOES_SOMETHING = /^(select:[A-Za-z0-9_-]+|ask_expert|new_customer|follow_through|review)$/;
 
 export function render(decision: Decision): Reply {
-  // Six at most, whatever step the model named; floor() cuts anything but a pitch to three.
+  // Six at most, whatever step the model named; floor() cuts them to three.
   const hasProductChoices = decision.buttons?.some((button) => button.id.startsWith("select:"));
   const lines = (decision.lines ?? [])
     // The store's nine-digit item codes are for the till, not for reading to a customer.
@@ -652,6 +660,14 @@ export function render(decision: Decision): Reply {
     .filter(Boolean)
     .slice(0, 6);
   if (hasProductChoices) lines.splice(0, lines.length, ...lines.filter((line) => !/^\*?Ask:\*?\s/i.test(line)));
+  // The brief's three lines: past three, the priced lines stay (each option, or the pick's price) and a
+  // heading or remark above options goes ("for a 12x14 room a 75 inch fits" was a made-up size rule).
+  if (hasProductChoices && lines.length > 3) {
+    const options = (decision.buttons ?? []).filter((button) => String(button?.id).startsWith("select:")).length;
+    const priced = lines.filter((line) => /\bRs\b/.test(line)).slice(0, 3);
+    const rest = options > 1 ? [] : lines.filter((line) => !priced.includes(line)).slice(0, 3 - priced.length);
+    lines.splice(0, lines.length, ...lines.filter((line) => priced.includes(line) || rest.includes(line)));
+  }
   const said = lines.length ? lines : ["Tell me what the customer said and I will give you the next question."];
   const reason = typeof decision.reason === "string" ? moneySafe(decision.reason.replace(/^\s*↳\s*/, "")).trim() : "";
   // Only under three lines: three options already carry a reason each, and floor() would cut the third for it.
@@ -861,6 +877,24 @@ export function awaitingSale(reply: Reply, lang: Lang): NonNullable<Reply["butto
   return [{ id: "sold", title: t(lang, "btn.sold") }, ...others].slice(0, 3);
 }
 
+/** The customer has said yes: "customer agrees", "they agreed", "maan gaye", "तैयार हैं". */
+const AGREED = /\b(agrees?|agreed|maan gaye|taiyar hai)\b|तैयार|मान गए|राज़ी|तयार/i;
+
+/** The customer said the wall, on the card or in these words: "dīvār par", "wall mounting". */
+const WALL = /\bwall\b|दीवार|भिंत/i;
+function wantsWall(session: Session, text?: string): boolean {
+  const card = session.card;
+  return WALL.test([text, card.mount, ...Object.values(card.facts ?? {}), ...(card.site_constraints ?? [])].join(" "));
+}
+
+/** Wall installation in place of table-top, and the brand's mount offered with the pick on the bill. */
+function mountOnWall(session: Session, pack: Pack, product: Pack["products"][number]): void {
+  const selection = session.selection!;
+  selection.charges = onTheWall(pack, product, selection.charges);
+  const mount = selection.offered?.find((line) => /mount|bracket/i.test(line.title));
+  if (mount && !selection.accessories.includes(mount.id)) selection.accessories.push(mount.id);
+}
+
 /** A line offered with the pick stays priceable on every later turn, like the pick itself. */
 export function withOffered(pack: Pack, session: Session): Pack {
   const offered = (session.selection?.offered ?? []).filter(
@@ -965,6 +999,7 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
         ? defaults
         : (session.selection?.charges ?? []).filter((id) => pack.charges.some((charge) => charge.id === id)),
     };
+    if (wantsWall(session)) session.selection.charges = onTheWall(pack, product, session.selection.charges);
     session.consent = false;
     session.sold = false;
     delete session.followups_set;
@@ -1018,7 +1053,25 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
         : bill;
     }
   }
-  if (event.action === "summary:customer") return customerSummary(session, pack, event.name ?? session.phone);
+  // Brief 5, word for word: "Customer agrees. Prepare the summary." is the sale and the customer's yes to
+  // their summary in one message, answered with the summary to send and the installation job.
+  const said = event.text ?? "";
+  if (session.selection && AGREED.test(said) && /\bsummary\b|सारांश/i.test(said)) {
+    if (!session.sold) {
+      session.sold = true;
+      for (const step of ["close", "follow_through"] as const)
+        if (!session.steps_done.includes(step)) session.steps_done.push(step);
+      recordPurchase(session, pack);
+    }
+    session.consent = true;
+    return customerSummary(session, pack, event.name ?? session.phone);
+  }
+  // Once it is sold, "Prepare the summary." is the customer's summary, not the sale again.
+  if (
+    event.action === "summary:customer" ||
+    (session.sold && /\bsummary\b|सारांश/i.test(event.text ?? "") && wantsFollowThrough(event.text, undefined, true))
+  )
+    return customerSummary(session, pack, event.name ?? session.phone);
   if (event.action === "consent:yes") {
     // The customer's yes is to their own copy of the summary, and only that: it is not the sale.
     if (session.selection) session.consent = true;
@@ -1080,6 +1133,8 @@ export function deterministic(event: Event, session: Session, pack: Pack, notes:
   }
   if (wantsFollowThrough(event.text, event.action, !!session.selection)) {
     session.step = "follow_through";
+    const chosen = pack.products.find((candidate) => candidate.sku === session.selection?.sku);
+    if (chosen && WALL.test(event.text ?? "")) mountOnWall(session, pack, chosen);
     return followThrough(session, pack, event.name ?? session.phone);
   }
   // "what do you have" used to open this too, so "what do you have in Samsung phones?" got "I have
@@ -1145,6 +1200,7 @@ export type Store = {
   logVisit(row: { reference: string; phone: string; associate?: string; store: string; body: string }): Promise<void>;
   openQuestions(): Promise<{ reference: string; area: string; owner: string }[]>;
   logQuestion(row: { reference: string; phone: string; area: string; owner: string; question: string }): Promise<void>;
+  broadcasts?(kind: "video", limit?: number): Promise<{ video?: string | null; sent_at: string | Date }[]>;
 };
 
 /** "They'll take it themselves" / "deliver it": an answer to take-or-deliver, while it is being asked. */
@@ -1375,6 +1431,9 @@ async function answer(
   let keptCard = false;
   let searchedNow = false;
   const remember = (reply: Reply): Reply => {
+    // The shift brief is not the customer's conversation: its practice question ("a bigger screen uses
+    // more power?") was answered as if a customer had said it, on the next customer's first turn.
+    if (wantsBrief(event.text, event.action) || event.action?.startsWith("brief:")) return reply;
     session.history.push({ who: "associate", text: (event.text ?? event.action ?? "photo").slice(0, 300) });
     session.history.push({ who: "storeiq", text: reply.text.slice(0, 300) });
     session.history = session.history.slice(-12);
@@ -1486,7 +1545,11 @@ async function answer(
     return { ...reply, buttons };
   };
   // No file brief on the live catalogue, so the brief is the store's own: stock and offers today.
-  if (wantsBrief(event.text, event.action) && catalogConfig() && !Object.keys(base.shift_brief ?? {}).length)
+  if (
+    (wantsBrief(event.text, event.action) || event.action?.startsWith("brief:answer:")) &&
+    catalogConfig() &&
+    !Object.keys(base.shift_brief ?? {}).length
+  )
     pack = { ...pack, shift_brief: await liveBrief(base, request).catch(() => ({})) };
   if (store && event.action === "site:problem" && session.selection) {
     const needs = siteNeeds(pack, session.selection).join("; ");
@@ -1633,6 +1696,11 @@ async function answer(
       ),
     );
   }
+  // Brief 4A: the video the manager approved and sent to the floor today goes with the brief.
+  if (free && store?.broadcasts && wantsBrief(event.text, event.action)) {
+    const [latest] = await store.broadcasts("video", 1).catch(() => []);
+    if (latest?.video && storeDay(0, new Date(latest.sent_at).getTime()) === storeDay()) free.video = latest.video;
+  }
   if (free && store?.followUps && wantsBrief(event.text, event.action) && (free.buttons ?? []).length < 3) {
     const due = await store.followUps({ phone: session.phone, dueBy: storeDay() });
     if (due.length)
@@ -1657,8 +1725,14 @@ async function answer(
     const offered = [mount, plan].filter(
       (line): line is NonNullable<typeof line> => !!line && !session.selection!.accessories.includes(line.id),
     );
+    // Kept on the selection even once on the bill, or the next turn cannot price it.
+    session.selection.offered = [mount, plan].filter((line): line is NonNullable<typeof line> => !!line);
+    if (mount && wantsWall(session)) {
+      mountOnWall(session, withOffered(pack, session), product);
+      Object.assign(free, followThrough(session, withOffered(pack, session), event.name ?? session.phone));
+      offered.splice(offered.indexOf(mount), 1);
+    }
     if (offered.length) {
-      session.selection.offered = offered;
       const [sold, ...rest] = free.buttons ?? [];
       free.buttons = [
         ...(sold ? [sold] : []),
@@ -1673,19 +1747,31 @@ async function answer(
   // The pick is where the associate sells it: what it does for this customer goes above its cost, or a
   // new associate is left reading "Sony, 126 cm, Rs 70,990" to someone who has not bought it yet.
   if (free && product && !session.sold) {
-    const lines = await pitchFor(product, event, session, pack, request).catch(() => []);
-    if (lines.length) free.text = `${lines.join("\n\n")}\n\n${free.text}`;
+    // Only the lines the cost leaves free: three pitch lines filled floor()'s three and the price and
+    // total under them were cut (6 Nov walk, a Samsung monitor picked with no cost shown).
+    // The pitch takes the reason's slot when it needs it: it is the reason, in what the customer said.
+    const all = free.text.split("\n").filter((line) => line.trim());
+    const said = all.filter((line) => !line.startsWith("↳"));
+    const room = 3 - said.length;
+    const lines =
+      room > 0 ? (await pitchFor(product, event, session, pack, request).catch(() => [])).slice(0, room) : [];
+    if (lines.length) free.text = [...lines, ...(lines.length + all.length > 3 ? said : all)].join("\n");
   }
   if (free) return remember(withoutUnavailableCharges(free));
 
   // A photo of a shelf tag: read what is printed, then treat it as being told the same words. The
   // reply is still written from the catalogue, so a misread tag cannot become an invented price.
+  const tagRead = !!event.image;
   if (event.image) {
     const read = await labelText(event.image, request).catch(() => "");
     if (!read) return remember({ text: t(session.language, "p.unread") });
     // The tag was read: that is the Translate step's evidence, whatever the model calls the turn.
     if (!session.steps_done.includes("translate")) session.steps_done.push("translate");
     event = { ...event, text: [`The shelf tag in their photo reads: ${read}.`, event.text].filter(Boolean).join(" ") };
+    // Brief 4D: the tag is translated for this customer, not answered with a list of televisions.
+    notes.push(
+      "They photographed this tag to explain it to the customer. In one or two lines, say what its specifications mean for this customer's home and use, in plain words (120 Hz: the ball stays sharp in cricket), and the one thing to demonstrate. Do not list other products and do not ask a question.",
+    );
     delete event.image;
   }
 
@@ -1787,6 +1873,16 @@ async function answer(
         : `The customer picked ${picked.name}, and its full cost is on the associate's screen. Nothing has been sent, and you cannot send it. When the customer buys it, the associate taps "${t(session.language, "btn.sold")}".`,
     );
 
+  // A monitor customer was asked a fourth question after three answers, and it undid the first; a TV
+  // customer who said four things up front was asked three more.
+  else if (!onScreen.length && !tagRead) {
+    const asked = session.history.filter((turn) => turn.who === "storeiq" && /\?["”'*_]*\s*$/m.test(turn.text)).length;
+    if (asked >= 3 || (asked >= 2 && cardParts(session).length >= 3))
+      notes.push(
+        "This customer has answered enough. If your next line would be another question about their needs, show up to three options instead.",
+      );
+  }
+
   const told = (card: Decision["card"]): string =>
     [
       event.text,
@@ -1867,6 +1963,12 @@ async function answer(
     decision = await written([
       `You wrote your last draft in the wrong language. ${languageNote(event.text, session.language)} Give the same answer, translated.`,
     ]);
+  // "Here are some good options:" went out over three product buttons and nothing else (6 Nov walk).
+  const options = (decision.buttons ?? []).filter((button) => String(button?.id).startsWith("select:")).length;
+  if (options > 1 && (decision.lines ?? []).filter((line) => /\bRs\b|₹/.test(String(line))).length < options)
+    decision = await written([
+      `You put ${options} products on buttons but did not write a line for each. Write one line per product: its name, its price from FACTS, what it does for this customer, and "Show:" what to demonstrate.`,
+    ]);
   // Refused twice, the figure still does not go out, but only the line it is in goes with it: "for a
   // family of 4, 500 to 550 litres" above three real fridges cost the associate all three.
   if (figuresIn(decision).length) {
@@ -1910,6 +2012,7 @@ async function answer(
   } else if (name && session.customer && !session.customer.name) session.customer.name = name;
   else if (name && !session.customer) session.named = name;
 
+  const cardBefore = JSON.stringify(session.card);
   const extra = (decision.card as { facts?: { name?: string; value?: string }[] })?.facts;
   if (Array.isArray(extra))
     for (const fact of extra)
@@ -1948,6 +2051,7 @@ async function answer(
     if (!session.steps_done.includes(decision.step)) session.steps_done.push(decision.step);
   }
 
+  const cardChanged = JSON.stringify(session.card) !== cardBefore;
   let reply = render(decision);
   // A pick has to be something that can be picked, or the tap fails with the customer waiting.
   const buttons = reply.buttons?.filter(
@@ -2021,6 +2125,27 @@ async function answer(
     // First, not last: as the second "Ask:" under a product question it read as one more thing to
     // say to the customer, and the associate never saw it was the home card being offered.
     reply = { ...reply, text: [ask, ...said.slice(0, 5)].join("\n") };
+  }
+  // Brief 4B: what was understood is read back above the next question, so a wrong card is corrected
+  // before it picks the options. It takes the reason's slot: both say why this question, and the reason
+  // alone repeated "काम/ऑफिस: office work needs a screen size" under three questions.
+  if (cardChanged && !reply.buttons?.some((button) => button.id.startsWith("select:"))) {
+    const lines = reply.text.split("\n").filter((line) => line.trim() && !line.startsWith("↳"));
+    const parts = cardParts(session);
+    const at = ask && lines[0] === ask ? 1 : 0;
+    // On a question turn a remark above the question gives way to it ("for a 12x14 room a 50 to 55
+    // inch fits" was a made-up size rule); an answer with a price never does.
+    const said = lines.slice(at);
+    const remark =
+      said.length > 1 && /\?["”']?\s*$/.test(said.at(-1)!) && !said.slice(0, -1).some((l) => /\bRs\b/.test(l));
+    const kept = lines.length < 3 ? said : remark ? said.slice(-(2 - at)) : null;
+    if (parts.length && kept)
+      reply = {
+        ...reply,
+        text: [...lines.slice(0, at), t(session.language, "card.heard", { body: parts.join("; ") }), ...kept].join(
+          "\n",
+        ),
+      };
   }
   // Given only the number, the model has nothing to add, and its empty answer became "Tell me what
   // the customer said" under "Card saved".
