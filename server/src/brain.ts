@@ -1767,6 +1767,16 @@ async function answer(
     decision = await written([
       `You wrote your last draft in the wrong language. ${languageNote(event.text, session.language)} Give the same answer, translated.`,
     ]);
+  // Refused twice, the figure still does not go out, but only the line it is in goes with it: "for a
+  // family of 4, 500 to 550 litres" above three real fridges cost the associate all three.
+  if (figuresIn(decision).length) {
+    const lines = decision.lines.filter(
+      (line) => !unsupportedNumbers(line, allowedNumbers(pack), told(decision.card)).length,
+    );
+    // The reason often repeats the same rule ("a family of 4 needs 300 to 400 litres"): it goes too.
+    const kept = reasonOnly({ ...decision, lines });
+    if (lines.length && !figuresIn(kept).length) decision = kept;
+  }
 
   // The customer's card. Who is standing there is the model's reading of the words; keeping the card
   // under a number the associate really said is the code's.

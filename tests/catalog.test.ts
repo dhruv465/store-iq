@@ -15,6 +15,8 @@ import {
   factsFor,
   readSearch,
   searchPack,
+  broad,
+  namedAs,
   shelvesOf,
   startingPack,
   type Pack,
@@ -706,4 +708,39 @@ test("a pick from this conversation's search shows the breakdown at once, on the
     reply.buttons?.map((button) => button.id),
     ["sold"],
   );
+});
+
+test("a broad search shows the whole price range, not the store's first page of the dearest", async () => {
+  // 48 fridges, the popular page led by the biggest: the first twelve alone are all Rs 1,00,000 and up.
+  const fridges = Array.from({ length: 48 }, (_, i) => row(100 + i, `Fridge ${i}`, 150000 - i * 2900));
+  const store = shop(() => page(fridges));
+  const pack = await searchPack(base, { q: "refrigerator", kind: "refrigerator" }, store.fetch);
+  assert.equal(store.store[0]!.searchParams.get("page_size"), "48");
+  const prices = pack.products.map((product) => product.price_rupees);
+  assert.equal(prices.length, 12);
+  assert.equal(Math.max(...prices), 150000);
+  assert.equal(Math.min(...prices), 150000 - 47 * 2900, "the cheapest is in");
+  assert.deepEqual(
+    prices,
+    [...prices].sort((a, b) => b - a),
+    "kept in the store's own order",
+  );
+});
+
+test("a named model is not a broad search: the store's own first twelve stand", () => {
+  assert.equal(broad({ q: "fridge" }), true);
+  assert.equal(broad({ q: "samsung tv" }), true);
+  assert.equal(broad({ q: "iphone 18 pro 256 gb" }), false);
+  assert.equal(broad({ q: "tv", sort_on: "price_asc" }), false);
+});
+
+test("a fridge on the Direct Cool shelf is a fridge by its own name; a stand or a cover is not", () => {
+  const named = (name: string, kind: string) => namedAs({ name }, kind);
+  assert.equal(named("Godrej Edge 180 Litres 1 Star Direct Cool Single Door Refrigerator, Grey", "refrigerator"), true);
+  assert.equal(named("Haier 596 L Side By Side Refrigerator with Deo Fresh Technology", "refrigerator"), true);
+  assert.equal(named("LG 340 L Frost Free Refrigerator (GL-S382SPZY)", "refrigerator"), true);
+  assert.equal(named("LG 7 Kg Washing Machine", "washing machine"), true);
+  assert.equal(named("Aluminium Laptop Stand", "laptop"), false);
+  assert.equal(named("Refrigerator Cover And Kits", "refrigerator"), false);
+  assert.equal(named("Trolley for Washing Machine", "washing machine"), false);
 });

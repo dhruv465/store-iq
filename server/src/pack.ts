@@ -125,6 +125,14 @@ function shelfIs(category: string, kind: string): boolean {
   return new RegExp(`(?:^|[\\s-])${kindPattern(kind).source.replace(/\\b/g, "")}$`, "i").test(category);
 }
 
+/** The row's own name ends on the kind, before its colour, model code or "with …": "Godrej 180 L Direct
+ *  Cool Single Door Refrigerator, Grey" is a fridge on a shelf called "Direct Cool". "Laptop Stand" and
+ *  "Refrigerator Cover" go on past the word, so they are not. */
+export function namedAs(row: Row, kind: string): boolean {
+  const head = String(row.name).split(/\b(?:for|compatible with|fits)\b/i)[0]!;
+  return new RegExp(`${kindPattern(kind).source}(?=\\s*(?:$|[,(]|with\\b|-\\s))`, "i").test(head);
+}
+
 /** Whether this row is that kind of thing, by its own name or its own category. What comes after
  *  "for" is what it serves: a "Trolley for Washing Machine" is a trolley. */
 export function carriesKind(row: Row, kind: string): boolean {
@@ -263,6 +271,23 @@ export async function liveBrief(base: Pack, request: typeof fetch = fetch): Prom
   return brief;
 }
 
+/** Just a kind of product, maybe a brand: no model, size or number, no sort, no page. The store's
+ *  "popular" first page for "fridge" was twelve side-by-sides from 520 L and Rs 70,590 up, so a family
+ *  of four was shown nothing they would buy; the next 36 rows hold 180 L to 340 L. */
+export function broad(search: Search): boolean {
+  return !search.sort_on && !search.page_no && !/\d/.test(search.q) && search.q.trim().split(/\s+/).length <= 3;
+}
+
+/** n rows spread from the cheapest to the dearest, kept in the store's own order so the most popular
+ *  of them still comes first (and gets its offers read). */
+export function spread<T extends { price?: { effective?: { min?: unknown } } }>(rows: T[], n: number): T[] {
+  if (rows.length <= n) return rows;
+  const cost = (row: T): number => Number(row.price?.effective?.min) || 0;
+  const byPrice = [...rows].sort((a, b) => cost(a) - cost(b));
+  const chosen = new Set(Array.from({ length: n }, (_, i) => byPrice[Math.round((i * (rows.length - 1)) / (n - 1))]!));
+  return rows.filter((row) => chosen.has(row));
+}
+
 /** The live catalogue, asked for what this turn is about. Rows are the store's own answer: a miss
  *  comes back as no products, which the model is told, and a failure throws. */
 export async function searchPack(base: Pack, search: Search, request: typeof fetch = fetch): Promise<Pack> {
@@ -274,10 +299,11 @@ export async function searchPack(base: Pack, search: Search, request: typeof fet
 
   // A sort is over more rows, because it is checked against the words below.
   const sorted = !!search.sort_on && search.sort_on !== "popular";
+  const wide = broad(search);
   const params = {
     q: search.q,
     sort_on: search.sort_on ?? "popular",
-    page_size: sorted ? 48 : 12,
+    page_size: sorted || wide ? 48 : 12,
     page_no: search.page_no ?? 1,
     page_type: "number" as const,
   };
@@ -312,7 +338,9 @@ export async function searchPack(base: Pack, search: Search, request: typeof fet
     // answered with stands and "none under that", with an Acer at Rs 36,990 on the shelf.
     const onShelf = (row: Row): boolean =>
       (row.categories ?? []).some((category: Row) => shelfIs(String(category?.name), kind));
-    if (rows.filter(onShelf).length * 2 < rows.length) {
+    // Most fridges sit on "Direct Cool" and "Frost Free", not a shelf named for fridges: by shelf alone
+    // they did not count, and the search was narrowed to the one shelf that is, side-by-sides from 520 L.
+    if (rows.filter((row) => onShelf(row) || namedAs(row, kind)).length * 2 < rows.length) {
       const shelves = shelvesOf(found.filters, kind);
       if (shelves.length) {
         const f = [`category:${shelves.join("||")}`, ...(price ? [price] : [])].join(":::");
@@ -323,10 +351,12 @@ export async function searchPack(base: Pack, search: Search, request: typeof fet
         }
       }
     }
-    const carrying = rows.filter((row) => carriesKind(row, kind));
+    // A row that ends on the kind or sits on its shelf first; "Bottom Refrigerator Panel" only names it.
+    const exact = rows.filter((row) => onShelf(row) || namedAs(row, kind));
+    const carrying = exact.length ? exact : rows.filter((row) => carriesKind(row, kind));
     if (carrying.length) rows = carrying;
   }
-  rows = rows.slice(0, 12);
+  rows = wide ? spread(rows, 12) : rows.slice(0, 12);
   const products = rows.map((row) => adaptProduct(fromFdk(row)).product).filter((product) => product.sku);
 
   // getPromotionOffers is per slug, so the first five are asked at once. Each offer says which

@@ -96,7 +96,10 @@ npm run format       # Prettier at 120 columns, pinned in .prettierrc
 - The products come from the **live catalogue**, per turn, when `CATALOG_APPLICATION_ID` and
   `CATALOG_APPLICATION_TOKEN` are set: `searchFrom()` in `brain.ts` asks the model for one search
   and `searchPack()` in `pack.ts` runs it, in FDK `getProducts` parameters, with
-  `getPromotionOffers` for the first five rows. That makes two model requests a turn. When the store
+  `getPromotionOffers` for the first five rows. That makes two model requests a turn. A broad search (just a kind, maybe a brand: no number, sort or page) takes 48 rows and keeps 12 spread
+  across the price range (`broad()`, `spread()`), and a row whose name ends on the kind counts as that kind
+  (`namedAs()`): the store shelves most fridges as "Direct Cool" and "Frost Free", and "fridge" was narrowed to
+  side-by-sides from 520 L. When the store
   does not answer it is logged, the model is told and the number stays up; no data is substituted.
   `data/pack.json` is a stub of televisions, used only with no credentials (dev and tests), and must
   never reach an associate as today's data. The host defaults to `api.jioretailer.com`. Reads only:

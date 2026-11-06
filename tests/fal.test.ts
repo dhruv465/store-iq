@@ -252,7 +252,7 @@ test("the hedged duplicate and an empty answer are billed too, because fal charg
     const fake = (async () => {
       calls++;
       const mine = calls;
-      await new Promise((resolve) => setTimeout(resolve, mine === 1 ? 60 : 5));
+      await new Promise((resolve) => setTimeout(resolve, mine === 1 ? 400 : 5));
       return Response.json({ output: mine === 1 ? "slow" : "fast", usage: { cost: 0.001 } });
     }) as unknown as typeof fetch;
     assert.equal((await falText({ key: "k", model: "m" }, "s", "u", fake, 20)).text, "fast");
