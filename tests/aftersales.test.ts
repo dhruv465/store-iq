@@ -202,6 +202,29 @@ test("a problem with something bought is raised with service, with a check-back 
   }
 });
 
+test("a problem said in words, without the tap, is raised with service too, never only claimed", async () => {
+  const db = await openDatabase("memory://");
+  try {
+    const session = await db.session(ASSOCIATE);
+    session.customer = {
+      id: "c-2",
+      phone: "9876501234",
+      name: "Asha",
+      bought: [{ sku: "x", name: "TCL 55C7L 139.7 cm", total: 100789, on: "2026-11-06" }],
+    };
+    const model = manager({
+      lines: ["I have raised this with our service team."],
+      problem: "the remote is not working",
+    });
+    const raised = await decide(said("Asha came back, her TV remote is not working"), session, pack, model.fetch, db);
+    assert.match(raised.text, /^Raised with .* · SIQ-\d{4}/);
+    assert.equal((await db.openQuestions())[0]?.area, "after-sales service");
+    assert.match((await db.followUps({ customer_id: "c-2" }))[0]!.what, /the remote is not working/);
+  } finally {
+    await db.close();
+  }
+});
+
 test("the pipe run is read only beside a word about the pipe or the outdoor unit", () => {
   assert.equal(pipeMetres("outdoor unit is 5 metres away"), 5);
   assert.equal(pipeMetres("copper pipe 6 m"), 6);
