@@ -256,7 +256,9 @@ test("the hedged duplicate and an empty answer are billed too, because fal charg
       return Response.json({ output: mine === 1 ? "slow" : "fast", usage: { cost: 0.001 } });
     }) as unknown as typeof fetch;
     assert.equal((await falText({ key: "k", model: "m" }, "s", "u", fake, 20)).text, "fast");
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    // The slow one finishes after the race; wait well past it, since a loaded suite delays timers.
+    for (let waited = 0; billed.length < 2 && waited < 2000; waited += 20)
+      await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(billed, [0.001, 0.001], "the slow first request was billed as well");
     const empty = (async () => Response.json({ output: " ", usage: { cost: 0.002 } })) as unknown as typeof fetch;
     await assert.rejects(falText({ key: "k", model: "m" }, "s", "u", empty, 1000), /Empty/);

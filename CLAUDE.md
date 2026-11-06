@@ -54,17 +54,14 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    about a television, and it made the product a form with a chat window around it. The code tells
    the model only what it cannot see, in a note (`JUST NOW:`): a search that missed, a store that did
    not answer. What is worth asking this customer is the model's judgement, and a customer who has
-   decided is served, not interviewed. A customer who only names a kind of product ("customer wants a
-   TV", "washing machine dikhao") has not decided: the model asks **at least three** things about the
-   customer, one at a time with answer buttons (for a TV: the room and distance, wall or table, what
-   they watch), then **pitches** the one that fits: why it fits, its features from the catalogue as what
-   they do for this customer, an `Ask:`, and the **price last**. A product that is not here is said so
-   first, and the nearest one in the catalogue is pitched in its place, stepping the customer up. The
-   associate is with the customer and should not have to ask for features, warranty or why. A pitch (a
-   reply with a `select:` button) may run to six lines, overriding the contest's three, which still holds
-   for every other reply (`floor()`). Decided by the user 6 Nov 2026, after "washing machine dikhao" went
-   straight to prices, and again that day: associates lead with product and price, so sell the features
-   first. **Do not add a question to the code.** The asks after a
+   decided is served, not interviewed. A customer who only names a kind of product ("customer wants a TV", "washing machine dikhao") has not decided:
+   the model asks **only what would change what it shows**, one question at a time, with buttons that are the
+   customer's real answers, and stops as soon as it has enough; then it shows up to three options, each with its
+   price and one reason. A product that is not here is said so first, and the nearest one in the catalogue, one
+   step up, is named in its place. Restored by the user 6 Nov 2026 to the flow of `703dcd3` (before the video
+   brief), after a rewrite that dropped the question rules ("no checklist, no minimum question count") asked
+   "bedroom ke liye TV?" with the buttons "Small bedroom / Living room / Big hall". The model never states a
+   size someone needs ("a family of 4 needs 500 litres"): that is an invented figure. **Do not add a question to the code.** The asks after a
    pick are the bill's, not the customer's needs, and stay in code: take it or deliver, how far, and the
    site at Sold. What still answers
    without a model request is a tap or a whole-message command: the reset, consent, the card
