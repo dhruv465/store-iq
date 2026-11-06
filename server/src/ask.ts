@@ -8,7 +8,7 @@ const HELLO =
 /** What a voice note adds around a hello: "Hello, good morning.", "Good morning, Store IQ.", "Hi, how are
  *  you?". Each went to the model, which answered without the brief and offered a home card for nobody. */
 const HELLO_TAIL =
-  "(?:store ?iq|team|everyone|all|how are you|how r u|how's it going|kaise ho|kya haal hai|कैसे हो|क्या हाल है)";
+  "(?:store ?iq|there|team|everyone|all|how are you|how r u|how's it going|what'?s up|wh?ass?up|sup|kaise ho|kya haal hai|kya chal raha hai|कैसे हो|क्या हाल है)";
 const GREETING = new RegExp(`^\\s*${HELLO}(?:[\\s,!.।?]+(?:${HELLO}|${HELLO_TAIL}))*[\\s!.।?]*$`, "i");
 
 /** Nobody on a shop floor writes to their manager without addressing them. "Namaste sir" was not

@@ -167,7 +167,16 @@ test("asked outright, the same offer is given", async () => {
 });
 
 test("a voice note's hello, with the words around it, is still a hello", () => {
-  for (const hello of ["Hello, good morning.", "Good morning, Store IQ.", "Hi, how are you?", "hello kaise ho"])
+  for (const hello of [
+    "Hello, good morning.",
+    "Good morning, Store IQ.",
+    "Hi, how are you?",
+    "hello kaise ho",
+    "Hey, what's up?",
+    "hey there",
+    "hi whats up",
+    "Hey Store IQ, what's up",
+  ])
     assert.equal(isGreeting(hello), true, hello);
   assert.equal(isGreeting("Hi, customer wants a TV"), false);
 });
