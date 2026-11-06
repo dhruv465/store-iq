@@ -75,12 +75,12 @@ How to be:
 - Talk to the associate the way a good manager talks: short, plain, direct, no greeting rituals and no selling at them. If they say hello, ask what is going on with them, the way you would in the aisle.
 - Answer the question they actually asked, about the exact thing they asked about. The search is loose, so FACTS can hold neighbours of what they named: an iPhone 18 Pro is not an iPhone 18 Pro Max, and a case is not a phone. If what they named is in FACTS, talk about that. If it is not, say so plainly in the first line and name the nearest thing in FACTS that would serve this customer, as a different product: one FACTS holds, one step up from what they asked for (the same size in a double door, the next size up), not the top of the range. Set "unknown" true only when FACTS has nothing that could serve them.
 - A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked what there is, which are good, to show something, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
-- A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets the price, whether it is available or on pre-order, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
+- A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets, in this order: two or three of its features from FACTS said as what they do for this customer (the associate is selling it, not reading a price tag), whether it is available or on pre-order, the price, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
 - Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, and stop as soon as you have enough to be useful. Never ask what this customer has already told you.
-- With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show three options with one reason and one difference each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
+- With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show up to three options, each with a feature from FACTS as what it does for them and its price after it, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
-- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
+- What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. When CUSTOMER NUMBER says what they bought before, that is their purchase history: answer any question about what they bought, when, or for how much from it, however it is asked, and never say you have no access to past purchases. For a problem with something they bought, name it and tell the associate to send what is wrong with it, so it is logged for service. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
 - Each product in FACTS has offers_on_it: everything running on that product today, discount, card and bank offers and free gifts together. Asked about offers on a product, say what its own offers_on_it says. Only when that list is empty is the answer that none is showing on it today, and then say that plainly. Never say none and name one in the same reply. Never mention an offer, an exchange or an EMI that is not on the list, not even as something you could go and check.
 
 Hard rules, never bent:
@@ -1111,6 +1111,10 @@ export function recordPurchase(session: Session, pack: Pack): void {
   session.customer.bought = [...bought, { sku: product.sku, name: product.name, total: itemised.total, on }].slice(-10);
 }
 
+/** The associate saying outright that someone else is now standing there. */
+const ANOTHER_CUSTOMER =
+  /\b(new|another|next|different|naya|nayi|naye|dusra|dusri|doosra|doosri)\s+(customer|grahak|client)\b|नया ग्राहक|दूसरा ग्राहक|नवीन ग्राहक/i;
+
 export type Store = {
   today(): Promise<Session[]>;
   findCustomer?(phone: string): Promise<SavedCustomer | null>;
@@ -1129,13 +1133,23 @@ const CARRY_WORDS =
 const DELIVER_WORDS = /\b(deliver|delivery|home delivery|ghar (pe|par) (bhej|chahiye)|bhej do)\b/i;
 
 /** Asking about a saved customer's card, what they bought or their history. */
-const CARD_ASK =
-  /\b(home\s?card|card|bought|purchase[sd]?|purchases|history|record|details|data|profile|kya liya|kya kharida|kharida)\b|कार्ड|खरीद|घेतलं/i;
+// "What did she buy before?" and "last time" are asking what was bought; "she wants to buy a fridge" is not.
+const PAST_BUY =
+  "did (?:he|she|they|the customer) buy|(?:buy|bought|purchased?) (?:before|earlier|last time)|past purchases?|pichh?li baar|pehle kya";
+const CARD_ASK = new RegExp(
+  `\\b(home\\s?card|card|bought|purchase[sd]?|purchases|history|record|details|data|profile|kya liya|kya kharida|kharida|${PAST_BUY})\\b|कार्ड|खरीद|घेतलं`,
+  "i",
+);
 /** Asking what they bought, rather than for the whole card. */
-const PURCHASE_WORDS = /\b(bought|purchases?|purchase history|kya liya|kya kharida|kharida)\b|खरीद|घेतलं/i;
+const PURCHASE_WORDS = new RegExp(
+  `\\b(bought|purchases?|purchase history|kya liya|kya kharida|kharida|${PAST_BUY})\\b|खरीद|घेतलं`,
+  "i",
+);
 /** About the customer whose card is already open: these words, without a name or a number. */
-const OWN_HISTORY =
-  /\b(home\s?card|bought|purchases?|purchase history|previous|history|kya liya|kya kharida|kharida)\b|खरीद|घेतलं/i;
+const OWN_HISTORY = new RegExp(
+  `\\b(home\\s?card|bought|purchases?|purchase history|previous|history|kya liya|kya kharida|kharida|${PAST_BUY})\\b|खरीद|घेतलं`,
+  "i",
+);
 
 /** A saved customer becomes the one being served: their card, their words and what they bought. */
 export function openCard(session: Session, found: SavedCustomer, phone: string): void {
@@ -1318,6 +1332,7 @@ async function answer(
   }
   const notes: string[] = [];
   let resetNow = false;
+  let keptCard = false;
   let searchedNow = false;
   const remember = (reply: Reply): Reply => {
     session.history.push({ who: "associate", text: (event.text ?? event.action ?? "photo").slice(0, 300) });
@@ -1632,6 +1647,12 @@ async function answer(
   // front of it instead of "no data on that customer" under a "Welcome back" line.
   const askedBefore = !!session.customer_asked;
   const number = mobileIn(event.text);
+  // The customer's own name and number, given while serving them, is this customer, not a new one. It
+  // was read as "a different customer has arrived" and wiped the 32 inch TV the associate had just asked
+  // about: the next reply asked "What can I help her with?", then "a TV, a tablet or a phone?".
+  // Only once the card has been offered: "ek aunty aayi hai, Asha, 98765…" unasked is a new customer.
+  const ownDetails =
+    !!number && !session.customer && !!session.customer_asked && !ANOTHER_CUSTOMER.test(event.text ?? "");
   let customerLine = "";
   let loaded = false;
   if (number && number !== session.customer?.phone && store?.findCustomer) {
@@ -1681,8 +1702,18 @@ async function answer(
   // writes the reply from those. Nothing about a product is answered from a written line any more.
   if (event.text && catalogConfig()) {
     const turn = await searchFrom(event.text, session, request);
-    if (turn.newCustomer) {
+    // A card just opened by the number in this message is the customer who arrived: the lookup already
+    // started their visit, and resetting again closed it ("9820012345 wali customer aayi hai").
+    if (turn.newCustomer && !ownDetails && !loaded) {
+      // A card opened by number and then "the old customer is back": the reset closed the card, and
+      // "what did she buy?" was answered "I don't have access". With no new number, the open card stays
+      // until the model says whether this is someone new.
+      const open = number ? undefined : session.customer;
       startInteraction(session);
+      if (open) {
+        session.customer = open;
+        keptCard = true;
+      }
       resetNow = true;
       pack = withAfterSales(base);
       notes.push(
@@ -1714,6 +1745,11 @@ async function answer(
     [
       event.text,
       event.action,
+      // What this customer bought before is on their card, not in this turn's FACTS: "82 cm" was refused.
+      ...(session.customer?.bought ?? []).map(
+        (item) =>
+          `${item.name} Rs ${item.total} ${item.on} ${new Date(`${item.on}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`,
+      ),
       // Said a turn ago is still said: "350 litre" asked for, then "4 people", was refused the 350.
       ...session.history.filter((turn) => turn.who === "associate").map((turn) => turn.text),
       typeof session.card.budget_rupees === "number" ? `Rs ${session.card.budget_rupees}` : "",
@@ -1741,7 +1777,8 @@ async function answer(
     );
   let stale: Session["card"] = {};
   let decision = await written();
-  if (!resetNow && !loaded && decision.customer?.arrived === "new") {
+  if (keptCard && decision.customer?.arrived === "new") delete session.customer;
+  if (!resetNow && !loaded && !ownDetails && decision.customer?.arrived === "new") {
     stale = session.card;
     startInteraction(session);
     resetNow = true;
@@ -1784,8 +1821,11 @@ async function answer(
   // The model writes this turn's card having seen the last customer's, and copies it back.
   if (
     (who?.arrived === "new" || who?.arrived === "returning") &&
+    // The one coming back, with no new number, is the one whose card is open.
+    !(who?.arrived === "returning" && session.customer && !number) &&
     !resetNow &&
     !loaded &&
+    !ownDetails &&
     (session.history.length || session.customer)
   ) {
     const search = searchedNow ? session.search : undefined;
@@ -1888,8 +1928,23 @@ async function answer(
   // Its own slot, because as one more line among the rest the model never wrote it: "served, not
   // interviewed" and the line limit won every time. The words are still the model's.
   const ask = typeof decision.ask_number === "string" ? decision.ask_number.trim().slice(0, 200) : "";
+  // Only with a customer in play: "Hello, good morning" was answered "Shall I make a home card for this
+  // customer?" with nobody standing there.
+  const serving =
+    /\b(customer|grahak)\b|ग्राहक|ग्राहिका/i.test(event.text ?? "") ||
+    (searchedNow && !!session.search?.kind) ||
+    session.shortlist.length > 0 ||
+    !!session.selection ||
+    Object.values(session.card).some((value) =>
+      Array.isArray(value)
+        ? value.length > 0
+        : typeof value === "object" && value
+          ? Object.keys(value).length > 0
+          : value !== undefined && value !== null && value !== "",
+    );
   if (
     ask &&
+    serving &&
     !/\d/.test(ask) &&
     !bad.length &&
     !number &&

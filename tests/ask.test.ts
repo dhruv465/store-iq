@@ -165,3 +165,9 @@ test("asked outright, the same offer is given", async () => {
   );
   assert.match(reply.text, /HDFC/);
 });
+
+test("a voice note's hello, with the words around it, is still a hello", () => {
+  for (const hello of ["Hello, good morning.", "Good morning, Store IQ.", "Hi, how are you?", "hello kaise ho"])
+    assert.equal(isGreeting(hello), true, hello);
+  assert.equal(isGreeting("Hi, customer wants a TV"), false);
+});

@@ -315,3 +315,48 @@ test("purchases survive the database round trip", async () => {
     await db.close();
   }
 });
+
+test("the customer's own name and number, once asked for, keep the TV being discussed", async () => {
+  const session = newSession(ASSOCIATE);
+  session.history = [
+    { who: "associate", text: "customer is looking for a 32 inch TV" },
+    { who: "storeiq", text: "Shall I make a home card for this customer? Send me their name and mobile number." },
+  ];
+  session.card = { facts: { "screen size": "32 inch" } };
+  session.customer_asked = true;
+  const interaction = session.interaction_id;
+  const model = manager({ customer: { arrived: "new", name: "Priya" }, lines: ["What will they use it for?"] });
+  const reply = await decide(
+    said("Her name is Priya and her number is 98200 12345."),
+    session,
+    pack,
+    model.fetch,
+    cards() as never,
+  );
+  assert.equal(session.interaction_id, interaction, "the same customer, not a new visit");
+  assert.equal(session.card.facts?.["screen size"], "32 inch");
+  assert.equal(session.customer?.phone, "9820012345");
+  assert.match(reply.text, /^Home card saved for Priya\./);
+});
+
+test("hello gets no home card offered: nobody is standing there", async () => {
+  const session = newSession(ASSOCIATE);
+  const model = manager({
+    lines: ["Good morning. What's going on?"],
+    ask_number: "Shall I make a home card for this customer?",
+  });
+  const reply = await decide(said("Good morning, what's the plan"), session, pack, model.fetch, cards() as never);
+  assert.doesNotMatch(reply.text, /home card/);
+});
+
+test("what did she buy before opens the open card's purchases", async () => {
+  const session = newSession(ASSOCIATE);
+  session.customer = {
+    id: "c-9",
+    phone: "9820012345",
+    name: "Priya",
+    bought: [{ sku: "1", name: "Philips 82 cm TV", total: 16990, on: "2026-11-06" }],
+  };
+  const reply = await decide(said("what did she buy before?"), session, pack, manager({}).fetch, cards() as never);
+  assert.match(reply.text, /Philips 82 cm TV/);
+});

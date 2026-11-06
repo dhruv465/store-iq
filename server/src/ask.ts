@@ -3,8 +3,13 @@ import type { Reply } from "./types.js";
 
 // No \b: in JavaScript a word boundary only knows ASCII, so "नमस्ते\b" never matched and a Hindi
 // hello fell through to the model — which then answered in Hindi with an English reason line.
-const GREETING =
-  /^\s*(hi|hey|hello|yo|hii+|namaste|namaskar|salaam|good (morning|afternoon|evening)|नमस्ते|नमस्कार|नमस्कारम्|हाय|हॅलो)[\s!.।]*$/i;
+const HELLO =
+  "(?:hi|hey|hello|yo|hii+|namaste|namaskar|salaam|good (?:morning|afternoon|evening)|नमस्ते|नमस्कार|नमस्कारम्|हाय|हॅलो)";
+/** What a voice note adds around a hello: "Hello, good morning.", "Good morning, Store IQ.", "Hi, how are
+ *  you?". Each went to the model, which answered without the brief and offered a home card for nobody. */
+const HELLO_TAIL =
+  "(?:store ?iq|team|everyone|all|how are you|how r u|how's it going|kaise ho|kya haal hai|कैसे हो|क्या हाल है)";
+const GREETING = new RegExp(`^\\s*${HELLO}(?:[\\s,!.।?]+(?:${HELLO}|${HELLO_TAIL}))*[\\s!.।?]*$`, "i");
 
 /** Nobody on a shop floor writes to their manager without addressing them. "Namaste sir" was not
  *  a greeting and "boss kitne ka target hai aaj" was not a question, because both patterns are
