@@ -360,3 +360,14 @@ test("what did she buy before opens the open card's purchases", async () => {
   const reply = await decide(said("what did she buy before?"), session, pack, manager({}).fetch, cards() as never);
   assert.match(reply.text, /Philips 82 cm TV/);
 });
+
+test("a hello in any words is the model's call, and gets the brief and New customer", async () => {
+  const session = newSession(ASSOCIATE);
+  const model = manager({ opening: true, lines: ["All good, what's up?"], ask_number: "Shall I make a home card?" });
+  const reply = await decide(said("aur bata, kya chal raha hai?"), session, pack, model.fetch, cards() as never);
+  assert.deepEqual(
+    reply.buttons?.map((button) => button.id),
+    ["brief", "new_customer"],
+  );
+  assert.doesNotMatch(reply.text, /home card/);
+});

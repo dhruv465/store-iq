@@ -700,7 +700,8 @@ test("a pick from this conversation's search shows the breakdown at once, on the
     base,
     store.fetch,
   );
-  assert.equal(store.told.length, 0, "a tap is the code's");
+  // One model request, for what it does for this customer; the total is still the code's.
+  assert.equal(store.told.length, 1, "the pick's pitch only");
   assert.equal(session.selection?.sku, "CODE70");
   assert.match(reply.text, /1,64,900/);
   assert.doesNotMatch(reply.text, /charge|delivery/i);
@@ -743,4 +744,23 @@ test("a fridge on the Direct Cool shelf is a fridge by its own name; a stand or 
   assert.equal(named("Aluminium Laptop Stand", "laptop"), false);
   assert.equal(named("Refrigerator Cover And Kits", "refrigerator"), false);
   assert.equal(named("Trolley for Washing Machine", "washing machine"), false);
+});
+
+test("a pick is pitched above its breakdown, and a pitch line with a made-up figure is dropped", async () => {
+  const q = `tv pick ${++unique}`;
+  const store = shop(
+    () => page([row(71, "Sony Bravia 126 cm 4K TV", 70990)]),
+    {},
+    { lines: ["Dolby Atmos, so movies sound like a theatre.", "It lasts 15 years."] },
+  );
+  const session = newSession("919820000001");
+  session.search = { q };
+  const reply = await decide(
+    { id: "p2", phone: session.phone, modality: "interactive", action: "select:CODE71" },
+    session,
+    base,
+    store.fetch,
+  );
+  assert.match(reply.text, /Dolby Atmos[\s\S]*70,990/);
+  assert.doesNotMatch(reply.text, /15 years/);
 });

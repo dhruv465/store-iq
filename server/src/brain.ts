@@ -76,8 +76,9 @@ How to be:
 - Answer the question they actually asked, about the exact thing they asked about. The search is loose, so FACTS can hold neighbours of what they named: an iPhone 18 Pro is not an iPhone 18 Pro Max, and a case is not a phone. If what they named is in FACTS, talk about that. If it is not, say so plainly in the first line and name the nearest thing in FACTS that would serve this customer, as a different product: one FACTS holds, one step up from what they asked for (the same size in a double door, the next size up), not the top of the range. Set "unknown" true only when FACTS has nothing that could serve them.
 - A direct question gets its answer FIRST, in the same reply, out of FACTS: what it costs, whether it is available, what the spec is, whether an offer is running. Asked what there is, which are good, to show something, or for the details or current data on something, name up to three from FACTS, each with its price and one reason. "We have several Samsung phones, what will they use it for?" is wrong, because it names nothing and costs the customer a turn; "Samsung A27 5G, Rs 36,595, 50 MP camera. M17e 5G, Rs 19,990, 6000 mAh battery." is right, and a question can follow it. Never answer a direct question with only a question.
 - A customer who has decided gets served, not interviewed. "I want to buy an iPhone 18 Pro 256 GB" gets, in this order: two or three of its features from FACTS said as what they do for this customer (the associate is selling it, not reading a price tag), whether it is available or on pre-order, the price, and the one choice left to make from FACTS, such as the colour. Do not gather anything else, and offer the "select:" button so the associate can close it.
-- Ask a question only if its answer would change what you show this customer, and ask about the product in front of them. For a phone that is what they will use it for most, games, camera, battery, storage or budget. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, and stop as soon as you have enough to be useful. Never ask what this customer has already told you.
-- With a customer who has not decided, the order that works is: find out what they need from this kind of product, correct a wrong belief kindly, turn a spec into something about their use, show up to three options, each with a feature from FACTS as what it does for them and its price after it, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
+- A customer who only names a kind of product ("customer wants a TV", "LED TV dekhna hai", "washing machine dikhao", "show fridges") has not decided. Ask three questions about this customer before you show anything, one per reply, each with buttons that are its real answers, the way a good floor salesman does, because each answer changes what you will show. For a TV: how far from the screen they sit, on the wall or on a table, and what they watch most (sports, movies and OTT, serials and news, gaming). For a fridge: how many people at home, single or double door, and whether they stock up for the week. For a washing machine: how many people it washes for, top or front loading, and fully or semi automatic. For an AC: how big the room is, whether it gets the afternoon sun or is on the top floor, and how many hours a day it runs. For a phone: what they use it for most (camera, games, battery), how much they store, and the budget. For anything else, the three things that most change which one fits. The budget comes last, if at all. A question the customer has already answered is skipped, never asked again; ask the next one. Once WHAT THE CUSTOMER HAS SAID holds three things about this kind of product, your next reply shows the options, not a fourth question. If the associate asks to see options now, or says the customer is in a hurry, show them at once.
+- Ask about the product in front of them. How many people will use a phone, whether it is for the family or the kids, and which phone they had before change nothing, so never ask them. A question about the room or the wall is only for something that goes in a room or on a wall. One question at a time, about one thing: never two joined by "or" ("what size, or what will they use it for?"), and never two lines that each ask something. Its buttons answer that question ("Sports", "Movies and OTT", "Gaming"), never name topics ("Screen size", "Main use", "Budget").
+- With a customer who has not decided, the order that works is: find out what they need from this kind of product with three questions, correct a wrong belief kindly, show up to three options that fit what they said, each with a feature from FACTS as what it does for them and its price after it, with a "select:" button for each, give the full cost, close with consent, then the follow-up. Keep them in that order when it is slipping, but as a nudge, not a script.
 - Hand them words to say out loud, in their words, not instructions about selling. A question for the customer is prefixed "Ask:" — Ask: "Which colour would you like?"
 - Everything you say is to the ASSOCIATE. The customer is standing in front of them and never talks to you.
 - What a customer said is kept under their mobile number, so their next visit starts where this one ended. Keep filling "card" with what they need exactly as before; the number changes nothing about that. CUSTOMER NUMBER says whether this one has given theirs. While it is "none yet" and they are serving a customer, write "ask_number": a line to the associate, not the customer, offering to make this customer's home card and asking them to send the customer's name and mobile number, such as "Shall I make a home card for this customer? Send me their name and mobile number." It goes out first, above your other lines, which still answer what they asked. When they say this customer has been in before, or CUSTOMER NUMBER says a card is saved under the name they used, ask for the number the customer gave then, in "ask_number". A message that gives the number needs no question about it. If no number comes, carry on and do not ask again. Fill "customer" whenever the message says a different customer has walked up, that one who came before is back, or gives the customer's name or number. When CUSTOMER NUMBER says what they bought before, that is their purchase history: answer any question about what they bought, when, or for how much from it, however it is asked, and never say you have no access to past purchases. For a problem with something they bought, name it and tell the associate to send what is wrong with it, so it is logged for service. The code keeps and looks up what was said and tells the associate, so never say you have saved or found anything. A name they give is the customer's: you are always talking to the associate, so never greet or address them by it ("Okay, Suresh." to the associate is wrong); speak of the customer by name, or as they and them, in the third person; him or her only after the associate has said which.
@@ -129,6 +130,9 @@ export type Decision = {
   reason?: string | null;
   /** The line asking for the customer's name and number, while they have no card. */
   ask_number?: string | null;
+  /** A hello or small talk with nothing in it to act on, in whatever words: the model's reading, not a
+   *  keyword list. It gets the greeting with Today's brief and New customer. */
+  opening?: boolean;
   /** Who is standing there, read from the words rather than a fixed phrase. */
   customer?: { arrived?: "new" | "returning" | null; name?: string | null } | null;
 };
@@ -139,7 +143,18 @@ const schema = {
   // in prose and reported nothing, so no human was ever offered.
   // "customer" too: left optional, the model left it out on "naya banda aaya hai" and the last
   // customer's card stayed on the new one.
-  required: ["step", "card", "shortlist", "demonstrated", "lines", "buttons", "unknown", "customer", "ask_number"],
+  required: [
+    "step",
+    "card",
+    "shortlist",
+    "demonstrated",
+    "lines",
+    "buttons",
+    "unknown",
+    "customer",
+    "ask_number",
+    "opening",
+  ],
   properties: {
     step: { type: "STRING", enum: [...STEPS] },
     card: {
@@ -199,6 +214,11 @@ const schema = {
       type: "STRING",
       nullable: true,
       description: "what that need means for what to say or show, a few words, no figures. null when because is null",
+    },
+    opening: {
+      type: "BOOLEAN",
+      description:
+        "true when this message opens the conversation or is small talk, with no customer, product, question or task in it: a hello in any words or language, how are you, what's up, starting the shift, checking in. false when it asks or tells you anything to act on, even if it starts with a hello",
     },
     ask_number: {
       type: "STRING",
@@ -1295,6 +1315,26 @@ export function mobileIn(said: string | undefined): string | null {
   return null;
 }
 
+/** Two or three lines the associate reads out about the product just picked, written by the model from
+ *  FACTS and what the customer said. A line with a figure nobody gave is dropped, never sent. */
+async function pitchFor(
+  product: Pack["products"][number],
+  event: Event,
+  session: Session,
+  pack: Pack,
+  request: typeof fetch,
+): Promise<string[]> {
+  const note = `The associate just picked ${product.name} for this customer, and its full cost goes out under your lines, so write no price, no total, no offer and no question. Write the pitch they read out to the customer: one line on why this one fits, in what the customer said, then two or three of its features from FACTS, each as what it does for this customer ("Dolby Atmos, so movies sound like a theatre"), never a bare spec. At most 3 short lines, no buttons, no ask_number.`;
+  const decision = readJson<Decision>(await askModel(SYSTEM, prompt(event, session, pack, [note]), schema, request));
+  const said = [
+    ...session.history.filter((turn) => turn.who === "associate").map((turn) => turn.text),
+    ...Object.values(session.card.facts ?? {}),
+  ].join(" ");
+  return (decision.lines ?? [])
+    .map((line) => String(line).trim())
+    .filter((line) => line && !unsupportedNumbers(line, allowedNumbers(pack), said).length)
+    .slice(0, 3);
+}
 export async function decide(
   event: Event,
   session: Session,
@@ -1630,6 +1670,12 @@ async function answer(
       ].slice(0, 3);
     }
   }
+  // The pick is where the associate sells it: what it does for this customer goes above its cost, or a
+  // new associate is left reading "Sony, 126 cm, Rs 70,990" to someone who has not bought it yet.
+  if (free && product && !session.sold) {
+    const lines = await pitchFor(product, event, session, pack, request).catch(() => []);
+    if (lines.length) free.text = `${lines.join("\n\n")}\n\n${free.text}`;
+  }
   if (free) return remember(withoutUnavailableCharges(free));
 
   // A photo of a shelf tag: read what is printed, then treat it as being told the same words. The
@@ -1778,6 +1824,23 @@ async function answer(
   let stale: Session["card"] = {};
   let decision = await written();
   if (keptCard && decision.customer?.arrived === "new") delete session.customer;
+  // The model read it as a hello, however it was put: the greeting the floor knows, with the brief and
+  // New customer, and no home card offered for nobody. Not a keyword list: "hey there" and "kya chal
+  // raha hai" are the model's call.
+  // A product named in it is not a hello, whatever the model said: "morning! any offers on samsung tv?".
+  if (
+    decision.opening === true &&
+    !decision.shortlist?.length &&
+    !event.action &&
+    !(searchedNow && session.search?.kind)
+  )
+    return remember(
+      greetingReply(
+        session.language,
+        Object.keys(base.shift_brief ?? {}).length > 0 || !!catalogConfig(),
+        store?.followUps ? (await store.followUps({ phone: session.phone, dueBy: storeDay() })).length : 0,
+      ),
+    );
   if (!resetNow && !loaded && !ownDetails && decision.customer?.arrived === "new") {
     stale = session.card;
     startInteraction(session);
@@ -1932,7 +1995,6 @@ async function answer(
   // customer?" with nobody standing there.
   const serving =
     /\b(customer|grahak)\b|ग्राहक|ग्राहिका/i.test(event.text ?? "") ||
-    (searchedNow && !!session.search?.kind) ||
     session.shortlist.length > 0 ||
     !!session.selection ||
     Object.values(session.card).some((value) =>

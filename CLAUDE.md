@@ -55,9 +55,12 @@ they do, update the matching project folder: the source note, `index.md`, `log.m
    the model only what it cannot see, in a note (`JUST NOW:`): a search that missed, a store that did
    not answer. What is worth asking this customer is the model's judgement, and a customer who has
    decided is served, not interviewed. A customer who only names a kind of product ("customer wants a TV", "washing machine dikhao") has not decided:
-   the model asks **only what would change what it shows**, one question at a time, with buttons that are the
-   customer's real answers, and stops as soon as it has enough; then it shows up to three options, each with its
-   price and one reason. A product that is not here is said so first, and the nearest one in the catalogue, one
+   the model asks **three questions about that kind of product** (a TV: how far they sit, wall or table, what
+   they watch), one at a time, with buttons that are the customer's real answers, skipping any already answered;
+   then it shows up to three options, each with a feature as what it does for them and its price. Decided by the
+   user 6 Nov 2026, after a walk where one answer ("movies") went straight to prices. **A pick is pitched**: the
+   model writes two or three of its features as what they do for this customer above the code's breakdown
+   (`pitchFor()`, one model request on the tap; a line with an unsupported figure is dropped). A product that is not here is said so first, and the nearest one in the catalogue, one
    step up, is named in its place. Restored by the user 6 Nov 2026 to the flow of `703dcd3` (before the video
    brief), after a rewrite that dropped the question rules ("no checklist, no minimum question count") asked
    "bedroom ke liye TV?" with the buttons "Small bedroom / Living room / Big hall". The model never states a
